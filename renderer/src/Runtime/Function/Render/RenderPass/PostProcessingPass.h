@@ -14,7 +14,7 @@ public:
 
 	virtual std::string GetName() override final { return "Post Processing"; }
 
-	virtual PassType GetType() override final { return POST_PROCESSING_PASS; };
+	virtual PassType GetType() override final { return POST_PROCESSING_PASS; }
 
 private:
 	struct PostProcessingSetting

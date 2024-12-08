@@ -39,7 +39,7 @@ void DirectionalShadowPass::Init()
     pipelineInfo.primitiveType      = PRIMITIVE_TYPE_TRIANGLE_LIST;
     pipelineInfo.rasterizerState    = { FILL_MODE_SOLID, CULL_MODE_NONE, DEPTH_CLIP, 0.0f, 0.0f };  // 不要做背面剔除，双面阴影                     
     pipelineInfo.depthStencilState              = { COMPARE_FUNCTION_LESS_EQUAL, true, true };
-    pipelineInfo.depthStencilAttachmentFormat   = FORMAT_D32_SFLOAT;
+    pipelineInfo.depthStencilAttachmentFormat   = EngineContext::Render()->GetDepthFormat();
     pipeline                                    = GraphicsPipelineCache::Get()->Allocate(pipelineInfo).pipeline;    // 普通mesh的默认绘制管线
 
     pipelineInfo.vertexShader                   = clusterVertexShader.shader;
@@ -49,7 +49,13 @@ void DirectionalShadowPass::Init()
 void DirectionalShadowPass::Build(RDGBuilder& builder) 
 {
     auto directionalLightComponent = EngineContext::Render()->GetLightManager()->GetDirectionalLight();
-    if(directionalLightComponent)
+    if( directionalLightComponent && 
+        directionalLightComponent->Enable() && 
+        directionalLightComponent->CastShadow() &&
+        IsEnabled() &&
+        !EngineContext::Render()->IsPassEnabled(RESTIR_PASS) &&
+        !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS) && 
+        !EngineContext::Render()->IsPassEnabled(PATH_TRACING_PASS))
     {
         for(uint32_t i = 0; i < DIRECTIONAL_SHADOW_CASCADE_LEVEL; i++)
         {
@@ -68,7 +74,7 @@ void DirectionalShadowPass::Build(RDGBuilder& builder)
 
                         Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
                         auto directionalLight = EngineContext::Render()->GetLightManager()->GetDirectionalLight();
-                        uint32_t index = context.passIndex;
+                        uint32_t index = context.passIndex[0];
 
                         RHICommandListRef command = context.command;                                            
                         command->SetGraphicsPipeline(pipeline);

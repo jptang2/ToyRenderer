@@ -61,15 +61,15 @@ struct Frustum
 
 struct BoundingBox
 {
-    vec3 max_bound;
+    vec3 maxBound;
     float _padding0;
-    vec3 min_bound;
+    vec3 minBound;
     float _padding1;
 };
 
 struct BoundingSphere
 {
-    vec4 center_radius;
+    vec4 centerRadius;
 };
 
 BoundingBox BoundingBoxTransform(BoundingBox box, mat4 transform)
@@ -83,58 +83,59 @@ BoundingBox BoundingBoxTransform(BoundingBox box, mat4 transform)
 						vec3(-1.0f, 1.0f, -1.0f),
 						vec3(1.0f, 1.0f, -1.0f)};
 
-	vec3 center = (box.max_bound + box.min_bound) * 0.5f;
-	vec3 extent = (box.max_bound - box.min_bound) * 0.5f;
+	vec3 center = (box.maxBound + box.minBound) * 0.5f;
+	vec3 extent = (box.maxBound - box.minBound) * 0.5f;
 
-	vec3 new_max_bound = vec3(-1e30);
-	vec3 new_min_bound = vec3(1e30);
+	vec3 newMaxBound = vec3(-1e30);
+	vec3 newMinBound = vec3(1e30);
 	for(int i = 0; i < 8; i++)
 	{
-		vec4 corner_before = vec4(extent * offsets[i] + center, 1.0f);
-		vec4 corner = transform * corner_before;
+		vec4 cornerBefore = vec4(extent * offsets[i] + center, 1.0f);
+		vec4 corner = transform * cornerBefore;
 		corner /= corner.w;
 
-		new_max_bound = vec3(max(new_max_bound.x, corner.x), max(new_max_bound.y, corner.y), max(new_max_bound.z, corner.z));
-		new_min_bound = vec3(min(new_min_bound.x, corner.x), min(new_min_bound.y, corner.y), min(new_min_bound.z, corner.z));
+		newMaxBound = vec3(max(newMaxBound.x, corner.x), max(newMaxBound.y, corner.y), max(newMaxBound.z, corner.z));
+		newMinBound = vec3(min(newMinBound.x, corner.x), min(newMinBound.y, corner.y), min(newMinBound.z, corner.z));
 	}
 
-	BoundingBox new_box;
-	new_box.max_bound = new_max_bound;
-	new_box.min_bound = new_min_bound;
+	BoundingBox newBox;
+	newBox.maxBound = newMaxBound;
+	newBox.minBound = newMinBound;
 
-	return new_box;
+	return newBox;
 }
 
 BoundingSphere SphereTransform(BoundingSphere sphere, mat4 transform)
 {
-    BoundingSphere new_sphere;
+    BoundingSphere newSphere;
 
-    new_sphere.center_radius.xyz = (transform * vec4(sphere.center_radius.xyz, 1.0f)).xyz;	
-    new_sphere.center_radius.w = sphere.center_radius.w * length( transform[0] );		
+    newSphere.centerRadius.xyz = (transform * vec4(sphere.centerRadius.xyz, 1.0f)).xyz;	
+    //newSphere.centerRadius.w = sphere.centerRadius.w * length( transform[0] );
+    newSphere.centerRadius.w = sphere.centerRadius.w * max(transform[0][0], max(transform[1][1], transform[2][2]));			
 
-    return new_sphere;
+    return newSphere;
 }
 
 bool PointIntersectBox(vec3 point, BoundingBox box)
 {
-	return max(min(point, box.max_bound), box.min_bound) == point;
+	return max(min(point, box.maxBound), box.minBound) == point;
 }
 
 bool FrustumIntersectBox(Frustum frustum, BoundingBox box)
 {
     bool intersect = true;
 
-    vec3 center = (box.max_bound + box.min_bound) * 0.5f;
-	vec3 extent = (box.max_bound - box.min_bound) * 0.5f;
+    vec3 center = (box.maxBound + box.minBound) * 0.5f;
+	vec3 extent = (box.maxBound - box.minBound) * 0.5f;
 
     for (int i = 0; i < 6; i++) 
     {
-        vec3 abs_plane = abs(frustum.planes[i].xyz);
-        float radius_project_plane = dot(abs_plane, extent);	//包围盒的投影半径，绝对值
+        vec3 absPlane = abs(frustum.planes[i].xyz);
+        float radiusProjectPlane = dot(absPlane, extent);	//包围盒的投影半径，绝对值
 
-        float signed_distance_from_plane = dot(-frustum.planes[i], vec4(center, 1.0f)); 
+        float signedDistanceFromPlane = dot(-frustum.planes[i], vec4(center, 1.0f)); 
 
-        intersect = intersect && (signed_distance_from_plane > -radius_project_plane);
+        intersect = intersect && (signedDistanceFromPlane > -radiusProjectPlane);
     }
 
 	return intersect;
@@ -146,9 +147,9 @@ bool FrustumIntersectSphere(Frustum frustum, BoundingSphere sphere)
 
     for (int i = 0; i < 6; i++) 
     {
-        float signed_distance_from_plane = dot(-frustum.planes[i], vec4(sphere.center_radius.xyz, 1.0f));		
+        float signedDistanceFromPlane = dot(-frustum.planes[i], vec4(sphere.centerRadius.xyz, 1.0f));		
         
-        intersect = intersect && (signed_distance_from_plane > -sphere.center_radius.w);
+        intersect = intersect && (signedDistanceFromPlane > -sphere.centerRadius.w);
     }
 
 	return intersect;
@@ -160,8 +161,8 @@ bool BoxIntersectSphere(BoundingBox box, BoundingSphere sphere)
 
     for(int i = 0; i < 3; i++)  //将box边界各扩展sphere半径长度即为可能的相交区域，对角处可能有一些误判
     {
-        intersect = intersect && !(box.min_bound[i] > sphere.center_radius[i]  && box.min_bound[i] - sphere.center_radius[i] > sphere.center_radius[3]);
-        intersect = intersect && !(box.max_bound[i] < sphere.center_radius[i]  && box.max_bound[i] - sphere.center_radius[i] < -sphere.center_radius[3]);
+        intersect = intersect && !(box.minBound[i] > sphere.centerRadius[i]  && box.minBound[i] - sphere.centerRadius[i] > sphere.centerRadius[3]);
+        intersect = intersect && !(box.maxBound[i] < sphere.centerRadius[i]  && box.maxBound[i] - sphere.centerRadius[i] < -sphere.centerRadius[3]);
     }
 
     return intersect;
@@ -171,22 +172,22 @@ bool BoxIntersectBox(BoundingBox box0, BoundingBox box1)
 {
     bool intersect = true;
 
-    intersect = intersect && !(box0.min_bound[0] > box1.max_bound[0] || box0.min_bound[1] > box1.max_bound[1] || box0.min_bound[2] > box1.max_bound[2]); 
-    intersect = intersect && !(box1.min_bound[0] > box0.max_bound[0] || box1.min_bound[1] > box0.max_bound[1] || box1.min_bound[2] > box0.max_bound[2]); 
+    intersect = intersect && !(box0.minBound[0] > box1.maxBound[0] || box0.minBound[1] > box1.maxBound[1] || box0.minBound[2] > box1.maxBound[2]); 
+    intersect = intersect && !(box1.minBound[0] > box0.maxBound[0] || box1.minBound[1] > box0.maxBound[1] || box1.minBound[2] > box0.maxBound[2]); 
 
     return intersect;
 }
 
 bool SphereIntersectSphere(BoundingSphere sphere0, BoundingSphere sphere1)
 {
-    bool intersect = length(sphere0.center_radius.xyz - sphere1.center_radius.xyz) <= sphere0.center_radius.w + sphere1.center_radius.w;
+    bool intersect = length(sphere0.centerRadius.xyz - sphere1.centerRadius.xyz) <= sphere0.centerRadius.w + sphere1.centerRadius.w;
     
     return intersect;
 }
 
 bool SphereInsideSphere(BoundingSphere sphere0, BoundingSphere sphere1) // 前者在后者内部
 {
-    bool inside = length(sphere0.center_radius.xyz - sphere1.center_radius.xyz) + sphere0.center_radius.w < sphere1.center_radius.w;
+    bool inside = length(sphere0.centerRadius.xyz - sphere1.centerRadius.xyz) + sphere0.centerRadius.w < sphere1.centerRadius.w;
     
     return inside;   
 }
@@ -311,8 +312,8 @@ bool OcclusionCull(
 	vec3 cameraPos, mat4 view, mat4 proj, float z_near,
 	texture2D hiz, sampler minSampler) 	//Hiz的第0级没做复制，还在原深度缓冲里
 {
-	vec3 center = sphere.center_radius.xyz;
-	float radius = sphere.center_radius.w;
+	vec3 center = sphere.centerRadius.xyz;
+	float radius = sphere.centerRadius.w;
 
 	vec4 aabb;
 	bool visible = true;
@@ -323,7 +324,7 @@ bool OcclusionCull(
 		ivec2 depthPyramidSize 		= textureSize(hiz, 0);	//计算Hiz对应尺寸的层级
 		float width 				= (aabb.z - aabb.x) * depthPyramidSize.x;
 		float height 				= (aabb.w - aabb.y) * depthPyramidSize.y;
-		float level 				= max(floor(log2(max(width, height))), 1.0f);
+		float level 				= max(floor(log2(max(width, height))), 0.0f);
 
 		// Sampler is set up to do max reduction, so this computes the minimum depth of a 2x2 texel quad
 		vec2 uv = (aabb.xy + aabb.zw) * 0.5;
@@ -346,5 +347,8 @@ bool OcclusionCull(
 
 	return visible;
 }
+
+
+
 
 #endif

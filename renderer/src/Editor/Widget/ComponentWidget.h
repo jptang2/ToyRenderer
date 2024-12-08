@@ -7,6 +7,7 @@
 #include "Function/Framework/Component/PointLightComponent.h"
 #include "Function/Framework/Component/SkyboxComponent.h"
 #include "Function/Framework/Component/TransformComponent.h"
+#include "Function/Framework/Component/VolumeLightComponent.h"
 
 #include <memory>
 
@@ -20,6 +21,7 @@ private:
     static void TransformComponentUI(std::shared_ptr<TransformComponent> component);
     static void DirectionalLightComponentUI(std::shared_ptr<DirectionalLightComponent> component);
     static void PointLightComponentUI(std::shared_ptr<PointLightComponent> component);
+    static void VolumeLightComponentUI(std::shared_ptr<VolumeLightComponent> component);
     static void MeshRendererComponentUI(std::shared_ptr<MeshRendererComponent> component);
     static void SkyboxComponentUI(std::shared_ptr<SkyboxComponent> component);
 };

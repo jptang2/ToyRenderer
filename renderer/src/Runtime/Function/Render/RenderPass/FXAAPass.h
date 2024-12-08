@@ -14,10 +14,10 @@ public:
 
 	virtual std::string GetName() override final { return "FXAA"; }
 
-	virtual PassType GetType() override final { return FXAA_PASS; };
+	virtual PassType GetType() override final { return FXAA_PASS; }
 
 private:
-	uint32_t enable = true;
+	uint32_t enable = 1.0f;
 
     Shader computeShader;
 

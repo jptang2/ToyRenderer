@@ -8,6 +8,7 @@
 #include "Function/Render/RHI/RHIStructs.h"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -52,26 +53,34 @@ public:
     RDGTextureBuilder CreateTexture(std::string name);
     RDGBufferBuilder CreateBuffer(std::string name);
     RDGRenderPassBuilder CreateRenderPass(std::string name);    // 假定所有pass的添加顺序就是执行顺序，方便处理排序和依赖关系等
-    RDGComputePassBuilder CreateComputePass(std::string name);  // index是为同名的pass准备，方便索引   
+    RDGComputePassBuilder CreateComputePass(std::string name);     
+    RDGRayTracingPassBuilder CreateRayTracingPass(std::string name);
     RDGPresentPassBuilder CreatePresentPass(std::string name);    
+    RDGCopyPassBuilder CreateCopyPass(std::string name);  
 
     RDGTextureHandle GetTexture(std::string name);
     RDGBufferHandle GetBuffer(std::string name);
-    RDGRenderPassHandle GetRenderPass(std::string name)     { return GetPass<RDGRenderPassNodeRef, RDGRenderPassHandle>(name); };
-    RDGComputePassHandle GetComputePass(std::string name)   { return GetPass<RDGComputePassNodeRef, RDGComputePassHandle>(name); };
-    RDGPresentPassHandle GetPresentPass(std::string name)   { return GetPass<RDGPresentPassNodeRef, RDGPresentPassHandle>(name); };
+    RDGRenderPassHandle GetRenderPass(std::string name)             { return GetPass<RDGRenderPassNodeRef, RDGRenderPassHandle>(name); }
+    RDGComputePassHandle GetComputePass(std::string name)           { return GetPass<RDGComputePassNodeRef, RDGComputePassHandle>(name); }
+    RDGRayTracingPassHandle GetRayTracingPass(std::string name)     { return GetPass<RDGRayTracingPassNodeRef, RDGRayTracingPassHandle>(name); }
+    RDGPresentPassHandle GetPresentPass(std::string name)           { return GetPass<RDGPresentPassNodeRef, RDGPresentPassHandle>(name); }
+    RDGCopyPassHandle GetCopyPass(std::string name)                 { return GetPass<RDGCopyPassNodeRef, RDGCopyPassHandle>(name); }
 
-    inline DependencyGraph* GetGraph() { return &graph; }
+    DependencyGraphRef GetGraph() { return graph; }
 
     void Execute();
 
 private:
     void CreateInputBarriers(RDGPassNodeRef pass);
     void CreateOutputBarriers(RDGPassNodeRef pass);
+    void PrepareDescriptorSet(RDGPassNodeRef pass);
+    void PrepareRenderTarget(RDGRenderPassNodeRef pass, RHIRenderPassInfo& renderPassInfo);
     void ReleaseResource(RDGPassNodeRef pass);
     void ExecutePass(RDGRenderPassNodeRef pass);
     void ExecutePass(RDGComputePassNodeRef pass);
+    void ExecutePass(RDGRayTracingPassNodeRef pass);
     void ExecutePass(RDGPresentPassNodeRef pass);
+    void ExecutePass(RDGCopyPassNodeRef pass);
 
     template<typename Type, typename Handle>
     Handle GetPass(std::string name)
@@ -92,12 +101,12 @@ private:
 
     RHIResourceState PreviousState(RDGTextureNodeRef textureNode, RDGPassNodeRef passNode, TextureSubresourceRange subresource = {}, bool output = false);    // 获取当前pass（在执行顺序上）的资源的前序状态
     RHIResourceState PreviousState(RDGBufferNodeRef bufferNode, RDGPassNodeRef passNode, uint32_t offset = 0, uint32_t size = 0, bool output = false);      // output用于标记是相对于输入还是输出资源
-    bool IsLastUsedPass(RDGTextureNodeRef textureNode, RDGPassNodeRef passNode);
-    bool IsLastUsedPass(RDGBufferNodeRef bufferNode, RDGPassNodeRef passNode);
+    bool IsLastUsedPass(RDGTextureNodeRef textureNode, RDGPassNodeRef passNode, bool output = false);
+    bool IsLastUsedPass(RDGBufferNodeRef bufferNode, RDGPassNodeRef passNode, bool output = false);
 
     std::vector<RDGPassNodeRef> passes; // 创建的全部pass，按照创建顺序执行
 
-    DependencyGraph graph;
+    DependencyGraphRef graph = std::make_shared<DependencyGraph>();
     RDGBlackBoard blackBoard;
 
     RHICommandListRef command;
@@ -157,7 +166,7 @@ public:
     , pass(pass)
     , graph(builder->GetGraph()) {};
 
-    RDGRenderPassBuilder& PassIndex(uint32_t index);                                        // 给一个index设置函数方便给Execute传参
+    RDGRenderPassBuilder& PassIndex(uint32_t x = 0, uint32_t y = 0, uint32_t z = 0);        // 给一个index设置函数方便给Execute传参
     RDGRenderPassBuilder& RootSignature(RHIRootSignatureRef rootSignature);                 // 若提供根签名未提供描述符，使用池化创建
     RDGRenderPassBuilder& DescriptorSet(uint32_t set, RHIDescriptorSetRef descriptorSet);   // 若提供了描述符，直接用相应的描述符
     RDGRenderPassBuilder& Read(uint32_t set, uint32_t binding, uint32_t index, RDGBufferHandle buffer, uint32_t offset = 0, uint32_t size = 0);
@@ -185,7 +194,7 @@ private:
     RDGBuilder* builder;
     RDGRenderPassNodeRef pass;
 
-    DependencyGraph* graph;
+    DependencyGraphRef graph;
 };
 
 class RDGComputePassBuilder
@@ -196,7 +205,7 @@ public:
     , pass(pass)
     , graph(builder->GetGraph()) {};
 
-    RDGComputePassBuilder& PassIndex(uint32_t index);                                        // 给一个index设置函数方便给Execute传参
+    RDGComputePassBuilder& PassIndex(uint32_t x = 0, uint32_t y = 0, uint32_t z = 0);        // 给一个index设置函数方便给Execute传参
     RDGComputePassBuilder& RootSignature(RHIRootSignatureRef rootSignature);                 // 若提供根签名未提供描述符，使用池化创建
     RDGComputePassBuilder& DescriptorSet(uint32_t set, RHIDescriptorSetRef descriptorSet);   // 若提供了描述符，直接用相应的描述符
     RDGComputePassBuilder& Read(uint32_t set, uint32_t binding, uint32_t index, RDGBufferHandle buffer, uint32_t offset = 0, uint32_t size = 0);
@@ -218,7 +227,39 @@ private:
     RDGBuilder* builder;
     RDGComputePassNodeRef pass;
 
-    DependencyGraph* graph;
+    DependencyGraphRef graph;
+};
+
+class RDGRayTracingPassBuilder
+{
+public:
+    RDGRayTracingPassBuilder(RDGBuilder* builder, RDGRayTracingPassNodeRef pass)
+    : builder(builder)
+    , pass(pass)
+    , graph(builder->GetGraph()) {};
+
+    RDGRayTracingPassBuilder& PassIndex(uint32_t x = 0, uint32_t y = 0, uint32_t z = 0);        // 给一个index设置函数方便给Execute传参
+    RDGRayTracingPassBuilder& RootSignature(RHIRootSignatureRef rootSignature);                 // 若提供根签名未提供描述符，使用池化创建
+    RDGRayTracingPassBuilder& DescriptorSet(uint32_t set, RHIDescriptorSetRef descriptorSet);   // 若提供了描述符，直接用相应的描述符
+    RDGRayTracingPassBuilder& Read(uint32_t set, uint32_t binding, uint32_t index, RDGBufferHandle buffer, uint32_t offset = 0, uint32_t size = 0);
+    RDGRayTracingPassBuilder& Read(uint32_t set, uint32_t binding, uint32_t index, RDGTextureHandle texture, TextureViewType viewType = VIEW_TYPE_2D, TextureSubresourceRange subresource = {}); 
+    RDGRayTracingPassBuilder& ReadWrite(uint32_t set, uint32_t binding, uint32_t index, RDGBufferHandle buffer, uint32_t offset = 0, uint32_t size = 0);   // 好像和read也没什么区别？
+    RDGRayTracingPassBuilder& ReadWrite(uint32_t set, uint32_t binding, uint32_t index, RDGTextureHandle texture, TextureViewType viewType = VIEW_TYPE_2D, TextureSubresourceRange subresource = {}); 
+    RDGRayTracingPassBuilder& OutputRead(RDGBufferHandle buffer, uint32_t offset = 0, uint32_t size = 0);             // 在执行完Pass后作为输出，自动屏障，可能还会在其他地方使用
+    RDGRayTracingPassBuilder& OutputRead(RDGTextureHandle texture, TextureSubresourceRange subresource = {});      
+    RDGRayTracingPassBuilder& OutputReadWrite(RDGBufferHandle buffer, uint32_t offset = 0, uint32_t size = 0);
+    RDGRayTracingPassBuilder& OutputReadWrite(RDGTextureHandle texture, TextureSubresourceRange subresource = {});  
+
+
+    RDGRayTracingPassBuilder& Execute(const RDGPassExecuteFunc& execute);
+
+    RDGRayTracingPassHandle Finish() { return pass->GetHandle(); }
+
+private:
+    RDGBuilder* builder;
+    RDGRayTracingPassNodeRef pass;
+
+    DependencyGraphRef graph;
 };
 
 class RDGPresentPassBuilder
@@ -238,8 +279,29 @@ private:
     RDGBuilder* builder;
     RDGPresentPassNodeRef pass;
 
-    DependencyGraph* graph;
+    DependencyGraphRef graph;
 };
 
+class RDGCopyPassBuilder
+{
+public:
+    RDGCopyPassBuilder(RDGBuilder* builder, RDGCopyPassNodeRef pass)
+    : builder(builder)
+    , pass(pass)
+    , graph(builder->GetGraph()) {};
+ 
+    RDGCopyPassHandle Finish() { return pass->GetHandle(); }
 
+    RDGCopyPassBuilder& From(RDGTextureHandle texture, TextureSubresourceLayers subresource = {});
+    RDGCopyPassBuilder& To(RDGTextureHandle texture, TextureSubresourceLayers subresource = {});
+    RDGCopyPassBuilder& GenerateMips();
+    RDGCopyPassBuilder& OutputRead(RDGTextureHandle texture, TextureSubresourceLayers subresource = {});
+    RDGCopyPassBuilder& OutputReadWrite(RDGTextureHandle texture, TextureSubresourceLayers subresource = {});
+
+private:
+    RDGBuilder* builder;
+    RDGCopyPassNodeRef pass;
+
+    DependencyGraphRef graph;
+};
 

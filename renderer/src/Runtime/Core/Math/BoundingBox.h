@@ -17,8 +17,8 @@ public:
 
     inline Vec3 GetCenter() const      { return center; }
     inline Vec3 GetHalfExtent() const  { return halfExtent; }
-    inline Vec3 GetMinCorner() const   { return maxCorner; }
-    inline Vec3 GetMaxCorner() const   { return minCorner; }
+    inline Vec3 GetMinCorner() const   { return minCorner; }
+    inline Vec3 GetMaxCorner() const   { return maxCorner; }
 
 private:
     Vec3 center = Vec3::Zero();

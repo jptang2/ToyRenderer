@@ -1,5 +1,6 @@
 #include "RenderMeshManager.h"
 #include "Function/Framework/Component/MeshRendererComponent.h"
+#include "Function/Global/Definations.h"
 #include "Function/Global/EngineContext.h"
 #include "Function/Render/RenderPass/GPUCullingPass.h"
 #include "RenderSystem.h"
@@ -12,6 +13,11 @@ void RenderMeshManager::Init()
 void RenderMeshManager::Tick()
 {
     PrepareMeshPass();
+
+#if ENABLE_RAY_TRACING
+    PrepareRayTracePass();
+#endif
+
 }
 
 void RenderMeshManager::PrepareMeshPass()
@@ -40,5 +46,28 @@ void RenderMeshManager::PrepareMeshPass()
         {
             processor->Process(batches);
         }
+    }
+}
+
+void RenderMeshManager::PrepareRayTracePass()
+{
+    ENGINE_TIME_SCOPE(RenderMeshManager::PrepareRayTracePass);
+
+    // 遍历场景，获取光追实例信息
+    std::vector<RHIAccelerationStructureInstanceInfo> instances;
+    auto rendererComponents = EngineContext::World()->GetActiveScene()->GetComponents<MeshRendererComponent>();     // 场景物体
+    for(auto component : rendererComponents) component->CollectAccelerationStructureInstance(instances);
+
+    if(tlas == nullptr)
+    {
+        tlas = EngineContext::RHI()->CreateTopLevelAccelerationStructure({
+            .maxInstance = MAX_PER_FRAME_OBJECT_SIZE,
+            .instanceInfos = instances
+        });
+        EngineContext::RenderResource()->SetTLAS(tlas);
+    }
+    else 
+    {
+        tlas->Update(instances);
     }
 }

@@ -21,7 +21,7 @@ public:
 
 	virtual std::string GetName() override final { return "GPU Culling"; }
 
-	virtual PassType GetType() override final { return GPU_CULLING_PASS; };
+	virtual PassType GetType() override final { return GPU_CULLING_PASS; }
 
 	void CollectStatisticDatas();
 
@@ -41,6 +41,9 @@ private:
 	{
 		float lodErrorRate = 0.01f;
 		float lodErrorOffset = 0.0f;
+		uint32_t disableVirtualMeshCulling = 0;	// 强制虚拟几何体使用LOD0,在ReSTIR中需要光栅G-Buffer和加速结构的几何一致
+		uint32_t disableOcclusionCulling = 0;
+		uint32_t disableFrustrumCulling = 0;
 	};
 	CullingLodSetting lodSetting = {};
 

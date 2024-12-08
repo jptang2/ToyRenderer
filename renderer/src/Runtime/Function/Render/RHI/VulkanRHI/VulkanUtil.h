@@ -3,10 +3,12 @@
 #include "Function/Render/RHI/RHI.h"
 #include "Core/Log/Log.h"
 #include "Function/Render/RHI/RHIStructs.h"
+#include "VulkanRHIResource.h"
+
+#include "Function/Global/Definations.h"
 
 #include <spirv_reflect.h>
 #include <volk.h>
-#include <GLFW/glfw3.h>
 #include <vma.h>
 #include <cstdint>
 #include <string>
@@ -27,9 +29,11 @@ static const char* INSTANCE_LAYERS[] = {
 };
 
 static const std::vector<VkValidationFeatureEnableEXT> ENABLED_VALIDATION_FEATURES = {  // 需要时再启用，对帧数影响大
+#if ENABLE_DEBUG_MODE
     //VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
     //VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
-    //VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
+    VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
+#endif
 };
 
 static const char* INSTANCE_EXTENTIONS[] = {
@@ -146,6 +150,15 @@ public:
         return  str;
     }
 
+    static uint64_t GetBufferDeviceAddress(VkBuffer buffer, VkDevice device)
+    {
+        VkBufferDeviceAddressInfoKHR bufferDeviceAddressInfo = {};
+        bufferDeviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        bufferDeviceAddressInfo.buffer = buffer;
+        bufferDeviceAddressInfo.pNext = nullptr;
+        return vkGetBufferDeviceAddress(device, &bufferDeviceAddressInfo);
+    } 
+
     static VkPipelineLayout CreatePipelineLayout(VkDevice device, 
                                                     const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts, 
                                                     const std::vector<VkPushConstantRange>& pushConstantRanges)
@@ -175,6 +188,23 @@ public:
         pushConstantRange.size = pushConstant.size;
 
         return pushConstantRange;
+    }
+
+    static VkAccelerationStructureInstanceKHR AccelerationStructureInstanceInfoToVk(const RHIAccelerationStructureInstanceInfo& info)
+    {
+        VkAccelerationStructureInstanceKHR instance = {};
+        instance.transform= {
+            info.transform[0][0], info.transform[0][1], info.transform[0][2], info.transform[0][3],
+            info.transform[1][0], info.transform[1][1], info.transform[1][2], info.transform[1][3],
+            info.transform[2][0], info.transform[2][1], info.transform[2][2], info.transform[2][3],
+        };
+        instance.instanceCustomIndex = info.instanceIndex;
+        instance.mask = info.mask;
+        instance.instanceShaderBindingTableRecordOffset = info.shaderBindingTableOffset;
+        instance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;                 // 剔除模式
+        instance.accelerationStructureReference = ResourceCast(info.blas)->GetAddress();
+
+        return instance;
     }
 
     static VkFormat RHIFormatToVkFormat(const RHIFormat& pixelFormat)
@@ -382,14 +412,14 @@ public:
 
     static VkBufferUsageFlags ResourceTypeToBufferUsage(ResourceType type)
     {
-        VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         if (type & RESOURCE_TYPE_UNIFORM_BUFFER)        usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
         if (type & RESOURCE_TYPE_RW_BUFFER)             usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         if (type & RESOURCE_TYPE_BUFFER)                usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        if (type & RESOURCE_TYPE_INDEX_BUFFER)          usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        if (type & RESOURCE_TYPE_VERTEX_BUFFER)         usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        if (type & RESOURCE_TYPE_INDEX_BUFFER)          usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+        if (type & RESOURCE_TYPE_VERTEX_BUFFER)         usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
         if (type & RESOURCE_TYPE_INDIRECT_BUFFER)       usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-        if (type & RESOURCE_TYPE_RAY_TRACING)           usage |= VK_BUFFER_USAGE_RAY_TRACING_BIT_NV;
+        if (type & RESOURCE_TYPE_RAY_TRACING)           usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
 
         return usage;
     }
@@ -664,6 +694,7 @@ public:
 
         if(accessFlags & (  VK_ACCESS_HOST_READ_BIT | 
                             VK_ACCESS_HOST_WRITE_BIT))                      flags |=    VK_PIPELINE_STAGE_HOST_BIT;                             // 0x00004000
+
 
         if(flags == 0) flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         return flags;

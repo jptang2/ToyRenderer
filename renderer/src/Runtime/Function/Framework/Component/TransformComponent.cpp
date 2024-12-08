@@ -1,32 +1,37 @@
 
 #include "TransformComponent.h"
+#include "Component.h"
+#include "Function/Global/EngineContext.h"
 #include "TryGetComponent.h"
 
 CEREAL_REGISTER_TYPE(TransformComponent)
 CEREAL_REGISTER_POLYMORPHIC_RELATION(Component, TransformComponent)
 
-void TransformComponent::Init()
+void TransformComponent::OnInit()
 {
-    Component::Init();
+    Component::OnInit();
 
 	UpdateMatrix();
 }
 
-void TransformComponent::Tick(float deltaTime)
+void TransformComponent::OnUpdate(float deltaTime)
 {
+    InitComponentIfNeed();
+
     UpdateMatrix();
 }
 
 void TransformComponent::UpdateMatrix()
 {
-    std::shared_ptr<TransformComponent> fatherTransform = TryGetComponentInParent<TransformComponent>();
-    if(fatherTransform)
-    {
-        // TODO 
-    }
+//     std::shared_ptr<TransformComponent> fatherTransform = TryGetComponentInParent<TransformComponent>();
+//     if(fatherTransform)
+//     {
+//         // TODO 
+//     }
 
-    //这里的矩阵计算顺序需要和ImGuizmo库一致，不然会有跳变
-    model = transform.GetMatrix();
+//     //这里的矩阵计算顺序需要和ImGuizmo库一致，不然会有跳变
+//     model = transform.GetMatrix();
+// 
 }
 
 

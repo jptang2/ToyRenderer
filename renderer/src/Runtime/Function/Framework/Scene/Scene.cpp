@@ -1,9 +1,13 @@
 #include "Scene.h"
 #include "Function/Framework/Component/CameraComponent.h"
+#include "Function/Framework/Component/Component.h"
 #include "Function/Framework/Component/TransformComponent.h"
 #include "Function/Framework/Entity/Entity.h"
 #include "Function/Global/EngineContext.h"
+#include <array>
 #include <memory>
+#include <set>
+#include <vector>
 
 CEREAL_REGISTER_TYPE(Scene)
 CEREAL_REGISTER_POLYMORPHIC_RELATION(Asset, Scene)
@@ -27,9 +31,15 @@ void Scene::OnSaveAsset()
 
 void Scene::Tick(float deltaTime)
 {
+    //std::array<std::set<std::shared_ptr<Component>>, COMPONENT_TYPE_MAX_ENUM> componentSets;
+
     for(auto& entity : entities) 
     {
-        entity->Tick(deltaTime);
+        for(auto& component : entity->GetComponents())
+        {
+            //componentSets[(int)component->GetType()].emplace(component);  // 是否排序？
+            if(component) component->OnUpdate(deltaTime);
+        }
     }
 
     std::shared_ptr<CameraComponent> camera = GetActiveCamera();    // TODO 

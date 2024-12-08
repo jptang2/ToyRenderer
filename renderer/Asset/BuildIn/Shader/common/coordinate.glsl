@@ -10,17 +10,17 @@
 //NDC space;        左上[-1, -1]，右下[1, 1]（透视除法后）
 //screen space:     左上[0, 0]，右下[1, 1]
 
-vec2 NDCToScreen(vec2 ndc)
+vec2 NDCToScreen(in vec2 ndc)
 {
     return ndc.xy * 0.5 + 0.5;
 }
 
-vec2 ScreenToNDC(vec2 screen)
+vec2 ScreenToNDC(in vec2 screen)
 {
     return screen.xy * 2.0 - 1.0;
 }
 
-vec4 NDCToView(vec4 ndc)
+vec4 NDCToView(in vec4 ndc)
 {	
 	vec4 view = CAMERA.invProj * ndc;       // View space position.
 	view /= view.w;                         // Perspective projection.
@@ -28,14 +28,14 @@ vec4 NDCToView(vec4 ndc)
 	return view;
 }
 
-vec4 ViewToClip(vec4 view)
+vec4 ViewToClip(in vec4 view)
 {
     vec4 clip = CAMERA.proj * view;
 
     return clip;
 }
 
-vec4 ViewToNDC(vec4 view)
+vec4 ViewToNDC(in vec4 view)
 {
     vec4 ndc = CAMERA.proj * view;
     ndc /= ndc.w;
@@ -43,60 +43,70 @@ vec4 ViewToNDC(vec4 view)
     return ndc;
 }  
 
-vec2 viewToScreen(vec4 view)
+vec2 viewToScreen(in vec4 view)
 {
     return NDCToScreen(ViewToNDC(view).xy);
 }  
 
-vec4 ViewToWorld(vec4 view)
+vec4 ViewToWorld(in vec4 view)
 {
     return CAMERA.invView * view;
 }  
 
-vec4 WorldToView(vec4 world)
+vec4 WorldToView(in vec4 world)
 {
     return CAMERA.view * world;
 }  
 
-vec4 WorldToCLip(vec4 world)
+vec4 WorldToClip(in vec4 world)
 {
     return ViewToClip(WorldToView(world));
 }
 
-vec4 WorldToNDC(vec4 world)
+vec4 WorldToNDC(in vec4 world)
 {
     return ViewToNDC(WorldToView(world));
 }  
 
-vec2 WorldToScreen(vec4 world)
+vec2 WorldToScreen(in vec4 world)
 {
     return viewToScreen(WorldToView(world));
 }
 
-vec4 NDCToWorld(vec4 ndc)
+vec4 NDCToWorld(in vec4 ndc)
 {	
 	return ViewToWorld(NDCToView(ndc));
 }
 
-vec4 ScreenToView(vec2 coord, float depth)
+vec4 ScreenToView(in vec2 coord, in float depth)
 {
     vec4 ndc = vec4(ScreenToNDC(coord), depth, 1.0f);  
 	return NDCToView(ndc);
 }
 
-vec4 ScreenToWorld(vec2 coord, float depth)
+vec4 ScreenToWorld(in vec2 coord, in float depth)
 {
     return ViewToWorld(ScreenToView(coord, depth));
 }
 
-vec4 DepthToView(vec2 coord)
+vec4 DepthToView(in vec2 coord)
 {
     return ScreenToView(coord, FetchDepth(coord));
 }
 
-vec4 DepthToWorld(vec2 coord)
+vec4 PrevDepthToView(in vec2 coord)
+{
+    return ScreenToView(coord, FetchPrevDepth(coord));
+}
+
+vec4 DepthToWorld(in vec2 coord)
 {
     return ViewToWorld(DepthToView(coord));
 }   
+
+vec4 PrevDepthToWorld(in vec2 coord)
+{
+    return ViewToWorld(PrevDepthToView(coord));
+}  
 
 #endif

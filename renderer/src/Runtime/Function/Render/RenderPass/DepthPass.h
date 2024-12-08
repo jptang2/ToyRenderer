@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Function/Render/RHI/RHIStructs.h"
 #include "Function/Render/RenderPass/RenderPass.h"
 #include "MeshPass.h"
 #include "RenderPass.h"
@@ -16,7 +17,7 @@ public:
 
 	virtual std::string GetName() override final { return "Depth"; }
 
-    virtual PassType GetType() override final { return DEPTH_PASS; };
+    virtual PassType GetType() override final { return DEPTH_PASS; }
 
 private:
     Shader vertexShader;

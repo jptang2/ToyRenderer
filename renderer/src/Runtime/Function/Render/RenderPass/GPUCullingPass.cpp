@@ -5,6 +5,7 @@
 #include "Function/Render/RHI/RHIStructs.h"
 #include "Function/Render/RenderResource/RenderStructs.h"
 #include "MeshPass.h"
+#include "RenderPass.h"
 
 #include <algorithm>
 #include <cassert>
@@ -33,8 +34,9 @@ void GPUCullingPass::Init()
     rootSignature = backend->CreateRootSignature(rootSignatureInfo);
 
     RHIComputePipelineInfo pipelineInfo     = {};
-    pipelineInfo.computeShader              = cullingShader.shader;
     pipelineInfo.rootSignature              = rootSignature;
+    
+    pipelineInfo.computeShader              = cullingShader.shader;
     cullingPipeline                         = backend->CreateComputePipeline(pipelineInfo);
 
     pipelineInfo.computeShader              = clusterCullingShader.shader;
@@ -48,6 +50,7 @@ void GPUCullingPass::Build(RDGBuilder& builder)
         
     auto& passes = EngineContext::Render()->GetMeshPasses();
 
+    lodSetting.disableVirtualMeshCulling = lodSetting.disableVirtualMeshCulling || (EngineContext::Render()->IsPassEnabled(RESTIR_PASS) ? true : false); //
     cullingSetting.processSize = 0;
     for(uint32_t i = 0; i < MESH_PASS_TYPE_MAX_CNT; i++)
     {

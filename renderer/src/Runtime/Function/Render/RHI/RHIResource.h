@@ -21,6 +21,8 @@ public:
 
 	inline RHIResourceType GetType() { return resourceType; }
 
+	virtual void* RawHandle() { return nullptr; };		// 底层资源的裸指针，仅debug时使用
+
 private:
 	RHIResourceType resourceType;
 	uint32_t lastUseTick = 0;		// 最后一次使用的时间，帧单位
@@ -96,7 +98,7 @@ protected:
 	friend class RHICommandList;
 };
 
-//缓冲，纹理 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+//缓冲，纹理，着色器，加速结构 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class RHIBuffer : public RHIResource
 {
@@ -165,8 +167,6 @@ protected:
 	RHISamplerInfo info;
 };
 
-//着色器 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 class RHIShader : public RHIResource
 {
 public:
@@ -188,6 +188,52 @@ protected:
 	RHIShaderInfo info;
 	ShaderReflectInfo reflectInfo;
 };
+
+class RHIShaderBindingTable : public RHIResource
+{
+public:
+	RHIShaderBindingTable(const RHIShaderBindingTableInfo& info) 
+	: RHIResource(RHI_SHADER_BINDING_TABLE)
+	, info(info)
+	{}
+
+	const RHIShaderBindingTableInfo& GetInfo() const { return info; }
+
+protected:
+	RHIShaderBindingTableInfo info;
+};
+
+class RHITopLevelAccelerationStructure : public RHIResource
+{
+public:
+	RHITopLevelAccelerationStructure(const RHITopLevelAccelerationStructureInfo& info) 
+	: RHIResource(RHI_TOP_LEVEL_ACCELERATION_STRUCTURE)
+	, info(info)
+	{}
+
+	virtual void Update(const std::vector<RHIAccelerationStructureInstanceInfo>& instanceInfos) = 0;
+
+	const RHITopLevelAccelerationStructureInfo& GetInfo() const { return info; }
+
+protected:
+	RHITopLevelAccelerationStructureInfo info;
+};
+
+class RHIBottomLevelAccelerationStructure : public RHIResource
+{
+public:
+	RHIBottomLevelAccelerationStructure(const RHIBottomLevelAccelerationStructureInfo& info) 
+	: RHIResource(RHI_BOTTOM_LEVEL_ACCELERATION_STRUCTURE)
+	, info(info)
+	{}
+
+	const RHIBottomLevelAccelerationStructureInfo& GetInfo() const { return info; }
+
+protected:
+	RHIBottomLevelAccelerationStructureInfo info;
+};
+
+//根签名，描述符 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class RHIRootSignature : public RHIResource	//对pipelinelayout, descriptorSetPool等的抽象
 {
@@ -239,38 +285,38 @@ class RHIGraphicsPipeline : public RHIResource
 {
 public:
 	RHIGraphicsPipeline(const RHIGraphicsPipelineInfo& info) 
-	: RHIResource(RHI_GRAPHICS_PIPELINE_STATE) 
-	, stateInfo(info)
+	: RHIResource(RHI_GRAPHICS_PIPELINE) 
+	, info(info)
 	{}
 
-	const RHIGraphicsPipelineInfo& GetInfo() { return stateInfo; }
+	const RHIGraphicsPipelineInfo& GetInfo() { return info; }
 
 protected:
-	RHIGraphicsPipelineInfo stateInfo;
+	RHIGraphicsPipelineInfo info;
 };
 
 class RHIComputePipeline : public RHIResource
 {
 public:
 	RHIComputePipeline(const RHIComputePipelineInfo& info) 
-	: RHIResource(RHI_COMPUTE_PIPELINE_STATE)
-	, stateInfo(info)
+	: RHIResource(RHI_COMPUTE_PIPELINE)
+	, info(info)
 	{}
 
 protected:
-	RHIComputePipelineInfo stateInfo;
+	RHIComputePipelineInfo info;
 };
 
 class RHIRayTracingPipeline : public RHIResource
 {
 public:
 	RHIRayTracingPipeline(const RHIRayTracingPipelineInfo& info)
-	: RHIResource(RHI_RAY_TRACING_PIPELINE_STATE) 
-	, stateInfo(info)
+	: RHIResource(RHI_RAY_TRACING_PIPELINE) 
+	, info(info)
 	{}
 
 protected:
-	RHIRayTracingPipelineInfo stateInfo;
+	RHIRayTracingPipelineInfo info;
 };
 
 //同步 ////////////////////////////////////////////////////////////////////////////////////////////////////////

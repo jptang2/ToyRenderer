@@ -8,6 +8,7 @@
 #include "Function/Render/RHI/RHIStructs.h"
 #include "Platform/HAL/CriticalSection.h"
 
+#include <memory>
 #include <volk.h>
 #include <vma.h>
 #include <array>
@@ -15,6 +16,8 @@
 #include <vector>
 
 #define VULKAN_VERSION VK_API_VERSION_1_3
+
+class VulkanRHICommandContextImmediate;
 
 class VulkanRHIBackend : public RHIBackend
 {
@@ -43,7 +46,7 @@ public:
 
     virtual RHICommandContextRef CreateCommandContext(RHICommandPoolRef pool) override final;
 
-    //缓冲，纹理 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //缓冲，纹理，着色器，加速结构 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     virtual RHIBufferRef CreateBuffer(const RHIBufferInfo& info) override final;
 
@@ -53,9 +56,15 @@ public:
 
     virtual RHISamplerRef CreateSampler(const RHISamplerInfo& info) override final;
 
-    //着色器 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
     virtual RHIShaderRef CreateShader(const RHIShaderInfo& info) override final;
+
+    virtual RHIShaderBindingTableRef CreateShaderBindingTable(const RHIShaderBindingTableInfo& info) override final;
+
+    virtual RHITopLevelAccelerationStructureRef CreateTopLevelAccelerationStructure(const RHITopLevelAccelerationStructureInfo& info) override final;
+
+    virtual RHIBottomLevelAccelerationStructureRef CreateBottomLevelAccelerationStructure(const RHIBottomLevelAccelerationStructureInfo& info) override final;
+
+    //根签名，描述符 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     virtual RHIRootSignatureRef CreateRootSignature(const RHIRootSignatureInfo& info) override final;
 
@@ -79,7 +88,7 @@ public:
 
     virtual RHICommandListImmediateRef GetImmediateCommand() override final;
 
-
+    std::shared_ptr<VulkanRHICommandContextImmediate> GetImmediateCommandContest();
 
 
 public:
@@ -94,6 +103,8 @@ public:
 
     VkFramebuffer FindOrCreateVkFramebuffer(const VkFramebufferCreateInfo& info) { return frameBufferPool.Allocate(info).frameBuffer; }
     VkFramebuffer CreateVkFramebuffer(const VkFramebufferCreateInfo& info);
+
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR GetRayTracingPipelineProperties() { return rayTracingPipelineProperties; }
 
 private:
 
@@ -196,6 +207,8 @@ public:
 
     virtual void SetComputePipeline(RHIComputePipelineRef computePipeline) override final;	
 
+    virtual void SetRayTracingPipeline(RHIRayTracingPipelineRef rayTracingPipeline) override final;
+
     virtual void PushConstants(void* data, uint16_t size, ShaderFrequency frequency) override final;
 
     virtual void BindDescriptorSet(RHIDescriptorSetRef descriptor, uint32_t set) override final;
@@ -208,6 +221,8 @@ public:
 
 	virtual void DispatchIndirect(RHIBufferRef argumentBuffer, uint32_t argumentOffset) override final;
 
+    virtual void TraceRays(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) override final;
+
     virtual void Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) override final;
 
     virtual void DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, uint32_t vertexOffset, uint32_t firstInstance) override final;
@@ -215,6 +230,8 @@ public:
     virtual void DrawIndirect(RHIBufferRef argumentBuffer, uint32_t offset, uint32_t drawCount) override final;
 
     virtual void DrawIndexedIndirect(RHIBufferRef argumentBuffer, uint32_t offset, uint32_t drawCount) override final;
+
+    virtual void* RawHandle() override final { return handle; }
 
     //ImGui /////////////////////////////////////////////////////////////////////////////////////
 
@@ -231,7 +248,7 @@ private:
     VulkanRHIRenderPass* renderPass;                // 运行时状态，随指令变化
     VulkanRHIGraphicsPipeline* graphicsPipeline;
     VulkanRHIComputePipeline* computePipeline;
-    VulkanRHIRaytracingPipeline* rayTraycingPipeline;
+    VulkanRHIRayTracingPipeline* rayTraycingPipeline;
 
     VkPipelineLayout GetCuttentPipelineLayout();
     VkPipelineBindPoint GetCuttentBindingPoint();
@@ -258,14 +275,17 @@ public:
 
     virtual void GenerateMips(RHITextureRef src) override final;  
 
+    VkCommandBuffer GetHandle() { return handle; }
+
 private:
-    VkCommandBuffer BeginSingleTimeCommand();
-    void EndSingleTimeCommand(VkCommandBuffer commandBuffer);
+    void BeginSingleTimeCommand();
+    void EndSingleTimeCommand();
     
     RHIFenceRef fence;
     RHIQueueRef queue;
     RHICommandPoolRef commandPool;
 
     VkCommandBuffer handle;
+    VkCommandBuffer oldHandle = VK_NULL_HANDLE;
     VkDevice device;
 };

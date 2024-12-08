@@ -820,7 +820,7 @@ IMPLOT_API void SetNextAxesToFit();
 // 1. If your data is a simple struct/class (e.g. Vector2f), you can use striding.
 //    This is the most performant option if applicable.
 //
-//    struct Vector2f { float X, Y; };
+//    struct Vector2f { float X, Y; }
 //    ...
 //    Vector2f data[42];
 //    ImPlot::PlotLine("line", &data[0].x, &data[0].y, 42, 0, 0, sizeof(Vector2f));

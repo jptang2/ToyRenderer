@@ -3,8 +3,9 @@
 #extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_samplerless_texture_functions : enable
 
-layout(set = 0, binding = 0) uniform texture2D LAST_MIP;
-layout(set = 0, binding = 1, r32f) uniform image2D CURRENT_MIP;
+layout(set = 0, binding = 0) 			uniform texture2D LAST_MIP;
+layout(set = 0, binding = 1, r32f) 		uniform image2D CURRENT_MIP;
+layout(set = 1, binding = 0)            uniform sampler SAMPLER[];
 
 layout(push_constant) uniform depth_pyramid_setting {
     uint mode;

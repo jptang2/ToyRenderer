@@ -152,6 +152,7 @@ void MeshPassProcessor::OnBuildDrawInfo(const DrawBatch& batch)
     pipelineState.renderQueue       = batch.material->RenderQueue();
     pipelineState.cullMode          = batch.material->CullMode();
     pipelineState.fillMode          = batch.material->GetFillMode();
+    pipelineState.depthCompare      = batch.material->DepthCompare();
     pipelineState.depthTest         = batch.material->DepthTest();
     pipelineState.depthWrite        = batch.material->DepthWrite();
     pipelineState.vertexShader      = batch.material->GetVertexShader() ? batch.material->GetVertexShader()->shader : nullptr;

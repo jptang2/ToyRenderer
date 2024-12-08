@@ -2,10 +2,13 @@
 #include "Function/Render/RenderResource/Model.h"
 #include "Core/Log/log.h"
 #include "Core/Math/BoundingBox.h"
+#include "Core/Math/Math.h"
 #include "Core/Mesh/Mesh.h"
 #include "Core/Mesh/TangentSpace.h"
 #include "Core/Mesh/MeshOptimizor/MeshOptimizor.h"
 #include "Function/Global/EngineContext.h"
+#include "Function/Render/RHI/RHIStructs.h"
+#include "Function/Render/RenderResource/Buffer.h"
 #include "Function/Render/RenderResource/Texture.h"
 #include "Material.h"
 #include "RenderStructs.h"
@@ -61,6 +64,7 @@ void Model::OnLoadAsset()
         indexBuffer->SetIndex(submeshes[i].mesh->index);
         submeshes[i].indexBuffer = indexBuffer;
     }
+
     if(processSetting.generateCluster)
     {
         for(uint32_t i = 0; i < submeshes.size(); i++)
@@ -103,6 +107,8 @@ void Model::OnLoadAsset()
             EngineContext::RenderResource()->SetMeshClusterInfo(meshClusterInfos, submeshes[i].meshClusterID.begin);
         }
     }
+
+    std::vector<uint32_t> lod0TriangleNums(submeshes.size());   // 对于虚拟几何体，构建加速结构使用的是第0层cluster的全部三角形
     if(processSetting.generateVirtualMesh)
     {   
         for(uint32_t i = 0; i < submeshes.size(); i++)
@@ -116,6 +122,7 @@ void Model::OnLoadAsset()
             VertexBufferRef vertexBuffer = std::make_shared<VertexBuffer>();
             IndexBufferRef indexBuffer = std::make_shared<IndexBuffer>();
 
+            lod0TriangleNums[i] = 0;
             for(auto& cluster : submesh.virtualMesh->clusters)  // cluster信息
             {
                 tempMesh.Merge(*cluster->mesh.get());
@@ -128,6 +135,8 @@ void Model::OnLoadAsset()
                     .sphere = cluster->sphereBound
                 });
                 indexOffset += cluster->mesh->index.size();
+
+                if(cluster->mipLevel == 0) lod0TriangleNums[i] += cluster->mesh->TriangleNum();
             }
 
             vertexBuffer->SetPosition(tempMesh.position);
@@ -161,6 +170,25 @@ void Model::OnLoadAsset()
             EngineContext::RenderResource()->SetMeshClusterGroupInfo(meshClusterGroupInfos, submeshes[i].meshClusterGroupID.begin);
         }
     }
+
+#if ENABLE_RAY_TRACING
+    for(uint32_t i = 0; i < submeshes.size(); i++)
+    {
+        RHIBottomLevelAccelerationStructureInfo blasInfo = {};
+        blasInfo.vertexBuffer = submeshes[i].vertexBuffer->positionBuffer;
+        blasInfo.indexBuffer = submeshes[i].indexBuffer->buffer;
+        blasInfo.triangleNum =  (processSetting.generateVirtualMesh) ?  lod0TriangleNums[i] :                       // 虚拟几何体，用第0层cluster
+                                (processSetting.generateCluster) ?      submeshes[i].indexBuffer->TriangleNum() :   // 分簇，用全部cluster
+                                                                        submeshes[i].indexBuffer->TriangleNum();    // 默认
+        // blasInfo.triangleNum = submeshes[i].indexBuffer->TriangleNum();    // 默认
+        blasInfo.vertexStride = sizeof(Vec3);
+        blasInfo.indexOffset = 0;
+        blasInfo.vertexOffset = 0;
+
+        submeshes[i].blas = EngineContext::RHI()->CreateBottomLevelAccelerationStructure(blasInfo);
+    }
+#endif
+
 }
 
 void Model::OnSaveAsset()
@@ -542,7 +570,7 @@ std::shared_ptr<Texture> Model::LoadMaterialTexture(aiMaterial* mat, aiTextureTy
         else
         {
             std::shared_ptr<Texture> texture = std::make_shared<Texture>(texturePath);
-            EngineContext::Asset()->SaveAsset(texture);
+            // EngineContext::Asset()->SaveAsset(texture);
             textureMap[texturePath] = texture;
             return texture;
         }

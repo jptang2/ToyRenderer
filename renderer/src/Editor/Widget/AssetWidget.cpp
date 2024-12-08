@@ -44,7 +44,8 @@ bool AssetWidget::MaterialAssetUI(std::shared_ptr<Material> material)
         update |= ImGui::DragFloat("Metallic", &material->metallic, 0.001f, 0.0f, 1.0f);
         update |= ImGui::DragFloat("Alpha clip", &material->alphaClip, 0.001f, 0.0f, 1.0f);
         update |= ImGui::ColorEdit4("Base color", &material->diffuse[0]);
-        update |= ImGui::ColorEdit4("Emission", &material->emission[0]);
+        update |= ImGui::ColorEdit3("Emission", &material->emission[0]);
+        update |= ImGui::DragFloat("Emission instencity", &material->emission[3], 0.001f, 0.0f);
     }
 
     ImGui::SeparatorText("");

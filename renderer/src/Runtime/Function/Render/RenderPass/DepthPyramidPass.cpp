@@ -14,12 +14,13 @@ void DepthPyramidPass::Init()
     RHIRootSignatureInfo rootSignatureInfo = {};
     rootSignatureInfo.AddEntry({0, 0, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})
                      .AddEntry({0, 1, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})
+                     .AddEntry(EngineContext::RenderResource()->GetSamplerRootSignature()->GetInfo())
                      .AddPushConstant({128, SHADER_FREQUENCY_COMPUTE});
     rootSignature = backend->CreateRootSignature(rootSignatureInfo);
 
     RHIComputePipelineInfo pipelineInfo     = {};
-    pipelineInfo.computeShader              = computeShader.shader;
     pipelineInfo.rootSignature              = rootSignature;
+    pipelineInfo.computeShader              = computeShader.shader;  
     computePipeline   = backend->CreateComputePipeline(pipelineInfo);
 }   
 
@@ -50,7 +51,7 @@ void DepthPyramidPass::Build(RDGBuilder& builder, uint32_t mode, RDGTextureHandl
         std::string index = " [" + std::to_string(i) + "]";
 
         auto passBuilder = builder.CreateComputePass(GetName() + minmax + index)
-            .PassIndex(i * 2 + mode)
+            .PassIndex(i, mode)
             .RootSignature(rootSignature)
             .Read(0, 0, 0, 
                 (i == 0) ? depth : depthMip, 
@@ -60,17 +61,18 @@ void DepthPyramidPass::Build(RDGBuilder& builder, uint32_t mode, RDGTextureHandl
             .Execute([&](RDGPassContext context) {       
 
                 Extent2D extent = EngineContext::Render()->GetWindowsExtent();
-                int mipLevel    = context.passIndex / 2;
+                int mipLevel    = context.passIndex[0];
                 extent.width    = std::max((int)std::ceil(extent.width / (std::pow(2, mipLevel) * 16)), 1);
                 extent.height   = std::max((int)std::ceil(extent.height / (std::pow(2, mipLevel) * 16)), 1);
 
                 DepthPyramidSetting passSetting = {};
-                passSetting.mode = context.passIndex % 2;
+                passSetting.mode = context.passIndex[1];
                 passSetting.mipLevel = mipLevel;
 
                 RHICommandListRef command = context.command; 
                 command->SetComputePipeline(computePipeline);
                 command->BindDescriptorSet(context.descriptors[0], 0);
+                command->BindDescriptorSet(EngineContext::RenderResource()->GetSamplerDescriptorSet(), 1);
                 command->PushConstants(&passSetting, sizeof(DepthPyramidSetting), SHADER_FREQUENCY_COMPUTE);
                 command->Dispatch(  extent.width,   // 已经除过local_size了
                                     extent.height, 

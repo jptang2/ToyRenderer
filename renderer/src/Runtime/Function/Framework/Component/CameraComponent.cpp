@@ -12,15 +12,17 @@
 CEREAL_REGISTER_TYPE(CameraComponent)
 CEREAL_REGISTER_POLYMORPHIC_RELATION(Component, CameraComponent)
 
-void CameraComponent::Init()
+void CameraComponent::OnInit()
 {
-	Component::Init();
+	Component::OnInit();
 	
 	UpdateMatrix();
 }
 
-void CameraComponent::Tick(float deltaTime)
+void CameraComponent::OnUpdate(float deltaTime)
 {
+	InitComponentIfNeed();
+
 	if(IsActiveCamera()) InputMove(deltaTime);
 	UpdateMatrix();
 }
@@ -36,12 +38,12 @@ void CameraComponent::InputMove(float deltaTime)
 
 	// 位移
     Vec3 deltaPosition = Vec3::Zero();
-	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_W))				deltaPosition += transformComponent->GetTransform().Front() * delta;
-	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_S))				deltaPosition -= transformComponent->GetTransform().Front() * delta;
-	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_A))				deltaPosition -= transformComponent->GetTransform().Right() * delta;
-	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_D))				deltaPosition += transformComponent->GetTransform().Right() * delta;
-	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_SPACE))			deltaPosition += transformComponent->GetTransform().Up() * delta;
-	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_LEFT_CONTROL))	deltaPosition -= transformComponent->GetTransform().Up() * delta;
+	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_W))				deltaPosition += transformComponent->Front() * delta;
+	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_S))				deltaPosition -= transformComponent->Front() * delta;
+	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_A))				deltaPosition -= transformComponent->Right() * delta;
+	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_D))				deltaPosition += transformComponent->Right() * delta;
+	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_SPACE))			deltaPosition += transformComponent->Up() * delta;
+	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_LEFT_CONTROL))	deltaPosition -= transformComponent->Up() * delta;
     transformComponent->Translate(deltaPosition);
 
 	if (EngineContext::Input()->MouseButtonIsPressed(MOUSE_BUTTON_TYPE_RIGHT)) 
@@ -49,7 +51,7 @@ void CameraComponent::InputMove(float deltaTime)
 		// 朝向
 		Vec2 offset = -EngineContext::Input()->GetMouseDeltaPosition() * sensitivity;
 
-		Vec3 eulerAngle = transformComponent->GetTransform().GetEulerAngle();
+		Vec3 eulerAngle = transformComponent->GetEulerAngle();
 		eulerAngle = Math::ClampEulerAngle(eulerAngle + Vec3(offset.x(), offset.y(), 0.0f));
 		transformComponent->SetRotation(eulerAngle);
 
@@ -74,12 +76,10 @@ void CameraComponent::UpdateMatrix()
 	std::shared_ptr<TransformComponent> transformComponent = TryGetComponent<TransformComponent>();
 	if(transformComponent)
 	{
-		const Transform& transform = transformComponent->GetTransform();
-		
-		this->position = transform.GetPosition();
-		this->front = transform.Front();
-		this->up = transform.Up();
-		this->right = transform.Right();
+		this->position = transformComponent->GetPosition();
+		this->front = transformComponent->Front();
+		this->up = transformComponent->Up();
+		this->right = transformComponent->Right();
 	}
 
 	prevView = view;
@@ -88,6 +88,8 @@ void CameraComponent::UpdateMatrix()
 	view = Math::LookAt(position, position + front, up);
 	proj = Math::Perspective(Math::ToRadians(fovy), aspect, near, far);
 	proj(1, 1) *= -1;		// Vulkan的NDC是y向下
+
+	move = (prevView == view && prevProj == proj) ? false : true;	// 记录相机是否更新
 
 	frustum = CreateFrustumFromMatrix(proj * view, -1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 1.0f);
 

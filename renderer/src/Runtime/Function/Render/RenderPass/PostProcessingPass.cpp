@@ -17,8 +17,8 @@ void PostProcessingPass::Init()
     rootSignature = backend->CreateRootSignature(rootSignatureInfo);
 
     RHIComputePipelineInfo pipelineInfo     = {};
-    pipelineInfo.computeShader              = computeShader.shader;
     pipelineInfo.rootSignature              = rootSignature;
+    pipelineInfo.computeShader              = computeShader.shader; 
     computePipeline   = backend->CreateComputePipeline(pipelineInfo);
 }   
 
@@ -26,7 +26,7 @@ void PostProcessingPass::Build(RDGBuilder& builder)
 {
     Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
 
-    RDGTextureHandle fxaaOutColor = builder.GetTexture("FXAA Out Color");
+    RDGTextureHandle taaOutColor = builder.GetTexture("TAA Out Color");
 
     RDGBufferHandle exposureData = builder.GetBuffer("Exposure Data");
 
@@ -42,7 +42,7 @@ void PostProcessingPass::Build(RDGBuilder& builder)
 
     RDGComputePassHandle pass = builder.CreateComputePass(GetName())
         .RootSignature(rootSignature)
-        .ReadWrite(0, 0, 0, fxaaOutColor)
+        .ReadWrite(0, 0, 0, taaOutColor)
         .ReadWrite(0, 1, 0, outColor)
         .ReadWrite(0, 2, 0, exposureData)
         .Execute([&](RDGPassContext context) {       

@@ -14,7 +14,8 @@ target("renderer")
                     "thirdparty/spirv_reflect", 
                     "thirdparty/smhasher/src", 
                     "thirdparty/implot", 
-                    "thirdparty/imgui-flame-graph")
+                    "thirdparty/imgui-flame-graph",
+                    "thirdparty/imgui-node-editor")                
     add_packages("vulkansdk", "glfw", "imgui", "stb", "assimp", "cereal", "spdlog", "eventpp", "meshoptimizer", "metis", "mikktspace", "eigen", "stduuid")
 
 --

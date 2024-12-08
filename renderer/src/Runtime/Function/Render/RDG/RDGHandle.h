@@ -47,16 +47,22 @@ public:
     RDGComputePassHandle(NodeID id) : RDGPassHandle(id) {};
 };
 
-class RDGCopyPassHandle : public RDGPassHandle
+class RDGRayTracingPassHandle : public RDGPassHandle
 {
 public:
-    RDGCopyPassHandle(NodeID id) : RDGPassHandle(id) {};
+    RDGRayTracingPassHandle(NodeID id) : RDGPassHandle(id) {};
 };
 
 class RDGPresentPassHandle : public RDGPassHandle
 {
 public:
     RDGPresentPassHandle(NodeID id) : RDGPassHandle(id) {};
+};
+
+class RDGCopyPassHandle : public RDGPassHandle
+{
+public:
+    RDGCopyPassHandle(NodeID id) : RDGPassHandle(id) {};
 };
 
 class RDGTextureHandle : public RDGResoruceHandle

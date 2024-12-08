@@ -77,84 +77,96 @@ void PointShadowPass::Init()
 
 void PointShadowPass::Build(RDGBuilder& builder) 
 {
-    pointShadowLights = EngineContext::Render()->GetLightManager()->GetPointShadowLights();
-    for(uint32_t i = 0; i < pointShadowLights.size(); i++)
+    if( IsEnabled() &&
+        !EngineContext::Render()->IsPassEnabled(RESTIR_PASS) &&
+        !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS) && 
+        !EngineContext::Render()->IsPassEnabled(PATH_TRACING_PASS))
     {
-        std::string index = " [" + std::to_string(i) + "]";
+        pointShadowLights = EngineContext::Render()->GetLightManager()->GetPointShadowLights();
+        for(uint32_t i = 0; i < pointShadowLights.size(); i++)
+        {
+            std::string index = " [" + std::to_string(i) + "]";
 
-        RDGTextureHandle color = builder.CreateTexture("Point Shadow Color" + index)
-            .Exetent({POINT_SHADOW_SIZE, POINT_SHADOW_SIZE, 1})
-            .Format(FORMAT_R32G32B32A32_SFLOAT)
-            .ArrayLayers(6)
-            .MipLevels(1)
-            .AllowRenderTarget()
-            .Finish();
+            RDGTextureHandle color = builder.CreateTexture("Point Shadow Color" + index)
+                .Exetent({POINT_SHADOW_SIZE, POINT_SHADOW_SIZE, 1})
+                .Format(FORMAT_R32G32B32A32_SFLOAT)
+                .ArrayLayers(6)
+                .MipLevels(1)
+                .AllowRenderTarget()
+                .Finish();
 
-        RDGTextureHandle filteredColor = builder.CreateTexture("Point Shadow Filtered Color" + index)
-            .Import(EngineContext::RenderResource()->GetPointShadowTexture(i), RESOURCE_STATE_UNDEFINED)
-            .Finish();
+            RDGTextureHandle filteredColor = builder.CreateTexture("Point Shadow Filtered Color" + index)
+                .Import(EngineContext::RenderResource()->GetPointShadowTexture(i), RESOURCE_STATE_UNDEFINED)
+                .Finish();
 
-        RDGTextureHandle depth = builder.CreateTexture("Point Shadow Depth" + index)
-            .Exetent({POINT_SHADOW_SIZE, POINT_SHADOW_SIZE, 1})
-            .Format(FORMAT_D32_SFLOAT)
-            .ArrayLayers(6)
-            .MipLevels(1)
-            .AllowDepthStencil()
-            .Finish();
+            RDGTextureHandle depth = builder.CreateTexture("Point Shadow Depth" + index)
+                .Import(EngineContext::RenderResource()->GetPointShadowDepthTexture(i), RESOURCE_STATE_UNDEFINED)
+                .Finish();
 
-        RDGRenderPassHandle pass = builder.CreateRenderPass(GetName() + index)
-            .PassIndex(i)
-            .Color(0, color, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, 
-                {0.0f, 0.0f, 0.0f, 0.0f}, {TEXTURE_ASPECT_COLOR, 0, 1, 0, 6})
-            .DepthStencil(depth, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, 
-                1.0f, 0, {TEXTURE_ASPECT_DEPTH, 0, 1, 0, 6})
-            .Execute([&](RDGPassContext context) {
+            // RDGTextureHandle depth = builder.CreateTexture("Point Shadow Depth" + index)
+            //     .Exetent({POINT_SHADOW_SIZE, POINT_SHADOW_SIZE, 1})
+            //     .Format(FORMAT_D32_SFLOAT)
+            //     .ArrayLayers(6)
+            //     .MipLevels(1)
+            //     .AllowDepthStencil()
+            //     .Finish();
 
-                Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
-                uint32_t index = context.passIndex;
-                uint32_t pointLightID = pointShadowLights[index]->GetPointLightID();
+            RDGRenderPassHandle pass = builder.CreateRenderPass(GetName() + index)
+                .PassIndex(i)
+                .Color(0, color, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, 
+                    {0.0f, 0.0f, 0.0f, 0.0f}, {TEXTURE_ASPECT_COLOR, 0, 1, 0, 6})
+                .DepthStencil(depth, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, 
+                    1.0f, 0, {TEXTURE_ASPECT_DEPTH, 0, 1, 0, 6})
+                .Execute([&](RDGPassContext context) {
 
-                RHICommandListRef command = context.command;      
-                command->SetGraphicsPipeline(pipeline);                                      
-                command->SetViewport({0, 0}, {POINT_SHADOW_SIZE, POINT_SHADOW_SIZE});
-                command->SetScissor({0, 0}, {POINT_SHADOW_SIZE, POINT_SHADOW_SIZE}); 
-                command->SetDepthBias(pointShadowLights[index]->GetConstantBias(), 
-                                        pointShadowLights[index]->GetSlopeBias(), 
-                                        0.0f);            
-                command->PushConstants(&pointLightID, sizeof(uint32_t), SHADER_FREQUENCY_GRAPHICS);
-                command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
+                    Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
+                    uint32_t index = context.passIndex[0];
+                    uint32_t pointLightID = pointShadowLights[index]->GetPointLightID();
 
-                meshPassProcessors[index]->Draw(command);                      
-            })
-            .OutputRead(color)  // 手动屏障
-            .Finish();
+                    RHICommandListRef command = context.command;      
+                    command->SetGraphicsPipeline(pipeline);                                      
+                    command->SetViewport({0, 0}, {POINT_SHADOW_SIZE, POINT_SHADOW_SIZE});
+                    command->SetScissor({0, 0}, {POINT_SHADOW_SIZE, POINT_SHADOW_SIZE}); 
+                    command->SetDepthBias(pointShadowLights[index]->GetConstantBias(), 
+                                            pointShadowLights[index]->GetSlopeBias(), 
+                                            0.0f);            
+                    command->PushConstants(&pointLightID, sizeof(uint32_t), SHADER_FREQUENCY_GRAPHICS);
+                    command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
 
-        RDGComputePassHandle filterPass = builder.CreateComputePass(GetName() + " Filter" + index)  //TODO 多轮？
-            .RootSignature(rootSignature1)
-            .Read(0, 0, 0, color, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 0, 1})
-            .Read(0, 0, 1, color, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 1, 1})
-            .Read(0, 0, 2, color, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 2, 1})
-            .Read(0, 0, 3, color, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 3, 1})
-            .Read(0, 0, 4, color, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 4, 1})
-            .Read(0, 0, 5, color, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 5, 1})
-            .ReadWrite(0, 1, 0, filteredColor, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 0, 1})
-            .ReadWrite(0, 1, 1, filteredColor, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 1, 1})
-            .ReadWrite(0, 1, 2, filteredColor, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 2, 1})
-            .ReadWrite(0, 1, 3, filteredColor, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 3, 1})
-            .ReadWrite(0, 1, 4, filteredColor, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 4, 1})
-            .ReadWrite(0, 1, 5, filteredColor, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 5, 1})  
-            .Execute([&](RDGPassContext context) {       
+                    meshPassProcessors[index]->Draw(command);                      
+                })
+                .OutputRead(depth)
+                .OutputRead(color)  // 手动屏障
+                .Finish();
 
-                RHICommandListRef command = context.command; 
-                command->SetComputePipeline(computePipeline);
-                command->BindDescriptorSet(context.descriptors[0], 0);
-                command->BindDescriptorSet(EngineContext::RenderResource()->GetSamplerDescriptorSet(), 1);
-                command->PushConstants(&setting, sizeof(KawaseSetting), SHADER_FREQUENCY_COMPUTE);
-                command->Dispatch(  POINT_SHADOW_SIZE / 16, 
-                                    POINT_SHADOW_SIZE / 16, 
-                                    1);
-            })
-            .OutputRead(filteredColor)
-            .Finish();
+            RDGComputePassHandle filterPass = builder.CreateComputePass(GetName() + " Filter" + index)  //TODO 多轮？
+                .RootSignature(rootSignature1)
+                .Read(0, 0, 0, color, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 0, 1})
+                .Read(0, 0, 1, color, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 1, 1})
+                .Read(0, 0, 2, color, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 2, 1})
+                .Read(0, 0, 3, color, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 3, 1})
+                .Read(0, 0, 4, color, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 4, 1})
+                .Read(0, 0, 5, color, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 5, 1})
+                .ReadWrite(0, 1, 0, filteredColor, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 0, 1})
+                .ReadWrite(0, 1, 1, filteredColor, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 1, 1})
+                .ReadWrite(0, 1, 2, filteredColor, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 2, 1})
+                .ReadWrite(0, 1, 3, filteredColor, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 3, 1})
+                .ReadWrite(0, 1, 4, filteredColor, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 4, 1})
+                .ReadWrite(0, 1, 5, filteredColor, VIEW_TYPE_2D, {TEXTURE_ASPECT_COLOR, 0, 1, 5, 1})  
+                .Execute([&](RDGPassContext context) {       
+
+                    RHICommandListRef command = context.command; 
+                    command->SetComputePipeline(computePipeline);
+                    command->BindDescriptorSet(context.descriptors[0], 0);
+                    command->BindDescriptorSet(EngineContext::RenderResource()->GetSamplerDescriptorSet(), 1);
+                    command->PushConstants(&setting, sizeof(KawaseSetting), SHADER_FREQUENCY_COMPUTE);
+                    command->Dispatch(  POINT_SHADOW_SIZE / 16, 
+                                        POINT_SHADOW_SIZE / 16, 
+                                        1);
+                })
+                .OutputRead(filteredColor)
+                .Finish();
+        }
     }
+    
 }

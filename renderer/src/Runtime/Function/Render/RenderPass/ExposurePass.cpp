@@ -18,8 +18,9 @@ void ExposurePass::Init()
 
 
     RHIComputePipelineInfo pipelineInfo     = {};
-    pipelineInfo.computeShader              = computeShader0.shader;
     pipelineInfo.rootSignature              = rootSignature;
+
+    pipelineInfo.computeShader              = computeShader0.shader;
     computePipeline0                        = backend->CreateComputePipeline(pipelineInfo);
 
     pipelineInfo.computeShader              = computeShader1.shader;
@@ -43,7 +44,7 @@ void ExposurePass::Build(RDGBuilder& builder)
     exposureDataBuffer.SetData(&setting, sizeof(ExposureSetting), 0);
 
 
-    RDGTextureHandle fxaaOutColor = builder.GetTexture("FXAA Out Color");
+    RDGTextureHandle taaOutColor = builder.GetTexture("TAA Out Color");
     
     RDGBufferHandle exposureData = builder.CreateBuffer("Exposure Data")
         .Import(exposureDataBuffer.buffer, RESOURCE_STATE_UNDEFINED)
@@ -51,7 +52,7 @@ void ExposurePass::Build(RDGBuilder& builder)
 
     RDGComputePassHandle pass0 = builder.CreateComputePass("Luminance Histogram")
         .RootSignature(rootSignature)
-        .ReadWrite(0, 0, 0, fxaaOutColor)
+        .ReadWrite(0, 0, 0, taaOutColor)
         .ReadWrite(0, 1, 0, exposureData)
         .Execute([&](RDGPassContext context) {       
 
@@ -66,7 +67,7 @@ void ExposurePass::Build(RDGBuilder& builder)
 
     RDGComputePassHandle pass1 = builder.CreateComputePass("Luminance Exposure")
         .RootSignature(rootSignature)
-        .ReadWrite(0, 0, 0, fxaaOutColor)
+        .ReadWrite(0, 0, 0, taaOutColor)
         .ReadWrite(0, 1, 0, exposureData)
         .Execute([&](RDGPassContext context) {       
 

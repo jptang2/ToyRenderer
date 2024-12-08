@@ -133,8 +133,8 @@ void main()
         vec2 posUV = startUV + tangentStep;
         vec2 negUV = startUV - tangentStep;
 
-        float deltaLumaPos = RGB2LUMA(texture(sampler2D(IN_COLOR, SAMPLER[0]), posUV).rgb) - lumaAverageStart;
-        float deltaLumaNeg = RGB2LUMA(texture(sampler2D(IN_COLOR, SAMPLER[0]), negUV).rgb) - lumaAverageStart;
+        float deltaLumaPos = RGB2LUMA(texture(sampler2D(IN_COLOR, SAMPLER[0]), posUV).xyz) - lumaAverageStart;
+        float deltaLumaNeg = RGB2LUMA(texture(sampler2D(IN_COLOR, SAMPLER[0]), negUV).xyz) - lumaAverageStart;
 
         bool reachedPos = abs(deltaLumaPos) > GRADIENT_SCALE * abs(gradient);
         bool reachedNeg = abs(deltaLumaNeg) > GRADIENT_SCALE * abs(gradient);
@@ -145,8 +145,8 @@ void main()
 
         if (!reachedBoth) {
             for(int i = 2; i < STEP_COUNT_MAX; i++){
-                if(!reachedPos) deltaLumaPos = RGB2LUMA(texture(sampler2D(IN_COLOR, SAMPLER[0]), posUV).rgb) - lumaAverageStart;
-                if(!reachedNeg) deltaLumaNeg = RGB2LUMA(texture(sampler2D(IN_COLOR, SAMPLER[0]), negUV).rgb) - lumaAverageStart;
+                if(!reachedPos) deltaLumaPos = RGB2LUMA(texture(sampler2D(IN_COLOR, SAMPLER[0]), posUV).xyz) - lumaAverageStart;
+                if(!reachedNeg) deltaLumaNeg = RGB2LUMA(texture(sampler2D(IN_COLOR, SAMPLER[0]), negUV).xyz) - lumaAverageStart;
 
                 bool reachedPos = abs(deltaLumaPos) > GRADIENT_SCALE * abs(gradient);
                 bool reachedNeg = abs(deltaLumaNeg) > GRADIENT_SCALE * abs(gradient);

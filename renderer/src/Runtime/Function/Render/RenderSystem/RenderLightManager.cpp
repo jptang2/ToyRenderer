@@ -26,15 +26,19 @@ void RenderLightManager::PrepareLights()
     setting.volumeLightCnt = 0;
     setting.globalIndexOffset = 0;
 
-    pointShadowLights.clear();
     directionalLight = nullptr;
+    pointShadowLights.clear();
+    volumeLights.clear();
 
     // 收集光源信息,更新参数
     // TODO 场景的CPU端剔除
 
     directionalLight = EngineContext::World()->GetActiveScene()->GetDirectionalLight();
-    if(directionalLight) directionalLight->UpdateLightInfo();
-    setting.directionalLightCnt = directionalLight ? 1 : 0;
+    if(directionalLight && directionalLight->Enable()) 
+    {
+        directionalLight->UpdateLightInfo();
+        setting.directionalLightCnt = 1;
+    }
 
     auto pointLightComponents = EngineContext::World()->GetActiveScene()->GetPointLights();
     for(auto& pointLight : pointLightComponents) 
@@ -57,6 +61,19 @@ void RenderLightManager::PrepareLights()
                 setting.pointLightCnt++;        
             }
             pointLight->UpdateLightInfo();
+        }
+    }
+
+    auto volumeLightComponents = EngineContext::World()->GetActiveScene()->GetVolumeLights();
+    for(auto& volumeLight : volumeLightComponents)
+    {
+        if(volumeLight && volumeLight->Enable())
+        {
+            setting.volumeLightIDs[setting.volumeLightCnt] = volumeLight->volumeLightID;
+            setting.volumeLightCnt++;
+            volumeLights.push_back(volumeLight);
+
+            volumeLight->UpdateLightInfo();
         }
     }
 

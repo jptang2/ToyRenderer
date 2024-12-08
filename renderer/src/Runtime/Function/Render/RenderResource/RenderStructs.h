@@ -123,7 +123,8 @@ typedef struct DirectionalLightInfo
     float intencity;            //前三维为颜色，最后一维强度
     
     float fogScattering;        //体积雾散射系数
-    float _padding[3];
+    uint32_t castShadow;        //是否投射阴影，非零值有效
+    float _padding[2];
 
     Frustum frustum;            //视锥，用于计算剔除      
     BoundingSphere sphere;
@@ -161,18 +162,18 @@ typedef struct DDGISetting
     float _padding0;
     Vec3  gridStep;
     float _padding1;
-    IVec3 probecounts;
+    IVec3 probeCounts;
     float _padding2;
 
     float depthSharpness;
-    float hysteresis;
+    float blendWeight;
     float normalBias;
     float energyPreservation;
 
     uint32_t irradianceTextureWidth;
     uint32_t irradianceTextureHeight;
     uint32_t depthTextureWidth;
-    uint32_t depthTextureWeight;
+    uint32_t depthTextureHeight;
 
     float maxProbeDistance;
     int   raysPerProbe;
@@ -181,7 +182,7 @@ typedef struct DDGISetting
     union { uint32_t _p0; bool enable; };   //cpp是一字节，glsl是四字节，手动对齐
     union { uint32_t _p1; bool visibilityTest; };
     union { uint32_t _p2; bool infiniteBounce; };
-    union { uint32_t _p3; bool _padding4; };
+    union { uint32_t _p3; bool randomOrientation; };
 
     BoundingBox boundingBox;    //包围盒，世界空间
 
@@ -206,6 +207,8 @@ typedef struct LightSetting
     uint32_t pointLightIDs[MAX_POINT_LIGHT_COUNT] = { 0 };          // 等待分簇光照处理的当前帧的全部点光源索引
     uint32_t pointShadowLightIDs[MAX_POINT_SHADOW_COUNT] = { 0 };   // 标记阴影点光源的lightID，方便剔除时索引
     
+    uint32_t volumeLightIDs[MAX_VOLUME_LIGHT_COUNT] = { 0 };
+
 } LightSetting;
 
 #define DIR_LIGHT_OFFSET        (0)

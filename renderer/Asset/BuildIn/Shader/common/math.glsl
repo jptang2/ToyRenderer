@@ -2,20 +2,15 @@
 #define MATH_GLSL
 
 
-float rcp(float x) { return 1 / x;}
-float rsqrt(float x) { return 1 / sqrt(x);}
+float rcp(float x) { return 1.0f / x; }
+float rsqrt(float x) { return 1.0f / sqrt(x); }
+float saturate(float x) { return clamp(x, 0.0f, 1.0f); }
+vec2 saturate(vec2 x) { return clamp(x, vec2(0.0f), vec2(1.0f)); }
+vec3 saturate(vec3 x) { return clamp(x, vec3(0.0f), vec3(1.0f)); }
+vec4 saturate(vec4 x) { return clamp(x, vec4(0.0f), vec4(1.0f)); }
 
 #define PI 		3.1415926
 #define FLT_EPS 0.0000001
-
-// //采样周围九点的结构体
-// struct AdjacentTex3 {
-//     vec3 color[3][3];
-// };
-
-// struct AdjacentTex4 {
-//     vec4 color[3][3];
-// };
 
 // 计算线性深度
 float Linear01Depth(float depth, float near, float far)
@@ -29,250 +24,197 @@ float LinearEyeDepth(float depth, float near, float far)            //view space
 	return 1 / (((near - far) / (near * far)) * depth + 1 / near);
 }
 
-// //重心插值
-// float barycentricsInterpolation(in float v0, in float v1, in float v2, vec3 barycentrics){
-//   return v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
-// }
+//重心插值
+float BarycentricsInterpolation(in float v0, in float v1, in float v2, vec3 barycentrics){
+  return v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
+}
 
-// vec2 barycentricsInterpolation(in vec2 v0, in vec2 v1, in vec2 v2, vec3 barycentrics){
-//   return v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
-// }
+vec2 BarycentricsInterpolation(in vec2 v0, in vec2 v1, in vec2 v2, vec3 barycentrics){
+  return v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
+}
 
-// vec3 barycentricsInterpolation(in vec3 v0, in vec3 v1, in vec3 v2, vec3 barycentrics){
-//   return v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
-// }
+vec3 BarycentricsInterpolation(in vec3 v0, in vec3 v1, in vec3 v2, vec3 barycentrics){
+  return v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
+}
 
-// vec4 barycentricsInterpolation(in vec4 v0, in vec4 v1, in vec4 v2, vec3 barycentrics){
-//   return v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
-// }
+vec4 BarycentricsInterpolation(in vec4 v0, in vec4 v1, in vec4 v2, vec3 barycentrics){
+  return v0 * barycentrics.x + v1 * barycentrics.y + v2 * barycentrics.z;
+}
 
+// 色彩空间转换
+// https://software.intel.com/en-us/node/503873
+vec3 RGBtoYCoCg(vec3 c)
+{
+    // Y = R/4 + G/2 + B/4
+    // Co = R/2 - B/2
+    // Cg = -R/4 + G/2 - B/4
+    return vec3(
+        c.x / 4.0 + c.y / 2.0 + c.z / 4.0,
+        c.x / 2.0 - c.z / 2.0,
+        -c.x / 4.0 + c.y / 2.0 - c.z / 4.0);
+}
 
-// //
-// vec3 clipAABB(vec3 aabb_min, vec3 aabb_max, vec3 p, vec3 q)
-// {
-// #ifdef USE_OPTIMIZATIONS
-//     // note: only clips towards aabb center (but fast!)
-//     vec3  p_clip  = 0.5 * (aabb_max + aabb_min);
-//     vec3  e_clip  = 0.5 * (aabb_max - aabb_min) + FLT_EPS;
-//     vec4  v_clip  = q - vec4(p_clip, p.w);
-//     vec3  v_unit  = v_clip.xyz / e_clip;
-//     vec3  a_unit  = abs(v_unit);
-//     float ma_unit = max(a_unit.x, max(a_unit.y, a_unit.z));
-//     if (ma_unit > 1.0)
-//         return vec4(p_clip, p.w) + v_clip / ma_unit;
-//     else
-//         return q; // point inside aabb
-// #else
-//     vec3        r    = q - p;
-//     vec3        rmax = aabb_max - p.xyz;
-//     vec3        rmin = aabb_min - p.xyz;
-//     const float eps  = FLT_EPS;
-//     if (r.x > rmax.x + eps)
-//         r *= (rmax.x / r.x);
-//     if (r.y > rmax.y + eps)
-//         r *= (rmax.y / r.y);
-//     if (r.z > rmax.z + eps)
-//         r *= (rmax.z / r.z);
-//     if (r.x < rmin.x - eps)
-//         r *= (rmin.x / r.x);
-//     if (r.y < rmin.y - eps)
-//         r *= (rmin.y / r.y);
-//     if (r.z < rmin.z - eps)
-//         r *= (rmin.z / r.z);
-//     return p + r;
-// #endif
-// }
+// https://software.intel.com/en-us/node/503873
+vec3 YCoCgtoRGB(vec3 c)
+{
+    // R = Y + Co - Cg
+    // G = Y + Cg
+    // B = Y - Co - Cg
+    // return clamp(vec3(
+    //                  c.x + c.y - c.z,
+    //                  c.x + c.z,
+    //                  c.x - c.y - c.z),
+    //              0.0,
+    //              1.0);
 
-// vec4 clipAABB(vec4 aabb_min, vec4 aabb_max, vec4 p, vec4 q)
-// {
-//     vec4        r    = q - p;
-//     vec4        rmax = aabb_max - p;
-//     vec4        rmin = aabb_min - p;
-//     const float eps  = FLT_EPS;
-//     if (r.x > rmax.x + eps)
-//         r *= (rmax.x / r.x);
-//     if (r.y > rmax.y + eps)
-//         r *= (rmax.y / r.y);
-//     if (r.z > rmax.z + eps)
-//         r *= (rmax.z / r.z);
-//     if (r.w > rmax.w + eps)
-//         r *= (rmax.w / r.w);   
+	return vec3(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z);
+}
 
-//     if (r.x < rmin.x - eps)
-//         r *= (rmin.x / r.x);
-//     if (r.y < rmin.y - eps)
-//         r *= (rmin.y / r.y);
-//     if (r.z < rmin.z - eps)
-//         r *= (rmin.z / r.z);
-//     if (r.w < rmin.w - eps)
-//         r *= (rmin.w / r.w);
-//     return p + r;
-// }
+float RGBtoLuminance(vec3 c)
+{
+    return dot(c, vec3(0.2125, 0.7154, 0.0721)); 
+}
 
+vec3 ClipAABB(vec3 aabb_min, vec3 aabb_max, vec3 p, vec3 q)
+{
+#ifdef USE_OPTIMIZATIONS
+    // note: only clips towards aabb center (but fast!)
+    vec3  p_clip  = 0.5 * (aabb_max + aabb_min);
+    vec3  e_clip  = 0.5 * (aabb_max - aabb_min) + FLT_EPS;
+    vec4  v_clip  = q - vec4(p_clip, p.w);
+    vec3  v_unit  = v_clip.xyz / e_clip;
+    vec3  a_unit  = abs(v_unit);
+    float ma_unit = max(a_unit.x, max(a_unit.y, a_unit.z));
+    if (ma_unit > 1.0)
+        return vec4(p_clip, p.w) + v_clip / ma_unit;
+    else
+        return q; // point inside aabb
+#else
+    vec3        r    = q - p;
+    vec3        rmax = aabb_max - p.xyz;
+    vec3        rmin = aabb_min - p.xyz;
+    float eps  = FLT_EPS;
+    if (r.x > rmax.x + eps)
+        r *= (rmax.x / r.x);
+    if (r.y > rmax.y + eps)
+        r *= (rmax.y / r.y);
+    if (r.z > rmax.z + eps)
+        r *= (rmax.z / r.z);
+    if (r.x < rmin.x - eps)
+        r *= (rmin.x / r.x);
+    if (r.y < rmin.y - eps)
+        r *= (rmin.y / r.y);
+    if (r.z < rmin.z - eps)
+        r *= (rmin.z / r.z);
+    return p + r;
+#endif
+}
 
-// // https://software.intel.com/en-us/node/503873
-// vec3 RGBtoYCoCg(vec3 c)
-// {
-//     // Y = R/4 + G/2 + B/4
-//     // Co = R/2 - B/2
-//     // Cg = -R/4 + G/2 - B/4
-//     return vec3(
-//         c.x / 4.0 + c.y / 2.0 + c.z / 4.0,
-//         c.x / 2.0 - c.z / 2.0,
-//         -c.x / 4.0 + c.y / 2.0 - c.z / 4.0);
-// }
+vec4 ClipAABB(vec4 aabb_min, vec4 aabb_max, vec4 p, vec4 q)
+{
+    vec4        r    = q - p;
+    vec4        rmax = aabb_max - p;
+    vec4        rmin = aabb_min - p;
+    const float eps  = FLT_EPS;
+    if (r.x > rmax.x + eps)
+        r *= (rmax.x / r.x);
+    if (r.y > rmax.y + eps)
+        r *= (rmax.y / r.y);
+    if (r.z > rmax.z + eps)
+        r *= (rmax.z / r.z);
+    if (r.w > rmax.w + eps)
+        r *= (rmax.w / r.w);   
 
-// // https://software.intel.com/en-us/node/503873
-// vec3 YCoCgtoRGB(vec3 c)
-// {
-//     // R = Y + Co - Cg
-//     // G = Y + Cg
-//     // B = Y - Co - Cg
-//     // return clamp(vec3(
-//     //                  c.x + c.y - c.z,
-//     //                  c.x + c.z,
-//     //                  c.x - c.y - c.z),
-//     //              0.0,
-//     //              1.0);
+    if (r.x < rmin.x - eps)
+        r *= (rmin.x / r.x);
+    if (r.y < rmin.y - eps)
+        r *= (rmin.y / r.y);
+    if (r.z < rmin.z - eps)
+        r *= (rmin.z / r.z);
+    if (r.w < rmin.w - eps)
+        r *= (rmin.w / r.w);
+    return p + r;
+}
 
-// 	return vec3(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z);
-// }
+//采样周围九点的结构体
+struct AdjacentTex3 
+{
+    vec3 color[3][3];
+};
 
-// float RGBtoLuminance(vec3 c)
-// {
-//     return dot(c, vec3(0.2125, 0.7154, 0.0721)); 
-// }
+struct AdjacentTex4 
+{
+    vec4 color[3][3];
+};
 
-// AdjacentTex3 textureAdj3(sampler2D tex, vec2 uv, int mip)
-// {
-//     AdjacentTex3 adjacent;
+AdjacentTex3 TextureAdj3(texture2D tex, ivec2 pixel)
+{
+    AdjacentTex3 adjacent;
+    ivec2 du                 = ivec2(1, 0);
+    ivec2 dv                 = ivec2(0, 1);
 
-//     ivec2 texSize           = textureSize(tex, mip);
-//     vec2 du                 = vec2(1.0f / texSize.x, 0.0);
-//     vec2 dv                 = vec2(0.0, 1.0f / texSize.y);
+    adjacent.color[0][0]    = texelFetch(tex, pixel - dv - du,  0).xyz;
+    adjacent.color[0][1]    = texelFetch(tex, pixel - dv,       0).xyz;
+    adjacent.color[0][2]    = texelFetch(tex, pixel - dv + du,  0).xyz;
+    adjacent.color[1][0]    = texelFetch(tex, pixel - du,       0).xyz;
+    adjacent.color[1][1]    = texelFetch(tex, pixel,            0).xyz;
+    adjacent.color[1][2]    = texelFetch(tex, pixel + du,       0).xyz;
+    adjacent.color[2][0]    = texelFetch(tex, pixel + dv - du,  0).xyz;
+    adjacent.color[2][1]    = texelFetch(tex, pixel + dv,       0).xyz;
+    adjacent.color[2][2]    = texelFetch(tex, pixel + dv + du,  0).xyz;
 
-//     adjacent.color[0][0]    = texture(tex, uv - dv - du).rgb;
-//     adjacent.color[0][1]    = texture(tex, uv - dv).rgb;
-//     adjacent.color[0][2]    = texture(tex, uv - dv + du).rgb;
-//     adjacent.color[1][0]    = texture(tex, uv - du).rgb;
-//     adjacent.color[1][1]    = texture(tex, uv).rgb;
-//     adjacent.color[1][2]    = texture(tex, uv + du).rgb;
-//     adjacent.color[2][0]    = texture(tex, uv + dv - du).rgb;
-//     adjacent.color[2][1]    = texture(tex, uv + dv).rgb;
-//     adjacent.color[2][2]    = texture(tex, uv + dv + du).rgb;
+    return adjacent;
+}
 
-//     return adjacent;
-// }
+vec3 MaxAdj3(AdjacentTex3 adjacent)
+{
+    return max( adjacent.color[0][0], max(
+                adjacent.color[0][1], max(
+                adjacent.color[0][2], max(
+                adjacent.color[1][0], max(
+                adjacent.color[1][1], max(
+                adjacent.color[1][2], max(
+                adjacent.color[2][0], max(
+                adjacent.color[2][1], 
+                adjacent.color[2][2]))))))));
+}
 
-// AdjacentTex4 textureAdj4(sampler2D tex, vec2 uv, int mip)
-// {
-//     AdjacentTex4 adjacent;
+vec3 MinAdj3(AdjacentTex3 adjacent)
+{
+    return min( adjacent.color[0][0], min(
+                adjacent.color[0][1], min(
+                adjacent.color[0][2], min(
+                adjacent.color[1][0], min(
+                adjacent.color[1][1], min(
+                adjacent.color[1][2], min(
+                adjacent.color[2][0], min(
+                adjacent.color[2][1], 
+                adjacent.color[2][2]))))))));
+}
 
-//     ivec2 texSize           = textureSize(tex, mip);
-//     vec2 du                 = vec2(1.0f / texSize.x, 0.0);
-//     vec2 dv                 = vec2(0.0, 1.0f / texSize.y);
+vec3 AvgAdj3(AdjacentTex3 adjacent)
+{
+    return (    adjacent.color[0][0] + 
+                adjacent.color[0][1] + 
+                adjacent.color[0][2] + 
+                adjacent.color[1][0] + 
+                adjacent.color[1][1] + 
+                adjacent.color[1][2] + 
+                adjacent.color[2][0] + 
+                adjacent.color[2][1] + 
+                adjacent.color[2][2]) / 9.0;
+}
 
-//     adjacent.color[0][0]    = texture(tex, uv - dv - du);
-//     adjacent.color[0][1]    = texture(tex, uv - dv);
-//     adjacent.color[0][2]    = texture(tex, uv - dv + du);
-//     adjacent.color[1][0]    = texture(tex, uv - du);
-//     adjacent.color[1][1]    = texture(tex, uv);
-//     adjacent.color[1][2]    = texture(tex, uv + du);
-//     adjacent.color[2][0]    = texture(tex, uv + dv - du);
-//     adjacent.color[2][1]    = texture(tex, uv + dv);
-//     adjacent.color[2][2]    = texture(tex, uv + dv + du);
+vec3 ClampedColor(vec3 color, AdjacentTex3 clampAdj)
+{
+    vec3 cmin           = MinAdj3(clampAdj);
+    vec3 cmax           = MaxAdj3(clampAdj);
+    vec3 cavg           = AvgAdj3(clampAdj);
 
-//     return adjacent;
-// }
-
-// vec3 maxAdj3(AdjacentTex3 adjacent)
-// {
-//     return max( adjacent.color[0][0], max(
-//                 adjacent.color[0][1], max(
-//                 adjacent.color[0][2], max(
-//                 adjacent.color[1][0], max(
-//                 adjacent.color[1][1], max(
-//                 adjacent.color[1][2], max(
-//                 adjacent.color[2][0], max(
-//                 adjacent.color[2][1], 
-//                 adjacent.color[2][2]))))))));
-// }
-
-// vec3 minAdj3(AdjacentTex3 adjacent)
-// {
-//     return min( adjacent.color[0][0], min(
-//                 adjacent.color[0][1], min(
-//                 adjacent.color[0][2], min(
-//                 adjacent.color[1][0], min(
-//                 adjacent.color[1][1], min(
-//                 adjacent.color[1][2], min(
-//                 adjacent.color[2][0], min(
-//                 adjacent.color[2][1], 
-//                 adjacent.color[2][2]))))))));
-// }
-
-// vec3 avgAdj3(AdjacentTex3 adjacent)
-// {
-//     return (    adjacent.color[0][0] + 
-//                 adjacent.color[0][1] + 
-//                 adjacent.color[0][2] + 
-//                 adjacent.color[1][0] + 
-//                 adjacent.color[1][1] + 
-//                 adjacent.color[1][2] + 
-//                 adjacent.color[2][0] + 
-//                 adjacent.color[2][1] + 
-//                 adjacent.color[2][2]) / 9.0;
-// }
-
-// vec4 maxAdj4(AdjacentTex4 adjacent)
-// {
-//     return max( adjacent.color[0][0], max(
-//                 adjacent.color[0][1], max(
-//                 adjacent.color[0][2], max(
-//                 adjacent.color[1][0], max(
-//                 adjacent.color[1][1], max(
-//                 adjacent.color[1][2], max(
-//                 adjacent.color[2][0], max(
-//                 adjacent.color[2][1], 
-//                 adjacent.color[2][2]))))))));
-// }
-
-// vec4 minAdj4(AdjacentTex4 adjacent)
-// {
-//     return min( adjacent.color[0][0], min(
-//                 adjacent.color[0][1], min(
-//                 adjacent.color[0][2], min(
-//                 adjacent.color[1][0], min(
-//                 adjacent.color[1][1], min(
-//                 adjacent.color[1][2], min(
-//                 adjacent.color[2][0], min(
-//                 adjacent.color[2][1], 
-//                 adjacent.color[2][2]))))))));
-// }
-
-// vec4 avgAdj4(AdjacentTex4 adjacent)
-// {
-//     return (    adjacent.color[0][0] + 
-//                 adjacent.color[0][1] + 
-//                 adjacent.color[0][2] + 
-//                 adjacent.color[1][0] + 
-//                 adjacent.color[1][1] + 
-//                 adjacent.color[1][2] + 
-//                 adjacent.color[2][0] + 
-//                 adjacent.color[2][1] + 
-//                 adjacent.color[2][2]) / 9.0;
-// }
-
-// vec3 clampedColor(vec3 color, AdjacentTex3 clampAdj)
-// {
-//     vec3 cmin           = minAdj3(clampAdj);
-//     vec3 cmax           = maxAdj3(clampAdj);
-//     vec3 cavg           = avgAdj3(clampAdj);
-
-//     //return  color;
-//     //return  clamp(color, cmin, cmax);
-//     return clipAABB(cmin, cmax, clamp(cavg, cmin, cmax), color);      
-// }
+    //return  color;
+    //return  clamp(color, cmin, cmax);
+    return ClipAABB(cmin, cmax, clamp(cavg, cmin, cmax), color);      
+}
 
 // vec4 clampedColor(vec4 color, AdjacentTex4 clampAdj)
 // {
@@ -286,57 +228,57 @@ float LinearEyeDepth(float depth, float near, float far)            //view space
 // }
 
 
-// void RGBtoYCoCg(inout AdjacentTex3 adjacent)
-// {
-//     for(int i = 0; i < 3; i++)
-//     {
-//         for(int j = 0; j < 3; j++)
-//         {
-//             adjacent.color[i][j] = RGBtoYCoCg(adjacent.color[i][j]);
-//         }
-//     }
-// }
+void RGBtoYCoCg(inout AdjacentTex3 adjacent)
+{
+    for(int i = 0; i < 3; i++)
+    {
+        for(int j = 0; j < 3; j++)
+        {
+            adjacent.color[i][j] = RGBtoYCoCg(adjacent.color[i][j]);
+        }
+    }
+}
 
-// void YCoCgtoRGB(inout AdjacentTex3 adjacent)
-// {
-//     for(int i = 0; i < 3; i++)
-//     {
-//         for(int j = 0; j < 3; j++)
-//         {
-//             adjacent.color[i][j] = YCoCgtoRGB(adjacent.color[i][j]);
-//         }
-//     }
-// }
+void YCoCgtoRGB(inout AdjacentTex3 adjacent)
+{
+    for(int i = 0; i < 3; i++)
+    {
+        for(int j = 0; j < 3; j++)
+        {
+            adjacent.color[i][j] = YCoCgtoRGB(adjacent.color[i][j]);
+        }
+    }
+}
 
-// float sign_not_zero(in float k)
-// {
-//     return (k >= 0.0) ? 1.0 : -1.0;
-// }
+float SignNotZero(in float k)
+{
+    return (k >= 0.0) ? 1.0 : -1.0;
+}
 
-// vec2 sign_not_zero(in vec2 v)
-// {
-//     return vec2(sign_not_zero(v.x), sign_not_zero(v.y));
-// }
+vec2 SignNotZero(in vec2 v)
+{
+    return vec2(SignNotZero(v.x), SignNotZero(v.y));
+}
 
-// // 八面体映射，输入输出范围[-1, 1]
-// vec2 Oct_Encode(in vec3 v) 
-// {
-//     float l1norm = abs(v.x) + abs(v.y) + abs(v.z);
-//     vec2 result = v.xy * (1.0 / l1norm);
-//     if (v.z < 0.0)
-//         result = (1.0 - abs(result.yx)) * sign_not_zero(result.xy);
-//     return result;
-// }
+// 八面体映射，输入输出范围[-1, 1]
+vec2 OctEncode(in vec3 v) 
+{
+    float l1norm = abs(v.x) + abs(v.y) + abs(v.z);
+    vec2 result = v.xy * (1.0 / l1norm);
+    if (v.z < 0.0)
+        result = (1.0 - abs(result.yx)) * SignNotZero(result.xy);
+    return result;
+}
 
-// vec3 Oct_Decode(vec2 o)
-// {
-//     vec3 v = vec3(o.x, o.y, 1.0 - abs(o.x) - abs(o.y));
+vec3 OctDecode(vec2 o)
+{
+    vec3 v = vec3(o.x, o.y, 1.0 - abs(o.x) - abs(o.y));
 
-//     if (v.z < 0.0)
-//         v.xy = (1.0 - abs(v.yx)) * sign_not_zero(v.xy);
+    if (v.z < 0.0)
+        v.xy = (1.0 - abs(v.yx)) * SignNotZero(v.xy);
 
-//     return normalize(v);
-// }
+    return normalize(v);
+}
 
 // // A simple utility to convert a float to a 2-component octohedral representation
 // // 向量压缩算法，实现思路和八面体映射一致
@@ -422,15 +364,15 @@ float LinearEyeDepth(float depth, float near, float far)            //view space
 
 
 
-// vec3 ToneMap(vec3 x)
-// {
-//     return x / (x + vec3(1.0f)); // Reinhard tonemap
-// }
+vec3 ToneMap(vec3 x)
+{
+    return x / (x + vec3(1.0f)); // Reinhard tonemap
+}
 
-// vec3 InverseToneMap(vec3 x)
-// {
-//     return x / max((vec3(1.0f) - x), vec3(FLT_EPS));
-// }
+vec3 InverseToneMap(vec3 x)
+{
+    return x / max((vec3(1.0f) - x), vec3(FLT_EPS));
+}
 
 float Saturate(float x)
 {

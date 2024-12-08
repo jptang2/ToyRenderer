@@ -54,32 +54,35 @@ SkyboxComponent::~SkyboxComponent()
     }
 }
 
-void SkyboxComponent::Load()
+void SkyboxComponent::OnLoad()
 {
     BeginLoadAssetBind()
     LoadAssetBind(Texture, skyboxTexture)
     EndLoadAssetBind
 }
 
-void SkyboxComponent::Save()
+void SkyboxComponent::OnSave()
 {
     BeginSaveAssetBind()
     SaveAssetBind(skyboxTexture)
     EndSaveAssetBind
 }
 
-void SkyboxComponent::Init()
+void SkyboxComponent::OnInit()
 {
-    Component::Init();
+    Component::OnInit();
 
     if(skyboxTexture) material->SetTextureCube(skyboxTexture, 0);
 }
 
-void SkyboxComponent::Tick(float deltaTime)
+void SkyboxComponent::OnUpdate(float deltaTime)
 {
+    InitComponentIfNeed();
+
     auto cameraComponent = EngineContext::World()->GetActiveScene()->GetActiveCamera();
     if(!cameraComponent) return;
 
+    material->SetFloat(intencity, 0);
 
     Vec3 position = cameraComponent->GetPosition();
     Vec3 scale = Vec3(200, 200, 200);

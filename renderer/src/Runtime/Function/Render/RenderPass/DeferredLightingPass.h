@@ -14,7 +14,7 @@ public:
 
 	virtual std::string GetName() override final { return "Deferred Lighting"; }
 
-	virtual PassType GetType() override final { return DEFERRED_LIGHTING_PASS; };
+	virtual PassType GetType() override final { return DEFERRED_LIGHTING_PASS; }
 
 private:
 	struct DeferredLightingSetting{

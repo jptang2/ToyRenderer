@@ -6,6 +6,7 @@
 #include "Function/Framework/Component/DirectionalLightComponent.h"
 #include "Function/Framework/Component/PointLightComponent.h"
 #include "Function/Framework/Component/SkyboxComponent.h"
+#include "Function/Framework/Component/VolumeLightComponent.h"
 #include "Function/Framework/Entity/Entity.h"
 #include "Resource/Asset/Asset.h"
 
@@ -59,7 +60,8 @@ public:
     std::shared_ptr<CameraComponent> GetActiveCamera();
     std::shared_ptr<SkyboxComponent> GetSkyBox();
     std::shared_ptr<DirectionalLightComponent> GetDirectionalLight();
-    std::vector<std::shared_ptr<PointLightComponent>> GetPointLights()  { return GetComponents<PointLightComponent>(); };
+    std::vector<std::shared_ptr<PointLightComponent>> GetPointLights()      { return GetComponents<PointLightComponent>(); }
+    std::vector<std::shared_ptr<VolumeLightComponent>> GetVolumeLights()    { return GetComponents<VolumeLightComponent>(); }
 
 protected:
     std::string name;

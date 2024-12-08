@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RenderPass.h"
+#include <cstdint>
 
 class BloomPass : public RenderPass
 {
@@ -14,7 +15,7 @@ public:
 
 	virtual std::string GetName() override final { return "Bloom"; }
 
-	virtual PassType GetType() override final { return BLOOM_PASS; };
+	virtual PassType GetType() override final { return BLOOM_PASS; }
 
 private:
 	struct BloomSetting {
@@ -23,19 +24,16 @@ private:
 		float stride = 1.0f;
 		float bias = 6.0f;
 		float accumulateIntencity = 2.0f;
-		float combineIntencity = 0.1f;
+		float combineIntencity = 0.01f; 
+		float thresholdMin = 0.7f;
+		float thresholdMax = 10.0f;
+		uint32_t bloomOnly = 0;
 	};
 	BloomSetting setting;
 
-    Shader computeShader0;
-	Shader computeShader1;
-	Shader computeShader2;
-	Shader computeShader3;
+    Shader computeShader[4];
 
-    RHIComputePipelineRef computePipeline0;
-	RHIComputePipelineRef computePipeline1;
-	RHIComputePipelineRef computePipeline2;
-	RHIComputePipelineRef computePipeline3;
+    RHIComputePipelineRef computePipeline[4];
 
 	RHIRootSignatureRef rootSignature;
 

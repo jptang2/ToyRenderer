@@ -96,6 +96,14 @@ layout(set = 1, binding = 5) buffer CullingSetting
 	uint passOffset [MAX_SUPPORTED_MESH_PASS_COUNT];
 };
 
+layout(push_constant) uniform CullingLodSetting {
+    float lodErrorRate;
+	float lodErrorOffset;
+	uint disableVirtualMeshCulling;	
+	uint disableOcclusionCulling;
+	uint disableFrustrumCulling;
+} SETTING;
+
 #define DEPTH_PASS_INDEX 0
 #define POINT_SHADOW_PASS_INDEX 1
 #define DIRECTIONAL_SHADOW_PASS_INDEX 2
@@ -123,11 +131,11 @@ void main()
 			MeshCluster cluster = MESH_CLUSTERS.slot[clusterInfo.clusterID];
 			Object object = OBJECTS.slot[clusterInfo.objectID];
 			
-			BoundingSphere world_sphere = SphereTransform(cluster.sphere, object.model);	//世界空间的包围球包围盒,是cluster的不是object的
+			BoundingSphere worldSphere = SphereTransform(cluster.sphere, object.model);	//世界空间的包围球包围盒,是cluster的不是object的
 
 			bool visible = true;			//整体可见性
-			bool frustum_visible = true;	//视锥剔除可见性
-			bool occlusion_visible = true;	//遮蔽剔除可见性
+			bool frustumVisible = true;		//视锥剔除可见性
+			bool occlusionVisible = true;	//遮蔽剔除可见性
 	
 			//屏幕空间绘制
 			if(	passType[i] == DEPTH_PASS_INDEX ||
@@ -135,10 +143,10 @@ void main()
 				passType[i] == FORWARD_PASS_INDEX ||
 				passType[i] == TRANSPARENT_PASS_INDEX)
 			{
-				frustum_visible = frustum_visible && FrustumIntersectSphere(CAMERA.frustum, world_sphere);
+				frustumVisible = frustumVisible && FrustumIntersectSphere(CAMERA.frustum, worldSphere);
 
-				occlusion_visible = occlusion_visible && OcclusionCull( 			//遮蔽剔除使用前一帧的深度缓冲Hiz
-					world_sphere, 
+				occlusionVisible = occlusionVisible && OcclusionCull( 			//遮蔽剔除使用前一帧的深度缓冲Hiz
+					worldSphere, 
 					CAMERA.pos.xyz, CAMERA.view, CAMERA.proj, CAMERA.near,
 					DEPTH_PYRAMID[1], SAMPLER[3]); 
 			}
@@ -146,25 +154,27 @@ void main()
 			//光源空间绘制，平行光
 			if(passType[i] == DIRECTIONAL_SHADOW_PASS_INDEX)
 			{			
-				// frustum_visible = frustum_visible && FrustumIntersectSphere(LIGHTS.directionalLights[passOffset[i]].frustum, world_sphere);
-				frustum_visible = frustum_visible && SphereIntersectSphere(LIGHTS.directionalLights[passOffset[i]].sphere, world_sphere);
+				// frustumVisible = frustumVisible && FrustumIntersectSphere(LIGHTS.directionalLights[passOffset[i]].frustum, worldSphere);
+				frustumVisible = frustumVisible && SphereIntersectSphere(LIGHTS.directionalLights[passOffset[i]].sphere, worldSphere);
 			}
 
 			//光源空间绘制，点光源
 			if(passType[i] == POINT_SHADOW_PASS_INDEX)
 			{
 				if(passOffset[i] >= LIGHTS.lightSetting.pointshadowedLightCnt)	visible = false;	//没启用的点光源槽位
-				else frustum_visible = frustum_visible && SphereIntersectSphere(world_sphere, LIGHTS.pointLights[LIGHTS.lightSetting.pointShadowLightIDs[passOffset[i]]].sphere);
+				else frustumVisible = frustumVisible && SphereIntersectSphere(worldSphere, LIGHTS.pointLights[LIGHTS.lightSetting.pointShadowLightIDs[passOffset[i]]].sphere);
 			}
 			
 			//TODO INDIRECT_COMMANDS可以放到这里来录制，不只是instanceCount
 
-			visible = visible && occlusion_visible && frustum_visible;
+            if(SETTING.disableFrustrumCulling != 0) frustumVisible = true;
+            if(SETTING.disableOcclusionCulling != 0) occlusionVisible = true;
+			visible = visible && occlusionVisible && frustumVisible;
 			// visible = true;	// 
 			
 			atomicAdd(CLUSTER_DRAW_DATAS[i].setting.drawSize, visible ? 1 : 0);						//存一下剔除的数量信息
-			atomicAdd(CLUSTER_DRAW_DATAS[i].setting.frustumCull, frustum_visible ? 0 : 1);
-			atomicAdd(CLUSTER_DRAW_DATAS[i].setting.occlusionCull, occlusion_visible ? 0 : 1);
+			atomicAdd(CLUSTER_DRAW_DATAS[i].setting.frustumCull, frustumVisible ? 0 : 1);
+			atomicAdd(CLUSTER_DRAW_DATAS[i].setting.occlusionCull, occlusionVisible ? 0 : 1);
 		
 			if(visible) 
 			{

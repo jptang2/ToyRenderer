@@ -1,8 +1,10 @@
 #pragma once
 
+#include "Function/Render/RHI/RHIStructs.h"
 #include "Function/Render/RenderResource/Shader.h"
 #include "MeshPass.h"
 #include "RenderPass.h"
+#include <cstdint>
 
 class GBufferPass : public MeshPass
 {
@@ -16,7 +18,7 @@ public:
 
 	virtual std::string GetName() override final { return "G-Buffer"; }
 
-    virtual PassType GetType() override final { return G_BUFFER_PASS; };
+    virtual PassType GetType() override final { return G_BUFFER_PASS; }
 
 private:
     Shader vertexShader;
@@ -27,6 +29,8 @@ private:
     RHIRootSignatureRef rootSignature;
     RHIGraphicsPipelineRef pipeline;
     RHIGraphicsPipelineRef clusterPipeline;
+
+    RHITextureRef historyNormalTex;
 
     friend class GBufferPassProcessor;
 

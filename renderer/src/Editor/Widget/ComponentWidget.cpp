@@ -19,7 +19,8 @@ void ComponentWidget::UI(std::shared_ptr<Component> component)
         case TRANSFORM_COMPONENT:           TransformComponentUI(std::static_pointer_cast<TransformComponent>(component));                  break;
         case CAMERA_COMPONENT:              CameraComponentUI(std::static_pointer_cast<CameraComponent>(component));                        break;
         case POINT_LIGHT_COMPONENT:         PointLightComponentUI(std::static_pointer_cast<PointLightComponent>(component));                break;
-        case DIRECTIONAL_LIGHT_COMPONENT:   DirectionalLightComponentUI(std::static_pointer_cast<DirectionalLightComponent>(component));    break;   
+        case DIRECTIONAL_LIGHT_COMPONENT:   DirectionalLightComponentUI(std::static_pointer_cast<DirectionalLightComponent>(component));    break; 
+		case VOLUME_LIGHT_COMPONENT:		VolumeLightComponentUI(std::static_pointer_cast<VolumeLightComponent>(component));    		  break;   
         case MESH_RENDERER_COMPONENT:       MeshRendererComponentUI(std::static_pointer_cast<MeshRendererComponent>(component));            break;   
 		case SKYBOX_COMPONENT:				SkyboxComponentUI(std::static_pointer_cast<SkyboxComponent>(component));						  break;
         default:                                                                                                                                             break;
@@ -88,15 +89,15 @@ void ComponentWidget::PointLightComponentUI(std::shared_ptr<PointLightComponent>
     ImGui::Checkbox("Enable", &component->enable);
 	ImGui::SameLine(); ImGui::Checkbox("Cast shadow", &component->castShadow);
 
-	ImGui::Text("Bounding box min: [%f, %f, %f]",
-		component->box.minBound[0], 
-        component->box.minBound[1], 
-        component->box.minBound[2]);
+	// ImGui::Text("Bounding box min: [%f, %f, %f]",
+	// 	component->box.minBound[0], 
+    //     component->box.minBound[1], 
+    //     component->box.minBound[2]);
 
-	ImGui::Text("Bounding box max: [%f, %f, %f]",
-		component->box.maxBound[0], 
-        component->box.maxBound[1], 
-        component->box.maxBound[2]);
+	// ImGui::Text("Bounding box max: [%f, %f, %f]",
+	// 	component->box.maxBound[0], 
+    //     component->box.maxBound[1], 
+    //     component->box.maxBound[2]);
 
 	ImGui::DragFloat("Constant bias", &component->constantBias, 0.0005f);
 	ImGui::DragFloat("Slope bias", &component->slopeBias, 0.05f);
@@ -105,6 +106,54 @@ void ComponentWidget::PointLightComponentUI(std::shared_ptr<PointLightComponent>
 	ImGui::DragFloat("Range", &component->far, 0.05f, 0.1f);
 	ImGui::DragFloat2("EVSM", &component->evsm[0]);
 	ImGui::DragFloat("Fog scattering", &component->fogScattering, 0.001f, 0.0f, 1.0f);
+}
+
+void ComponentWidget::VolumeLightComponentUI(std::shared_ptr<VolumeLightComponent> component)
+{
+	// 配置参数
+	ImGui::Checkbox("Enable", &component->enable);
+	
+	ImGui::Checkbox("Visibility test", &component->visibilityTest);
+	ImGui::SameLine();	
+	ImGui::Checkbox("Infinite bounce", &component->infiniteBounce);
+	ImGui::SameLine();	
+	ImGui::Checkbox("Random probe orientation", &component->randomOrientation);
+
+	// 可视化
+	ImGui::Checkbox("Visualize probe", &component->visulaize);
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Irradiance", component->visulaizeMode == 0))
+		component->visulaizeMode = 0;
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Depth", component->visulaizeMode == 1))
+		component->visulaizeMode = 1;
+	ImGui::DragFloat("Probe scale", &component->visulaizeProbeScale, 0.02f, 0.01f, 1.0f);
+
+
+	// 更新
+	ImGui::DragInt("Geometry update frequency",		&component->updateFrequences[0], 0.1f, 0, 10);
+	ImGui::DragInt("Irradiance update frequency",	&component->updateFrequences[1], 0.1f, 0, 10);
+	if (ImGui::Button("Update geometry once"))		component->shouldUpdate[0] = true;	ImGui::SameLine();
+	if (ImGui::Button("Update irradiance once"))		component->shouldUpdate[1] = true;
+
+
+	//尺寸
+	if (ImGui::DragInt3("Probe counts", &component->probeCounts[0], 0.1f, 1, 50)) component->UpdateTexture();
+	// ImGui::Text("Probe counts:[%d, %d, %d]",	//暂时写死，不能改纹理大小
+	// 	component->probeCounts[0],
+	// 	component->probeCounts[1], 
+	// 	component->probeCounts[2]);
+
+	if (ImGui::DragInt("Rays per probe", &component->raysPerProbe, 1.0f, 1.0f, 256.0f)) component->UpdateTexture();
+	//ImGui::Text("Rays per probe:[%d]",		component->raysPerProbe);	//暂时写死，不能改纹理大小
+	
+
+	// 计算参数
+	ImGui::DragFloat3("Grid step",			&component->gridStep[0], 0.05f, 0.1f, 10.0f);
+	ImGui::DragFloat("Depth sharpness",		&component->depthSharpness, 0.05f, 0.0f, 100.0f);
+	ImGui::DragFloat("History blend weight",	&component->blendWeight, 0.05f, 0.0f, 1.0f);
+	ImGui::DragFloat("Normal bias",			&component->normalBias, 0.05f, 0.0f, 1.0f);
+	ImGui::DragFloat("Energy preservation", &component->energyPreservation, 0.01f, 0.0f, 1.0f);
 }
 
 void ComponentWidget::MeshRendererComponentUI(std::shared_ptr<MeshRendererComponent> component)
@@ -160,4 +209,6 @@ void ComponentWidget::SkyboxComponentUI(std::shared_ptr<SkyboxComponent> compone
 {
 	ImGui::SeparatorText("Skybox texture:");
 	AssetWidget::UI(component->skyboxTexture);
+
+	ImGui::DragFloat("Intencity", &component->intencity);
 }

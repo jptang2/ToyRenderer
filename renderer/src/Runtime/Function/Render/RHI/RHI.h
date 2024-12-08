@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Function/Render/RHI/RHIStructs.h"
 #include "RHIResource.h"
 #include "RHIStructs.h"
 
@@ -55,7 +56,7 @@ public:
 
     virtual RHICommandContextRef CreateCommandContext(RHICommandPoolRef pool) = 0;
 
-    //缓冲，纹理 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //缓冲，纹理，着色器，加速结构 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     virtual RHIBufferRef CreateBuffer(const RHIBufferInfo& info) = 0;
 
@@ -65,9 +66,15 @@ public:
 
     virtual RHISamplerRef CreateSampler(const RHISamplerInfo& info) = 0;
 
-    //着色器 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
     virtual RHIShaderRef CreateShader(const RHIShaderInfo& info) = 0;
+
+    virtual RHIShaderBindingTableRef CreateShaderBindingTable(const RHIShaderBindingTableInfo& info) = 0;
+
+    virtual RHITopLevelAccelerationStructureRef CreateTopLevelAccelerationStructure(const RHITopLevelAccelerationStructureInfo& info) = 0;
+
+    virtual RHIBottomLevelAccelerationStructureRef CreateBottomLevelAccelerationStructure(const RHIBottomLevelAccelerationStructureInfo& info) = 0;
+
+    //根签名，描述符 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     virtual RHIRootSignatureRef CreateRootSignature(const RHIRootSignatureInfo& info) = 0;
 
@@ -96,7 +103,7 @@ protected:
     RHIBackend() = delete;
     RHIBackend(const RHIBackendInfo& info) : backendInfo(info) {}
 
-    void RegisterResource(RHIResourceRef resource) { resourceMap[resource->GetType()].push_back(resource); };     // 所有资源创建时应加入统一的资源管理
+    void RegisterResource(RHIResourceRef resource) { resourceMap[resource->GetType()].push_back(resource); }     // 所有资源创建时应加入统一的资源管理
 
     std::array<std::vector<RHIResourceRef>, RHI_RESOURCE_TYPE_MAX_CNT> resourceMap;
 
@@ -161,9 +168,11 @@ public:
 
     virtual void SetDepthBias(float constantBias, float slopeBias, float clampBias) = 0;
 
-    virtual void SetGraphicsPipeline(RHIGraphicsPipelineRef graphicsState) = 0;
+    virtual void SetGraphicsPipeline(RHIGraphicsPipelineRef graphicsPipeline) = 0;
 
-    virtual void SetComputePipeline(RHIComputePipelineRef computeState) = 0;	
+    virtual void SetComputePipeline(RHIComputePipelineRef computePipeline) = 0;	
+
+    virtual void SetRayTracingPipeline(RHIRayTracingPipelineRef rayTracingPipeline) = 0;	
 
     virtual void PushConstants(void* data, uint16_t size, ShaderFrequency frequency) = 0;
 
@@ -176,6 +185,8 @@ public:
 	virtual void Dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) = 0;
 
 	virtual void DispatchIndirect(RHIBufferRef argumentBuffer, uint32_t argumentOffset) = 0;
+
+    virtual void TraceRays(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) = 0;
 
     virtual void Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) = 0;
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Component.h"
+#include "Core/Serialize/Serializable.h"
 #include "Function/Render/RenderPass/MeshPass.h"
 #include "Function/Render/RenderResource/Drawable.h"
 #include "Function/Render/RenderResource/Material.h"
@@ -16,14 +17,15 @@ public:
 	SkyboxComponent();
 	~SkyboxComponent();
 
-	virtual void Load() override;
-	virtual void Save() override;
-	virtual void Init() override;
-	virtual void Tick(float deltaTime) override;
+	virtual void OnLoad() override;
+	virtual void OnSave() override;
+	virtual void OnInit() override;
+	virtual void OnUpdate(float deltaTime) override;
 
     virtual std::string GetTypeName() override		{ return "Skybox Component"; }
 	virtual ComponentType GetType() override	    { return SKYBOX_COMPONENT; }
 
+    void SetIntencity(float intencity)              { this->intencity = intencity; };  
     void SetSkyboxTexture(TextureRef texture);     
     uint32_t GetMaterialID()                        { return material ? material->GetMaterialID() : 0; }  
 
@@ -40,10 +42,13 @@ private:
 
     uint32_t objectID = 0;
 
+    float intencity = 1.0f;
+
 private:
     BeginSerailize()
     SerailizeBaseClass(Component)
     SerailizeBaseClass(AssetBinder)
+    SerailizeEntry(intencity)
     EndSerailize
 
     EnableComponentEditourUI()

@@ -1,18 +1,30 @@
 #include "RenderSystem.h"
+#include "Function/Global/Definations.h"
 #include "Function/Global/EngineContext.h"
 #include "Function/Render/RenderPass/GPUCullingPass.h"
 #include "Function/Render/RenderPass/ClusterLightingPass.h"
+#include "Function/Render/RenderPass/IBLPass.h"
 #include "Function/Render/RenderPass/DepthPass.h"
 #include "Function/Render/RenderPass/DepthPyramidPass.h"
 #include "Function/Render/RenderPass/DirectionalShadowPass.h"
 #include "Function/Render/RenderPass/PointShadowPass.h"
+#include "Function/Render/RenderPass/DDGIPass.h"
 #include "Function/Render/RenderPass/GBufferPass.h"
+#include "Function/Render/RenderPass/ReprojectionPass.h"
 #include "Function/Render/RenderPass/DeferredLightingPass.h"
+#include "Function/Render/RenderPass/SSSRPass.h"
+#include "Function/Render/RenderPass/VolumetricFogPass.h"
+#include "Function/Render/RenderPass/ReSTIRPass.h"
+#include "Function/Render/RenderPass/SVGFPass.h"
 #include "Function/Render/RenderPass/ForwardPass.h"
+#include "Function/Render/RenderPass/DDGIVisualizePass.h"
 #include "Function/Render/RenderPass/BloomPass.h"
 #include "Function/Render/RenderPass/FXAAPass.h"
+#include "Function/Render/RenderPass/TAAPass.h"
 #include "Function/Render/RenderPass/ExposurePass.h"
 #include "Function/Render/RenderPass/PostProcessingPass.h"
+#include "Function/Render/RenderPass/RayTracingBasePass.h"
+#include "Function/Render/RenderPass/PathTracingPass.h"
 #include "Function/Render/RenderPass/EditorUIPass.h"
 #include "Function/Render/RenderPass/PresentPass.h"
 #include "Function/Render/RenderPass/RenderPass.h"
@@ -60,7 +72,7 @@ void RenderSystem::InitBaseResource()
     pool          = backend->CreateCommandPool({ queue });  
     for(uint32_t i = 0; i < FRAMES_IN_FLIGHT; i++) 
     {
-        perFrameCommonResources[i].command = pool->CreateCommandList(false);
+        perFrameCommonResources[i].command = pool->CreateCommandList(true);
         perFrameCommonResources[i].startSemaphore = backend->CreateSemaphore();
         perFrameCommonResources[i].finishSemaphore = backend->CreateSemaphore();
         perFrameCommonResources[i].fence = backend->CreateFence(true);
@@ -77,20 +89,46 @@ void RenderSystem::InitPasses()
 
     passes[GPU_CULLING_PASS]                    = std::make_shared<GPUCullingPass>();
     passes[CLUSTER_LIGHTING_PASS]               = std::make_shared<ClusterLightingPass>();
+    passes[IBL_PASS]                            = std::make_shared<IBLPass>();
     passes[DEPTH_PASS]                          = meshPasses[MESH_DEPTH_PASS];
     passes[DEPTH_PYRAMID_PASS]                  = std::make_shared<DepthPyramidPass>();
     passes[POINT_SHADOW_PASS]                   = meshPasses[MESH_POINT_SHADOW_PASS];
     passes[DIRECTIONAL_SHADOW_PASS]             = meshPasses[MESH_DIRECTIONAL_SHADOW_PASS];
+    passes[DDGI_PASS]                           = nullptr;
     passes[G_BUFFER_PASS]                       = meshPasses[MESH_G_BUFFER_PASS];
+    passes[REPROJECTION_PASS]                   = std::make_shared<ReprojectionPass>();
     passes[DEFERRED_LIGHTING_PASS]              = std::make_shared<DeferredLightingPass>();
+    passes[RESTIR_PASS]                         = nullptr;
+    passes[SVGF_PASS]                           = nullptr;
+    passes[SSSR_PASS]                           = std::make_shared<SSSRPass>();
+    passes[VOLUMETIRC_FOG_PASS]                 = std::make_shared<VolumetricFogPass>();
     passes[FORWARD_PASS]                        = meshPasses[MESH_FORWARD_PASS];
+    passes[DDGI_VISUALIZE_PASS]                 = nullptr;
     passes[TRANSPARENT_PASS]                    = nullptr;
+    passes[PATH_TRACING_PASS]                   = nullptr;
     passes[BLOOM_PASS]                          = std::make_shared<BloomPass>();
     passes[FXAA_PASS]                           = std::make_shared<FXAAPass>();
+    passes[TAA_PASS]                            = std::make_shared<TAAPass>();
     passes[EXPOSURE_PASS]                       = std::make_shared<ExposurePass>();
     passes[POST_PROCESSING_PASS]                = std::make_shared<PostProcessingPass>();
+    passes[RAY_TRACING_BASE_PASS]               = nullptr;
     passes[EDITOR_UI_PASS]                      = std::make_shared<EditorUIPass>();
     passes[PRESENT_PASS]                        = std::make_shared<PresentPass>();
+
+    //passes[BLOOM_PASS]->SetEnable(false);       //TODO 暂时禁用，有单位问题
+
+#if ENABLE_RAY_TRACING
+    passes[DDGI_PASS]                       = std::make_shared<DDGIPass>();     
+    passes[RESTIR_PASS]                     = std::make_shared<ReSTIRPass>();
+    passes[SVGF_PASS]                       = std::make_shared<SVGFPass>();
+    passes[DDGI_VISUALIZE_PASS]             = std::make_shared<DDGIVisualizePass>();
+    passes[PATH_TRACING_PASS]               = std::make_shared<PathTracingPass>();
+    passes[RAY_TRACING_BASE_PASS]           = std::make_shared<RayTracingBasePass>();
+
+    passes[RESTIR_PASS]->SetEnable(false);
+    passes[PATH_TRACING_PASS]->SetEnable(false);  
+    passes[RAY_TRACING_BASE_PASS]->SetEnable(false);      
+#endif
 
     for(auto& pass : passes) { if(pass) pass->Init(); }
 }
@@ -118,6 +156,7 @@ bool RenderSystem::Tick()
             
             for(auto& pass : passes) { if(pass) pass->Build(rdgBuilder); }
             rdgBuilder.Execute();
+            rdgDependencyGraph = rdgBuilder.GetGraph(); //
         }
         {
             ENGINE_TIME_SCOPE(RenderSystem::RecordCommands);

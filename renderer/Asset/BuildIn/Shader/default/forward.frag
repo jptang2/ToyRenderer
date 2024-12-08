@@ -4,11 +4,12 @@
 #include "../common/common.glsl"
 
 layout(location = 0) in vec4 IN_POSITION;
-layout(location = 1) in vec3 IN_COLOR;
-layout(location = 2) in vec2 IN_TEXCOORD;
-layout(location = 3) in vec3 IN_NORMAL;
-layout(location = 4) in vec4 IN_TANGENT;
-layout(location = 5) in flat uint IN_ID;
+layout(location = 1) in vec4 IN_PREV_POSITION;
+layout(location = 2) in vec3 IN_COLOR;
+layout(location = 3) in vec2 IN_TEXCOORD;
+layout(location = 4) in vec3 IN_NORMAL;
+layout(location = 5) in vec4 IN_TANGENT;
+layout(location = 6) in flat uint IN_ID;
 
 layout (location = 0) out vec4 OUT_COLOR;
 

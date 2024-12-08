@@ -74,7 +74,7 @@ public:
 
     CachedPipeline Allocate(const RHIGraphicsPipelineInfo& info);
 
-    inline uint32_t CachedSize()    { return cachedPipelines.size(); };
+    inline uint32_t CachedSize()    { return cachedPipelines.size(); }
     void Clear()                    { cachedPipelines.clear(); }
 
     static std::shared_ptr<GraphicsPipelineCache> Get()

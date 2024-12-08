@@ -10,6 +10,8 @@
 #include "Core/Log/Log.h"
 #include "implot.h"
 
+#include <cassert>
+#include <cstddef>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
@@ -53,7 +55,6 @@ void VulkanRHIBackend::Destroy()
         ImPlot::DestroyContext();
         ImGui::DestroyContext();
     }
-    
     
     RHIBackend::Destroy();
 
@@ -160,7 +161,7 @@ RHICommandContextRef VulkanRHIBackend::CreateCommandContext(RHICommandPoolRef po
     return commandContext;
 }
 
-//缓冲，纹理 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+//缓冲，纹理，着色器，加速结构 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 RHIBufferRef VulkanRHIBackend::CreateBuffer(const RHIBufferInfo& info) 
 { 
@@ -194,8 +195,6 @@ RHISamplerRef VulkanRHIBackend::CreateSampler(const RHISamplerInfo& info)
     return sampler;
 }
 
-//着色器 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 RHIShaderRef VulkanRHIBackend::CreateShader(const RHIShaderInfo& info) 
 { 
     RHIShaderRef shader = std::make_shared<VulkanRHIShader>(info, *this);
@@ -203,6 +202,32 @@ RHIShaderRef VulkanRHIBackend::CreateShader(const RHIShaderInfo& info)
 
     return shader;
 }
+
+RHIShaderBindingTableRef VulkanRHIBackend::CreateShaderBindingTable(const RHIShaderBindingTableInfo& info)
+{
+    RHIShaderBindingTableRef sbt = std::make_shared<VulkanRHIShaderBindingTable>(info, *this);
+    RegisterResource(sbt);
+
+    return sbt;
+}
+
+RHITopLevelAccelerationStructureRef VulkanRHIBackend::CreateTopLevelAccelerationStructure(const RHITopLevelAccelerationStructureInfo& info)
+{
+    RHITopLevelAccelerationStructureRef tlas = std::make_shared<VulkanRHITopLevelAccelerationStructure>(info, *this);
+    RegisterResource(tlas);
+
+    return tlas;
+}
+
+RHIBottomLevelAccelerationStructureRef VulkanRHIBackend::CreateBottomLevelAccelerationStructure(const RHIBottomLevelAccelerationStructureInfo& info)
+{
+    RHIBottomLevelAccelerationStructureRef blas = std::make_shared<VulkanRHIBottomLevelAccelerationStructure>(info, *this);
+    RegisterResource(blas);
+
+    return blas;
+}
+
+//根签名，描述符 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 RHIRootSignatureRef VulkanRHIBackend::CreateRootSignature(const RHIRootSignatureInfo& info) 
 { 
@@ -238,7 +263,13 @@ RHIComputePipelineRef VulkanRHIBackend::CreateComputePipeline(const RHIComputePi
     return computePipeline;
 }
 
-RHIRayTracingPipelineRef VulkanRHIBackend::CreateRayTracingPipeline(const RHIRayTracingPipelineInfo& info) { return nullptr; }
+RHIRayTracingPipelineRef VulkanRHIBackend::CreateRayTracingPipeline(const RHIRayTracingPipelineInfo& info) 
+{
+    RHIRayTracingPipelineRef rayTracingPipeline = std::make_shared<VulkanRHIRayTracingPipeline>(info, *this);
+    RegisterResource(rayTracingPipeline);
+
+    return rayTracingPipeline;
+}
 
 //同步 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -263,6 +294,11 @@ RHISemaphoreRef VulkanRHIBackend::CreateSemaphore()
 RHICommandListImmediateRef VulkanRHIBackend::GetImmediateCommand() 
 {
     return immediateCommand;
+}
+
+std::shared_ptr<VulkanRHICommandContextImmediate> VulkanRHIBackend::GetImmediateCommandContest()  
+{
+    return dynamic_pointer_cast<VulkanRHICommandContextImmediate>(immediateCommandContext); 
 }
 
 void VulkanRHIBackend::CreateInstance()
@@ -537,6 +573,8 @@ void VulkanRHIBackend::CreateLogicalDevice()
     deviceFeatures.multiDrawIndirect = VK_TRUE;         //多重间接绘制
     deviceFeatures.independentBlend = VK_TRUE;          //MRT单独设置每个混合状态
     deviceFeatures.drawIndirectFirstInstance = VK_TRUE; //允许间接绘制的firstInstance不为0
+    deviceFeatures.shaderInt64 = VK_TRUE;               //64位支持
+    deviceFeatures.shaderFloat64 = VK_TRUE;
     createInfo.pEnabledFeatures = &deviceFeatures;
 
     VkPhysicalDeviceVulkan12Features vulkan12Features{};                                        //1.2版本的其他支持
@@ -672,6 +710,7 @@ void VulkanRHIBackend::CreateMemoryAllocator()
     allocatorCreateInfo.device = logicalDevice;
     allocatorCreateInfo.instance = instance;
     allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
+    allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT; // 加上这个才能获取地址
 
     vmaCreateAllocator(&allocatorCreateInfo, &memoryAllocator);
 }
@@ -824,6 +863,9 @@ void TextureBarrier(VkCommandBuffer commandBuffer, const RHITextureBarrier& barr
     VkPipelineStageFlags srcStage = VulkanUtil::AccessFlagsToPipelineStageFlags(srcAccessMask);
     VkPipelineStageFlags dstStage = VulkanUtil::AccessFlagsToPipelineStageFlags(dstAccessMask);
 
+    // srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;   // 可以保证绝对不会出错
+    // dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;   // 目前验证层VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT还是会有一些报错，太难调了
+
     VkImageMemoryBarrier memoryBarrier = {};
     memoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     memoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -918,14 +960,16 @@ void CopyTexture(VkCommandBuffer commandBuffer, RHITextureRef src, TextureSubres
     VkImageCopy imageCopy = {};
     imageCopy.srcOffset = {0, 0, 0};    // TODO ?
     imageCopy.dstOffset = {0, 0, 0};
-    imageCopy.srcSubresource = VulkanUtil::SubresourceToVk(srcSubresource);
-    imageCopy.dstSubresource = VulkanUtil::SubresourceToVk(dstSubresource);
+    imageCopy.srcSubresource = (srcSubresource.aspect == 0) ? VulkanUtil::SubresourceToVk(src->GetDefaultSubresourceLayers()) : VulkanUtil::SubresourceToVk(srcSubresource);
+    imageCopy.dstSubresource = (dstSubresource.aspect == 0) ? VulkanUtil::SubresourceToVk(dst->GetDefaultSubresourceLayers()) : VulkanUtil::SubresourceToVk(dstSubresource);
     imageCopy.extent = VulkanUtil::ExtentToVk(src->MipExtent(srcSubresource.mipLevel));
 
     vkCmdCopyImage(commandBuffer,
         ResourceCast(src)->GetHandle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         ResourceCast(dst)->GetHandle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1, &imageCopy);
+
+        
 }
 
 // 假定处于正确的src在src状态，dst在dst状态
@@ -1230,6 +1274,15 @@ void VulkanRHICommandContext::SetComputePipeline(RHIComputePipelineRef computePi
     this->computePipeline->Bind(handle);
 }	
 
+void VulkanRHICommandContext::SetRayTracingPipeline(RHIRayTracingPipelineRef rayTracingPipeline)
+{
+    this->graphicsPipeline = nullptr;
+    this->computePipeline = nullptr;
+    this->rayTraycingPipeline = ResourceCast(rayTracingPipeline).get();
+
+    this->rayTraycingPipeline->Bind(handle);
+}
+
 void VulkanRHICommandContext::PushConstants(void* data, uint16_t size, ShaderFrequency frequency) 
 {
     vkCmdPushConstants(handle, 
@@ -1241,11 +1294,11 @@ void VulkanRHICommandContext::PushConstants(void* data, uint16_t size, ShaderFre
 void VulkanRHICommandContext::BindDescriptorSet(RHIDescriptorSetRef descriptor, uint32_t set)
 {
     vkCmdBindDescriptorSets(handle, 
-    GetCuttentBindingPoint(), 
-    GetCuttentPipelineLayout(), 
-    set, 1, &ResourceCast(descriptor)->GetHandle(), 
-    0,              //TODO dynamic offset
-    nullptr);
+        GetCuttentBindingPoint(), 
+        GetCuttentPipelineLayout(), 
+        set, 1, &ResourceCast(descriptor)->GetHandle(), 
+        0,              //TODO dynamic offset
+        nullptr);
 }
 
 void VulkanRHICommandContext::BindVertexBuffer(RHIBufferRef vertexBuffer, uint32_t streamIndex, uint32_t offset)
@@ -1266,7 +1319,24 @@ void VulkanRHICommandContext::Dispatch(uint32_t groupCountX, uint32_t groupCount
 
 void VulkanRHICommandContext::DispatchIndirect(RHIBufferRef argumentBuffer, uint32_t argumentOffset) 
 {
+    LOG_FATAL("VulkanRHICommandContext::DispatchIndirect is not implemented yet!");
+}
 
+void VulkanRHICommandContext::TraceRays(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
+{
+    assert(this->rayTraycingPipeline != nullptr);
+
+    //gl_LaunchSizeEXT 对应此处给出的3维尺寸
+    //gl_LaunchIDEXT 类似于compute shader的gl_GlobalInvocationID，对应调用shader的坐标(ID)
+    vkCmdTraceRaysKHR(
+        handle,
+        &this->rayTraycingPipeline->GetRaygenRegion(),
+        &this->rayTraycingPipeline->GetRayMissRegion(),
+        &this->rayTraycingPipeline->GetHitRegion(),
+        &this->rayTraycingPipeline->GetCallableRegion(),
+        groupCountX,
+        groupCountY,
+        groupCountZ);
 }
 
 void VulkanRHICommandContext::Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) 
@@ -1303,7 +1373,7 @@ VkPipelineLayout VulkanRHICommandContext::GetCuttentPipelineLayout()
 {
     if (graphicsPipeline != nullptr)    return graphicsPipeline->GetPipelineLayout();
     if (computePipeline != nullptr)     return computePipeline->GetPipelineLayout();
-    // TODO 
+    if (rayTraycingPipeline != nullptr) return rayTraycingPipeline->GetPipelineLayout();
 
     LOG_FATAL("Havent bind any pipeline!"); return nullptr;
 }
@@ -1326,19 +1396,18 @@ VkPipelineBindPoint VulkanRHICommandContext::GetCuttentBindingPoint()
 VulkanRHICommandContextImmediate::VulkanRHICommandContextImmediate(VulkanRHIBackend& backend)
 : RHICommandContextImmediate()
 {
-    fence = backend.CreateFence();
+    fence = backend.CreateFence(true);
     queue = backend.GetQueue({QUEUE_TYPE_GRAPHICS, 0}); // 用QUEUE_TYPE_TRANSFER其实就行？
     commandPool = backend.CreateCommandPool({queue});
     device = backend.GetLogicalDevice();
 
-    handle = BeginSingleTimeCommand();
+    BeginSingleTimeCommand();
 }
 
 void VulkanRHICommandContextImmediate::Flush()
 {
-    EndSingleTimeCommand(handle);
-
-    handle = BeginSingleTimeCommand();
+    EndSingleTimeCommand();
+    BeginSingleTimeCommand();
 }
 
 void VulkanRHICommandContextImmediate::TextureBarrier(const RHITextureBarrier& barrier)
@@ -1377,36 +1446,38 @@ void VulkanRHICommandContextImmediate::GenerateMips(RHITextureRef src)
     ::GenerateMips(handle, src);
 }
 
-VkCommandBuffer VulkanRHICommandContextImmediate::BeginSingleTimeCommand()
+void VulkanRHICommandContextImmediate::BeginSingleTimeCommand()
 {
-    //新开一个VkCommandBuffer
+    // 重新分配VkCommandBuffer
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandPool = ResourceCast(commandPool)->GetHandle();
     allocInfo.commandBufferCount = 1;
 
-    VkCommandBuffer commandBuffer;
-    vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+    vkAllocateCommandBuffers(device, &allocInfo, &handle);
 
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-    return commandBuffer;
+    vkBeginCommandBuffer(handle, &beginInfo);
 }
 
-void VulkanRHICommandContextImmediate::EndSingleTimeCommand(VkCommandBuffer commandBuffer)
+void VulkanRHICommandContextImmediate::EndSingleTimeCommand()
 {
-    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+    // 等待前一次flush执行完成
+    fence->Wait();
+    if(oldHandle != VK_NULL_HANDLE) vkFreeCommandBuffers(Backend()->GetLogicalDevice(), ResourceCast(commandPool)->GetHandle(), 1, &oldHandle);
+
+    // 提交最新一次的flush
+    if (vkEndCommandBuffer(handle) != VK_SUCCESS) {
         LOG_FATAL("Failed to record command buffer!");
     }
 
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
+    submitInfo.pCommandBuffers = &handle;
     submitInfo.waitSemaphoreCount = 0;
     submitInfo.pWaitSemaphores = nullptr;
     submitInfo.pWaitDstStageMask = nullptr;
@@ -1414,10 +1485,10 @@ void VulkanRHICommandContextImmediate::EndSingleTimeCommand(VkCommandBuffer comm
     submitInfo.pSignalSemaphores = nullptr;
 
     VkResult result = vkQueueSubmit(ResourceCast(queue)->GetHandle(), 1, &submitInfo, ResourceCast(fence)->GetHandle());
-    if (result != VK_SUCCESS) {
+    if (result != VK_SUCCESS) 
+    {
         LOG_FATAL("Failed to submit draw command buffer! [%d]", result);
     }
 
-    fence->Wait();
-    vkFreeCommandBuffers(Backend()->GetLogicalDevice(), ResourceCast(commandPool)->GetHandle(), 1, &commandBuffer);
+    oldHandle = handle;
 }

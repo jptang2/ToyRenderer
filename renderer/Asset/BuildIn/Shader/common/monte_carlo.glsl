@@ -229,9 +229,35 @@ vec4 UniformSampleHemisphere( vec2 E )
 	return vec4( H, PDF );
 }
 
+// PDF = NoL / PI
+vec4 CosineSampleHemisphere( vec2 E )
+{
+	float Phi = 2 * PI * E.x;
+	float CosTheta = sqrt(E.y);
+	float SinTheta = sqrt(1 - CosTheta * CosTheta);
 
+	vec3 H;
+	H.x = SinTheta * cos(Phi);
+	H.y = SinTheta * sin(Phi);
+	H.z = CosTheta;
 
-// 重要性采样/////////////////////////////////////////////////////////////////////
+	float PDF = CosTheta * (1.0 / PI);
+
+	return vec4(H, PDF);
+}
+
+// PDF = NoL / PI
+vec4 CosineSampleHemisphere( vec2 E, vec3 N ) 
+{
+	vec3 H = UniformSampleSphere( E ).xyz;
+	H = normalize( N + H );
+
+	float PDF = dot(H, N) * (1.0 /  PI);
+
+	return vec4( H, PDF );
+}
+
+// GGX波瓣的重要性采样
 // E.x 圆周角
 // E.y 仰角，[90, 0] 对应 [0, 1]
 // PDF = D * NoH / (4 * VoH)
@@ -251,7 +277,17 @@ vec4 ImportanceSampleGGX( vec2 E, float a2 )
 	float D = a2 / ( PI*d*d );
 	float PDF = D * CosTheta;	// 用法线分布来对环境光照进行采样时的使用的概率密度函数，按法线分布函数的定义，D * CosTheta半球积分就是1
 
-	return vec4( H, PDF );
+	return vec4( H, PDF );	// 这里的PDF是半程向量的，反射向量的需要用下面的函数转一遍
+}
+
+
+// Compute PDF of reflection (2 * dot( V, H ) * H - V).
+// [Heitz 2014, "Importance Sampling Microfacet-Based BSDFs using the Distribution of Visible Normals"]
+float RayPDFToReflectionRayPDF(float VoH, float RayPDF)
+{
+	float ReflectPDF = RayPDF / (4.0 * saturate(VoH));
+
+	return ReflectPDF;
 }
 
 

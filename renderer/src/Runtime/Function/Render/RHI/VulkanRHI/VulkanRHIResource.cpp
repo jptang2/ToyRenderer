@@ -4,7 +4,11 @@
 #include "Function/Render/RHI/RHIResource.h"
 #include "Function/Render/RHI/RHIStructs.h"
 #include "Core/Log/Log.h"
+#include "imgui_impl_vulkan.h"
+#include "vma.h"
 
+#include <cassert>
+#include <cstring>
 #include <regex>
 #include <spirv_reflect.h>
 #include <memory>
@@ -293,7 +297,7 @@ void VulkanRHICommandPool::Destroy()
     vkDestroyCommandPool(Backend()->GetLogicalDevice(), handle, nullptr);
 }
 
-//缓冲，纹理 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+//缓冲，纹理，着色器，加速结构 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 VulkanRHIBuffer::VulkanRHIBuffer(const RHIBufferInfo& info, VulkanRHIBackend& backend)
 : RHIBuffer(info)
@@ -324,11 +328,33 @@ VulkanRHIBuffer::VulkanRHIBuffer(const RHIBufferInfo& info, VulkanRHIBackend& ba
     //vmaFlushAllocation(), vmaInvalidateAllocation() 指定缓存写入和缓存失效
 
     allocationInfo = {};
-    if(vmaCreateBuffer(backend.GetMemoryAllocator(), &bufferInfo, &allocationCreateInfo, &handle, &allocation, &allocationInfo) != VK_SUCCESS)
+    if(info.creationFlag & BUFFER_CREATION_FORCE_ALIGNMENT)
     {
-        LOG_FATAL("VMA failed to allocate buffer!");
+        // 带上一个256位对齐，光追等会用到
+        if(vmaCreateBufferWithAlignment(backend.GetMemoryAllocator(), 
+                &bufferInfo, 
+                &allocationCreateInfo, 
+                256, 
+                &handle, 
+                &allocation, 
+                &allocationInfo) != VK_SUCCESS)
+        {
+            LOG_FATAL("VMA failed to allocate buffer!");
+        }
     }
-
+    else 
+    {
+        if(vmaCreateBuffer(backend.GetMemoryAllocator(), 
+                &bufferInfo, 
+                &allocationCreateInfo, 
+                &handle, 
+                &allocation, 
+                &allocationInfo) != VK_SUCCESS)
+        {
+            LOG_FATAL("VMA failed to allocate buffer!");
+        }
+    }
+    
     //vmaMapMemory(VmaAllocator  _Nonnull allocator, VmaAllocation  _Nonnull allocation, void * _Nullable * _Nonnull ppData)
 }
 
@@ -526,8 +552,6 @@ void VulkanRHISampler::Destroy()
     vkDestroySampler(Backend()->GetLogicalDevice(), handle, nullptr);
 }
 
-//着色器 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 VulkanRHIShader::VulkanRHIShader(const RHIShaderInfo& info, VulkanRHIBackend& backend)
 : RHIShader(info)
 {
@@ -694,6 +718,374 @@ void VulkanRHIShader::Destroy()
     vkDestroyShaderModule(Backend()->GetLogicalDevice(), handle, nullptr);
 }
 
+VulkanRHIShaderBindingTable::VulkanRHIShaderBindingTable(const RHIShaderBindingTableInfo& info, VulkanRHIBackend& backend)
+: RHIShaderBindingTable(info)
+{
+    typedef struct hitGroupInfo
+    {
+        VkPipelineShaderStageCreateInfo* closestHitStage = nullptr;
+        VkPipelineShaderStageCreateInfo* anyHitStage = nullptr;
+        VkPipelineShaderStageCreateInfo* intersectionStage = nullptr;
+    }HitGroupInfo;
+
+    std::vector<VkPipelineShaderStageCreateInfo>    rayGenStages;
+    std::vector<VkPipelineShaderStageCreateInfo>    missStages;
+    std::vector<VkPipelineShaderStageCreateInfo>    hitStages;
+    std::vector<HitGroupInfo>                       hitGroupInfos;
+
+    for(auto& shader : info.rayGenGroups)
+    {
+        rayGenStages.push_back(ResourceCast(shader)->GetShaderStageCreateInfo());
+    }
+    for(auto& shader : info.missGroups)
+    {
+        missStages.push_back(ResourceCast(shader)->GetShaderStageCreateInfo());
+    }
+    for(auto& shaders : info.hitGroups)
+    {
+        HitGroupInfo groupInfo = {};
+
+        assert(shaders.closestHitShader != nullptr);
+        {
+            hitStages.push_back(ResourceCast(shaders.closestHitShader)->GetShaderStageCreateInfo());
+            groupInfo.closestHitStage = &hitStages.back();
+        }
+        if(shaders.anyHitShader != nullptr)
+        {
+            hitStages.push_back(ResourceCast(shaders.anyHitShader)->GetShaderStageCreateInfo());
+            groupInfo.closestHitStage = &hitStages.back();
+        }
+        if(shaders.intersectionShader != nullptr)
+        {
+            hitStages.push_back(ResourceCast(shaders.intersectionShader)->GetShaderStageCreateInfo());
+            groupInfo.closestHitStage = &hitStages.back();
+        }
+        
+        hitGroupInfos.push_back(groupInfo);
+    }
+    rayGenGroupSize = rayGenStages.size();
+    hitGroupSize = hitGroupInfos.size();
+    rayMissGroupSize = missStages.size();
+
+    // Ray gen shaders
+    for (auto& stage : rayGenStages)
+    {
+        VkRayTracingShaderGroupCreateInfoKHR shaderGroup{};
+        shaderGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+        shaderGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+        shaderGroup.generalShader = stages.size();
+        shaderGroup.closestHitShader = VK_SHADER_UNUSED_KHR;
+        shaderGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
+        shaderGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
+
+        stages.push_back(stage);
+        groups.push_back(shaderGroup);
+    }
+
+    // Ray miss shaders
+    for (auto& stage : missStages)
+    {
+        VkRayTracingShaderGroupCreateInfoKHR shaderGroup{};
+        shaderGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+        shaderGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+        shaderGroup.generalShader = stages.size();
+        shaderGroup.closestHitShader = VK_SHADER_UNUSED_KHR;
+        shaderGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
+        shaderGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
+
+        stages.push_back(stage);
+        groups.push_back(shaderGroup);
+    }
+
+    // Ray hit shaders
+    for (auto& group : hitGroupInfos)
+    {
+        VkRayTracingShaderGroupCreateInfoKHR shaderGroup{};
+        shaderGroup.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+        shaderGroup.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+        shaderGroup.generalShader = VK_SHADER_UNUSED_KHR;
+        shaderGroup.closestHitShader = stages.size();
+        shaderGroup.anyHitShader = VK_SHADER_UNUSED_KHR;
+        shaderGroup.intersectionShader = VK_SHADER_UNUSED_KHR;
+    
+        stages.push_back(*group.closestHitStage);
+        
+        if (group.anyHitStage)
+        {
+            shaderGroup.anyHitShader = stages.size();
+            stages.push_back(*group.anyHitStage);
+        }
+
+        if (group.intersectionStage)
+        {
+            shaderGroup.intersectionShader = stages.size();
+            stages.push_back(*group.intersectionStage);
+        }
+
+        groups.push_back(shaderGroup);
+    }
+}
+
+void VulkanRHIShaderBindingTable::Destroy()
+{
+
+}
+
+VulkanRHITopLevelAccelerationStructure::VulkanRHITopLevelAccelerationStructure(const RHITopLevelAccelerationStructureInfo& info, VulkanRHIBackend& backend)
+: RHITopLevelAccelerationStructure(info)
+{
+    instanceBuffer = backend.CreateBuffer({
+        .size = sizeof(VkAccelerationStructureInstanceKHR) * info.maxInstance,
+        .memoryUsage = MEMORY_USAGE_CPU_TO_GPU,
+        .type = RESOURCE_TYPE_RW_BUFFER | RESOURCE_TYPE_RAY_TRACING,
+        .creationFlag = BUFFER_CREATION_PERSISTENT_MAP}); 
+
+    Update(this->info.instanceInfos);
+    this->info.instanceInfos.clear();
+}
+
+void VulkanRHITopLevelAccelerationStructure::Update(const std::vector<RHIAccelerationStructureInstanceInfo>& instanceInfos) 
+{
+    bool update = (handle == VK_NULL_HANDLE) ? false : true;
+
+    std::vector<VkAccelerationStructureInstanceKHR> blasInstances;
+    for(int i = 0; i < instanceInfos.size(); i++)
+    {
+        blasInstances.push_back(VulkanUtil::AccelerationStructureInstanceInfoToVk(instanceInfos[i]));
+    }
+    memcpy(instanceBuffer->Map(), blasInstances.data(), blasInstances.size() * sizeof(VkAccelerationStructureInstanceKHR));
+  
+    // 0. 数据结构
+    // 填充顶层加速结构使用的几何信息（只有一个），使用的图元是VK_GEOMETRY_TYPE_INSTANCES_KHR
+    VkAccelerationStructureGeometryKHR accelerationStructureGeometry{};
+    accelerationStructureGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+    accelerationStructureGeometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+    accelerationStructureGeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+    accelerationStructureGeometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+    accelerationStructureGeometry.geometry.instances.arrayOfPointers = VK_FALSE;
+    accelerationStructureGeometry.geometry.instances.data.deviceAddress = VulkanUtil::GetBufferDeviceAddress(ResourceCast(instanceBuffer)->GetHandle(), Backend()->GetLogicalDevice());
+
+    // 构建加速结构的信息
+    VkAccelerationStructureBuildGeometryInfoKHR accelerationStructureBuildGeometryInfo{};
+    accelerationStructureBuildGeometryInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+    accelerationStructureBuildGeometryInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;			//顶层
+    accelerationStructureBuildGeometryInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+    accelerationStructureBuildGeometryInfo.geometryCount = 1;											//只有一个几何信息，就是顶层的
+    accelerationStructureBuildGeometryInfo.mode = update ?
+                                                                VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR :   //加速结构是否更新
+                                                                VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    accelerationStructureBuildGeometryInfo.pGeometries = &accelerationStructureGeometry;
+    accelerationStructureBuildGeometryInfo.srcAccelerationStructure = VK_NULL_HANDLE;
+    accelerationStructureBuildGeometryInfo.dstAccelerationStructure = VK_NULL_HANDLE;
+
+
+    // 1. 获取需要分配的buffer的尺寸信息
+    VkAccelerationStructureBuildSizesInfoKHR buildSize = {};
+    buildSize.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+    {    
+        uint32_t primitiveCount = update ? instanceInfos.size() : info.maxInstance;
+
+        //获取buffer尺寸，在下面进行分配
+        vkGetAccelerationStructureBuildSizesKHR(
+            Backend()->GetLogicalDevice(),
+            VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+            &accelerationStructureBuildGeometryInfo,
+            &primitiveCount,			
+            &buildSize);
+    }
+
+
+    // 2. 如果非更新，需要首先创建加速结构
+    if (update == false)    
+    {
+        accelerationStructureBuffer = Backend()->CreateBuffer({
+            .size = buildSize.accelerationStructureSize,
+            .memoryUsage = MEMORY_USAGE_GPU_ONLY,
+            .type = RESOURCE_TYPE_RAY_TRACING,
+            .creationFlag = 0});
+
+        VkAccelerationStructureCreateInfoKHR createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+        createInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+        createInfo.size = buildSize.accelerationStructureSize;
+        createInfo.buffer = ResourceCast(accelerationStructureBuffer)->GetHandle();
+        createInfo.offset = 0;
+
+        // 此处仅创建了加速结构，并没有实际构建（分配了空间，还没往里填数据）
+        if (vkCreateAccelerationStructureKHR(Backend()->GetLogicalDevice(), &createInfo, nullptr, &handle) != VK_SUCCESS)
+        {
+            LOG_FATAL("Failed to create Acceleration Structure!");
+        }
+
+        // 获取加速结构地址
+        VkAccelerationStructureDeviceAddressInfoKHR accelerationDeviceAddressInfo{};
+        accelerationDeviceAddressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+        accelerationDeviceAddressInfo.accelerationStructure = handle;
+        address = vkGetAccelerationStructureDeviceAddressKHR(Backend()->GetLogicalDevice(), &accelerationDeviceAddressInfo);
+    }
+
+
+    // 3. 创建构建过程需要使用的scratch buffer
+    RHIBufferRef scratchBuffer = Backend()->CreateBuffer({
+        .size = buildSize.buildScratchSize,
+        .memoryUsage = MEMORY_USAGE_CPU_TO_GPU,
+        .type = RESOURCE_TYPE_RW_BUFFER,
+        .creationFlag = BUFFER_CREATION_PERSISTENT_MAP | BUFFER_CREATION_FORCE_ALIGNMENT}); // scratch buffer有内存对齐的要求
+
+
+    // 4. 命令执行加速结构创建
+    {
+        //补齐构建所需的信息（需要构建的加速结构，和scratch buffer）
+        accelerationStructureBuildGeometryInfo.srcAccelerationStructure = update ? 
+                                                                                handle:
+                                                                                VK_NULL_HANDLE;
+        accelerationStructureBuildGeometryInfo.dstAccelerationStructure = handle;
+        accelerationStructureBuildGeometryInfo.scratchData.deviceAddress = VulkanUtil::GetBufferDeviceAddress(ResourceCast(scratchBuffer)->GetHandle(), Backend()->GetLogicalDevice());
+
+        // 构建
+        VkAccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo = {};
+        accelerationStructureBuildRangeInfo.primitiveCount = instanceInfos.size();
+        //accelerationStructureBuildRangeInfo.primitiveCount = 0;
+        accelerationStructureBuildRangeInfo.primitiveOffset = 0;
+        accelerationStructureBuildRangeInfo.firstVertex = 0;
+        accelerationStructureBuildRangeInfo.transformOffset = 0;
+        std::vector<VkAccelerationStructureBuildRangeInfoKHR*> accelerationBuildStructureRangeInfos = { &accelerationStructureBuildRangeInfo };
+ 
+        auto immediateCommandContest = Backend()->GetImmediateCommandContest();    // 暂时这样写吧，不应该把加速结构的构建函数暴露出去？
+        vkCmdBuildAccelerationStructuresKHR(immediateCommandContest->GetHandle(), 
+            1, 
+            &accelerationStructureBuildGeometryInfo, 
+            accelerationBuildStructureRangeInfos.data());     //在这个指令处真正完成构建     
+    
+        immediateCommandContest->Flush();
+    }
+
+    // 5. 回收scratch buffer内存
+}
+
+void VulkanRHITopLevelAccelerationStructure::Destroy()
+{
+    vkDestroyAccelerationStructureKHR(Backend()->GetLogicalDevice(), handle, nullptr);
+}
+
+VulkanRHIBottomLevelAccelerationStructure::VulkanRHIBottomLevelAccelerationStructure(const RHIBottomLevelAccelerationStructureInfo& info, VulkanRHIBackend& backend)
+: RHIBottomLevelAccelerationStructure(info)
+{
+    VkDeviceOrHostAddressConstKHR vertexBufferDeviceAddress{};
+    VkDeviceOrHostAddressConstKHR indexBufferDeviceAddress{};
+    vertexBufferDeviceAddress.deviceAddress = VulkanUtil::GetBufferDeviceAddress(ResourceCast(info.vertexBuffer)->GetHandle(), backend.GetLogicalDevice());
+    indexBufferDeviceAddress.deviceAddress = VulkanUtil::GetBufferDeviceAddress(ResourceCast(info.indexBuffer)->GetHandle(), backend.GetLogicalDevice());
+
+    // 填充底层加速结构使用的几何信息，使用的图元是VK_GEOMETRY_TYPE_TRIANGLES_KHR
+    VkAccelerationStructureGeometryKHR accelerationStructureGeometry{};
+    accelerationStructureGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+    accelerationStructureGeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;   //暂时都假定不透明
+    accelerationStructureGeometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+    accelerationStructureGeometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+
+    accelerationStructureGeometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+    accelerationStructureGeometry.geometry.triangles.vertexData = vertexBufferDeviceAddress;
+    accelerationStructureGeometry.geometry.triangles.maxVertex = 3;
+    accelerationStructureGeometry.geometry.triangles.vertexStride = info.vertexStride;
+
+    accelerationStructureGeometry.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
+    accelerationStructureGeometry.geometry.triangles.indexData = indexBufferDeviceAddress;
+
+    //accelerationStructureGeometry.geometry.triangles.transformData.deviceAddress = 0;
+    //accelerationStructureGeometry.geometry.triangles.transformData.hostAddress = nullptr;
+    //accelerationStructureGeometry.geometry.triangles.transformData = transformBufferDeviceAddress;
+
+    //指定构建加速结构的范围（上面只给了起始地址，没给范围）
+    VkAccelerationStructureBuildRangeInfoKHR buildRange;
+    buildRange.primitiveCount = info.triangleNum;                      //图元数目（三角形数目）
+    buildRange.primitiveOffset = info.indexOffset;                     //index的起始偏移量
+    buildRange.firstVertex = info.vertexOffset / info.vertexStride;    //所有index将加上该值来索引vertex信息
+    buildRange.transformOffset = 0;
+
+
+    // 0. 数据结构
+    // 构建加速结构的信息
+    VkAccelerationStructureBuildGeometryInfoKHR buildGeometryInfo = {};
+    buildGeometryInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+    buildGeometryInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+    buildGeometryInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    buildGeometryInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    buildGeometryInfo.geometryCount = 1;
+    buildGeometryInfo.pGeometries = &accelerationStructureGeometry;
+
+
+    // 1. 获取需要分配的buffer的尺寸信息
+    VkAccelerationStructureBuildSizesInfoKHR buildSize = {};
+    buildSize.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+    vkGetAccelerationStructureBuildSizesKHR(
+        backend.GetLogicalDevice(),
+        VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+        &buildGeometryInfo,
+        &buildRange.primitiveCount,
+        &buildSize);
+
+
+    // 2. 创建加速结构
+    accelerationStructureBuffer = backend.CreateBuffer({
+        .size = buildSize.accelerationStructureSize,
+        .memoryUsage = MEMORY_USAGE_GPU_ONLY,
+        .type = RESOURCE_TYPE_RAY_TRACING,
+        .creationFlag = 0});
+
+    VkAccelerationStructureCreateInfoKHR createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+    createInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+    createInfo.size = accelerationStructureBuffer->GetInfo().size;
+    createInfo.buffer = ResourceCast(accelerationStructureBuffer)->GetHandle();
+    createInfo.offset = 0;
+
+    // 此处仅创建了加速结构，并没有实际构建（分配了空间，还没往里填数据）
+    if (vkCreateAccelerationStructureKHR(backend.GetLogicalDevice(), &createInfo, nullptr, &handle) != VK_SUCCESS)
+    {
+        LOG_FATAL("Failed to create Acceleration Structure!");
+    }
+
+    // 获取加速结构地址
+    VkAccelerationStructureDeviceAddressInfoKHR accelerationDeviceAddressInfo{};
+    accelerationDeviceAddressInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+    accelerationDeviceAddressInfo.accelerationStructure = handle;
+    address = vkGetAccelerationStructureDeviceAddressKHR(backend.GetLogicalDevice(), &accelerationDeviceAddressInfo);
+
+
+    // 3. 创建构建过程需要使用的scratch buffer
+    RHIBufferRef scratchBuffer = backend.CreateBuffer({
+        .size = buildSize.buildScratchSize,
+        .memoryUsage = MEMORY_USAGE_CPU_TO_GPU,
+        .type = RESOURCE_TYPE_RW_BUFFER,
+        .creationFlag = BUFFER_CREATION_PERSISTENT_MAP | BUFFER_CREATION_FORCE_ALIGNMENT}); // scratch buffer有内存对齐的要求
+
+
+    // 4. 命令执行加速结构创建
+    // 补齐构建所需的信息（需要构建的加速结构，和scratch buffer）
+    buildGeometryInfo.srcAccelerationStructure = VK_NULL_HANDLE;
+    buildGeometryInfo.dstAccelerationStructure = handle;
+    buildGeometryInfo.scratchData.deviceAddress = VulkanUtil::GetBufferDeviceAddress(ResourceCast(scratchBuffer)->GetHandle(), backend.GetLogicalDevice());
+    const VkAccelerationStructureBuildRangeInfoKHR* pBuildRange = &buildRange;
+
+    auto immediateCommandContest = backend.GetImmediateCommandContest();    // 暂时这样写吧，不应该把加速结构的构建函数暴露出去？
+    vkCmdBuildAccelerationStructuresKHR(
+        immediateCommandContest->GetHandle(),
+        1,
+        &buildGeometryInfo,
+        &pBuildRange);     //在这个指令处真正完成构建 
+    immediateCommandContest->Flush();
+
+
+    // 5. 回收scratch buffer内存，自动完成
+}
+
+void VulkanRHIBottomLevelAccelerationStructure::Destroy()
+{
+    vkDestroyAccelerationStructureKHR(Backend()->GetLogicalDevice(), handle, nullptr);
+}
+
+//根签名，描述符 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 VulkanRHIRootSignature::VulkanRHIRootSignature(const RHIRootSignatureInfo& info, VulkanRHIBackend& backend)
 : RHIRootSignature(info)
 {
@@ -835,7 +1227,12 @@ RHIDescriptorSet& VulkanRHIDescriptorSet::UpdateDescriptor(const RHIDescriptorUp
         descriptorWrite.pBufferInfo = &bufferDescriptor;
         break;
 
-	// case RESOURCE_TYPE_RAY_TRACING:  // TODO
+	case RESOURCE_TYPE_RAY_TRACING:
+        accelerationDescriptor.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+        accelerationDescriptor.accelerationStructureCount = 1;
+        accelerationDescriptor.pAccelerationStructures = &ResourceCast(descriptorUpdateInfo.tlas)->GetHandle();
+        descriptorWrite.pNext = &accelerationDescriptor;
+        break;
 
     default:    LOG_FATAL("Unsupported resource type!");
     }
@@ -1004,11 +1401,6 @@ void VulkanRHIGraphicsPipeline::Bind(VkCommandBuffer commandBuffer)
         dynamicBindingDescriptions.data(),
         (uint32_t)dynamicAttributeDescriptions.size(),
         dynamicAttributeDescriptions.data());
-}
-
-void VulkanRHIComputePipeline::Bind(VkCommandBuffer commandBuffer)
-{
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, handle);
 }
 
 VkPipelineVertexInputStateCreateInfo VulkanRHIGraphicsPipeline::GetInputStateCreateInfo(const VertexInputStateInfo& vertexInputState) 
@@ -1238,7 +1630,145 @@ VulkanRHIComputePipeline::VulkanRHIComputePipeline(const RHIComputePipelineInfo&
     }
 }
 
+void VulkanRHIComputePipeline::Bind(VkCommandBuffer commandBuffer)
+{
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, handle);
+}
+
 void VulkanRHIComputePipeline::Destroy()
+{
+    vkDestroyPipelineLayout(Backend()->GetLogicalDevice(), pipelineLayout, nullptr);
+    vkDestroyPipeline(Backend()->GetLogicalDevice(), handle, nullptr); 
+}
+
+VulkanRHIRayTracingPipeline::VulkanRHIRayTracingPipeline(const RHIRayTracingPipelineInfo& info, VulkanRHIBackend& backend)
+: RHIRayTracingPipeline(info)
+{
+    // 描述符 push constant
+    std::vector<VkPushConstantRange> pushConstants;
+    std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+    for(const auto& pushConstant : info.rootSignature->GetInfo().GetPushConstants())
+    {
+        pushConstants.push_back(VulkanUtil::GetPushConstantInfo(pushConstant));
+    }
+    for(const auto& setInfo : ResourceCast(info.rootSignature)->GetSetInfos())
+    {
+        descriptorSetLayouts.push_back(setInfo.layout);
+    }
+    pipelineLayout = VulkanUtil::CreatePipelineLayout(backend.GetLogicalDevice(), descriptorSetLayouts, pushConstants);
+
+    // 着色器，用SBT描述
+
+    VkRayTracingPipelineCreateInfoKHR pipelineInfo = {};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
+    pipelineInfo.basePipelineHandle             = VK_NULL_HANDLE;
+    pipelineInfo.basePipelineIndex              = -1;
+    pipelineInfo.maxPipelineRayRecursionDepth   = 1;	//光线最多的弹射次数
+    pipelineInfo.layout                         = pipelineLayout;
+    pipelineInfo.stageCount	                    = (uint32_t)ResourceCast(info.shaderBindingTable)->GetStages().size();
+    pipelineInfo.pStages                        = ResourceCast(info.shaderBindingTable)->GetStages().data();
+    pipelineInfo.groupCount	                    = (uint32_t)ResourceCast(info.shaderBindingTable)->GetGroups().size();
+    pipelineInfo.pGroups                        = ResourceCast(info.shaderBindingTable)->GetGroups().data();
+    
+    if (vkCreateRayTracingPipelinesKHR(backend.GetLogicalDevice(), VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &pipelineInfo, VK_NULL_HANDLE, &handle) != VK_SUCCESS) 
+    {
+        LOG_FATAL("Failed to create compute pipeline!");
+    }
+
+    // 处理SBT句柄
+    BuildShaderGroupHandle();
+}
+
+uint32_t Align(uint32_t value, uint32_t alignment)
+{
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
+void VulkanRHIRayTracingPipeline::BuildShaderGroupHandle()
+{
+    uint32_t rayGenGroupSize    = ResourceCast(info.shaderBindingTable)->GetRayGenGroupSize();
+    uint32_t hitGroupSize       = ResourceCast(info.shaderBindingTable)->GetHitGroupSize();
+    uint32_t rayMissGroupSize   = ResourceCast(info.shaderBindingTable)->GetRayMissGroupSize(); 
+    uint32_t groupSize          = ResourceCast(info.shaderBindingTable)->GetGroups().size();
+
+
+    // 0. 初始化有关内存偏移和对齐的信息
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties = Backend()->GetRayTracingPipelineProperties();
+    uint32_t handleSize = rayTracingPipelineProperties.shaderGroupHandleSize;
+    uint32_t handleSizeAligned = Align(rayTracingPipelineProperties.shaderGroupHandleSize, rayTracingPipelineProperties.shaderGroupHandleAlignment);
+    {
+        // 每个handle按照shaderGroupHandleSize对齐；
+        // 每个table按照shaderGroupBaseAlignment对齐
+        raygenRegion.deviceAddress = 0;
+        raygenRegion.stride = Align(rayGenGroupSize * handleSizeAligned, rayTracingPipelineProperties.shaderGroupBaseAlignment);	//对于pRayGenShaderBindingTable，步长和大小要一致？
+        raygenRegion.size = Align(rayGenGroupSize * handleSizeAligned, rayTracingPipelineProperties.shaderGroupBaseAlignment);
+
+        missRegion.deviceAddress = raygenRegion.size;
+        missRegion.stride = handleSizeAligned;
+        missRegion.size = Align(rayMissGroupSize * handleSizeAligned, rayTracingPipelineProperties.shaderGroupBaseAlignment);;
+
+        hitRegion.deviceAddress = raygenRegion.size + missRegion.size;
+        hitRegion.stride = handleSizeAligned;
+        hitRegion.size = Align(hitGroupSize * handleSizeAligned, rayTracingPipelineProperties.shaderGroupBaseAlignment);;
+    }
+
+
+    // 1. 获取ShaderGroup的句柄信息，在绘制时需要使用
+    std::vector<uint8_t> shaderHandleStorage;
+    {
+        uint32_t sbtSize = groupSize * handleSize;
+
+        shaderHandleStorage = std::vector<uint8_t>(sbtSize);
+        vkGetRayTracingShaderGroupHandlesKHR(Backend()->GetLogicalDevice(), handle, 0, groupSize, sbtSize, shaderHandleStorage.data());
+    }
+
+
+    // 2. 创建buffer保存句柄信息
+    {
+        uint32_t totalSize = raygenRegion.size + missRegion.size + hitRegion.size;
+
+        shaderGroupHandleBuffer = Backend()->CreateBuffer({
+            .size = totalSize,
+            .memoryUsage = MEMORY_USAGE_CPU_TO_GPU,
+            .type = RESOURCE_TYPE_RAY_TRACING,
+            .creationFlag = BUFFER_CREATION_NONE});
+        uint64_t address = VulkanUtil::GetBufferDeviceAddress(ResourceCast(shaderGroupHandleBuffer)->GetHandle(), Backend()->GetLogicalDevice());
+        raygenRegion.deviceAddress	+= address;
+        missRegion.deviceAddress	+= address;
+        hitRegion.deviceAddress		+= address;
+
+        uint32_t handleIndex = 0;
+
+        // 把获取到的句柄信息按内存对齐拷贝到buffer内
+        for (int i = 0; i < rayGenGroupSize; i++)
+        {
+            memcpy((uint8_t*)shaderGroupHandleBuffer->Map() + (0 + (i * raygenRegion.stride)), 
+                shaderHandleStorage.data() + (handleIndex++ * handleSize), 
+                handleSize);
+        }
+
+        for (int i = 0; i < rayMissGroupSize; i++)
+        {
+            memcpy((uint8_t*)shaderGroupHandleBuffer->Map() + (raygenRegion.size + (i * missRegion.stride)), 
+                shaderHandleStorage.data() + (handleIndex++ * handleSize), 
+                handleSize);
+        }
+
+        for (int i = 0; i < hitGroupSize; i++)
+        {
+            memcpy((uint8_t*)shaderGroupHandleBuffer->Map() + (raygenRegion.size + missRegion.size + (i * hitRegion.stride)), 
+                shaderHandleStorage.data() + (handleIndex++ * handleSize), 
+                handleSize);
+        }
+    }	
+}
+
+void VulkanRHIRayTracingPipeline::Bind(VkCommandBuffer commandBuffer)
+{
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, handle);
+}
+
+void VulkanRHIRayTracingPipeline::Destroy()
 {
     vkDestroyPipelineLayout(Backend()->GetLogicalDevice(), pipelineLayout, nullptr);
     vkDestroyPipeline(Backend()->GetLogicalDevice(), handle, nullptr); 

@@ -15,7 +15,7 @@ public:
 
 	virtual std::string GetName() override final { return "Directional Shadow"; }
 
-    virtual PassType GetType() override final { return DIRECTIONAL_SHADOW_PASS; };
+    virtual PassType GetType() override final { return DIRECTIONAL_SHADOW_PASS; }
 
     virtual std::vector<MeshPassProcessorRef> GetMeshPassProcessors() override final   { return meshPassProcessors; }   // 其实也可以检查，仅当需要更新时返回相应的processor
 

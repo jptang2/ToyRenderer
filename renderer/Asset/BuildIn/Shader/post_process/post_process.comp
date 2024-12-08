@@ -96,7 +96,7 @@ layout (local_size_x = THREAD_SIZE_X,
 void main() 
 {
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
-	vec3 color = imageLoad(IN_COLOR, pixel).rgb;
+	vec3 color = imageLoad(IN_COLOR, pixel).xyz;
 
 	float finalExposure = SETTING.exposure / adaptedLuminance;	//使得整个画面的输出光照接近setting.exposure，例如0.5
 	
@@ -116,8 +116,8 @@ void main()
 	// 	float b_floor 		= floor(b);
 	// 	float b_ceil 		= ceil(b);
 
-	// 	vec3 color_floor 	= texture(colorLUT, vec2((b_floor + color.r) / lut_tex_size.y, color.g)).rgb;
-	// 	vec3 color_ceil 	= texture(colorLUT, vec2((b_ceil + color.r) / lut_tex_size.y, color.g)).rgb;
+	// 	vec3 color_floor 	= texture(colorLUT, vec2((b_floor + color.r) / lut_tex_size.y, color.g)).xyz;
+	// 	vec3 color_ceil 	= texture(colorLUT, vec2((b_ceil + color.r) / lut_tex_size.y, color.g)).xyz;
 	// 	color_floor 		= pow(color_floor, vec3(1.0/2.2));   
 	// 	color_ceil 			= pow(color_ceil, vec3(1.0/2.2));   
 

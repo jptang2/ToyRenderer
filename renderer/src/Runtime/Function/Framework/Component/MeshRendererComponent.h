@@ -26,10 +26,10 @@ public:
 	MeshRendererComponent() = default;
 	~MeshRendererComponent();
 
-	virtual void Load() override;
-	virtual void Save() override;
-	virtual void Init() override;
-	virtual void Tick(float deltaTime) override;
+	virtual void OnLoad() override;
+	virtual void OnSave() override;
+	virtual void OnInit() override;
+	virtual void OnUpdate(float deltaTime) override;
 
 	virtual std::string GetTypeName() override		{ return "Mesh Renderer Component"; }
 	virtual ComponentType GetType() override	    { return MESH_RENDERER_COMPONENT; }
@@ -42,6 +42,7 @@ public:
 	MaterialRef GetMaterial(uint32_t index);			
 
 	virtual void CollectDrawBatch(std::vector<DrawBatch>& batches) override;
+	virtual void CollectAccelerationStructureInstance(std::vector<RHIAccelerationStructureInstanceInfo>& instances) override;
 
 private:
 	ModelRef model;

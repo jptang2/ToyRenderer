@@ -15,31 +15,34 @@ void EditorUIPass::Init()
 
 void EditorUIPass::Build(RDGBuilder& builder) 
 {
-    RDGTextureHandle outColor = builder.GetTexture("Final Color");
-    RDGTextureHandle depth = builder.GetTexture("Depth");
+    if(IsEnabled())
+    {
+        RDGTextureHandle outColor = builder.GetTexture("Final Color");
+        RDGTextureHandle depth = builder.GetTexture("Depth");
 
-    RDGRenderPassHandle pass = builder.CreateRenderPass(GetName())
-        .Color(0, outColor, ATTACHMENT_LOAD_OP_LOAD, ATTACHMENT_STORE_OP_STORE, {0.0f, 0.0f, 0.0f, 0.0f})
-        .DepthStencil(depth, ATTACHMENT_LOAD_OP_LOAD, ATTACHMENT_STORE_OP_STORE, 1.0f, 0)   // 为什么必须加深度才有效？
-        .Execute([&](RDGPassContext context) {
-            
-            Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
+        RDGRenderPassHandle pass = builder.CreateRenderPass(GetName())
+            .Color(0, outColor, ATTACHMENT_LOAD_OP_LOAD, ATTACHMENT_STORE_OP_STORE, {0.0f, 0.0f, 0.0f, 0.0f})
+            .DepthStencil(depth, ATTACHMENT_LOAD_OP_LOAD, ATTACHMENT_STORE_OP_STORE, 1.0f, 0)   // 为什么必须加深度才有效？
+            .Execute([&](RDGPassContext context) {
+                
+                Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
 
-            RHICommandListRef command = context.command;                                            
-            command->SetViewport({0, 0}, {windowExtent.width, windowExtent.height});
-            command->SetScissor({0, 0}, {windowExtent.width, windowExtent.height}); 
+                RHICommandListRef command = context.command;                                            
+                command->SetViewport({0, 0}, {windowExtent.width, windowExtent.height});
+                command->SetScissor({0, 0}, {windowExtent.width, windowExtent.height}); 
 
-            ImGui_ImplVulkan_NewFrame();
-            ImGui_ImplGlfw_NewFrame();
-            ImGui::NewFrame();
-            // IMGUIZMO_NAMESPACE::BeginFrame();
+                ImGui_ImplVulkan_NewFrame();
+                ImGui_ImplGlfw_NewFrame();
+                ImGui::NewFrame();
+                // IMGUIZMO_NAMESPACE::BeginFrame();
 
-			EngineContext::Editor()->UI();
+                EngineContext::Editor()->UI();
 
-            ImGui::Render();
-            command->ImGuiRenderDrawData();
-        })
-        .Finish();
+                ImGui::Render();
+                command->ImGuiRenderDrawData();
+            })
+            .Finish();
+    }
 }
 
 void EditorUIPass::InitImGuiStyle()

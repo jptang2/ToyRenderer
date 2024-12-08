@@ -15,7 +15,7 @@ public:
 
 	virtual std::string GetName() override final { return "Forward"; }
 
-    virtual PassType GetType() override final { return FORWARD_PASS; };
+    virtual PassType GetType() override final { return FORWARD_PASS; }
 
 private:
     Shader vertexShader;

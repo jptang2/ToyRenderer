@@ -495,6 +495,8 @@ void BuildParentClusters(
     {
         printf("ERROR SimplifyMesh at level [%d], rate [%f], indexCnt [%d], try to do it sloppy...\n", clusterGroup->mipLevel + 1, (float)tempIndex.size() / prevIndexSize, prevIndexSize);
         
+        //return; //TODO 减面算法还是有问题，减不下去了直接返回
+
         float error = MeshOptimizor::SimplifyMeshSloppy(tempMesh, 0.3f, 1e50, tempIndex);  //TODO 减面算法还是有问题，减不下去了就用sloppy的？
         
         assert((float)tempIndex.size() / prevIndexSize < 0.5);

@@ -14,7 +14,7 @@ public:
 
 	virtual std::string GetName() override final { return "Editor UI"; }
 
-	virtual PassType GetType() override final { return EDITOR_UI_PASS; };
+	virtual PassType GetType() override final { return EDITOR_UI_PASS; }
 
 private:
 	void InitImGuiStyle();

@@ -14,7 +14,7 @@ public:
 
 	virtual std::string GetName() override final { return "Present"; }
 
-	virtual PassType GetType() override final { return PRESENT_PASS; };
+	virtual PassType GetType() override final { return PRESENT_PASS; }
 
 private:
 	EnablePassEditourUI()

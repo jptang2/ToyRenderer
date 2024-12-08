@@ -15,7 +15,7 @@ public:
 
 	virtual std::string GetName() override final { return "Depth Pyramid"; }
 
-	virtual PassType GetType() override final { return DEPTH_PYRAMID_PASS; };
+	virtual PassType GetType() override final { return DEPTH_PYRAMID_PASS; }
 
 private:
 	struct DepthPyramidSetting

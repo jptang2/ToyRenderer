@@ -80,26 +80,29 @@ void ForwardPass::Init()
 
 void ForwardPass::Build(RDGBuilder& builder) 
 {
-    RDGTextureHandle outColor = builder.GetTexture("Mesh Pass Out Color");
+    if(IsEnabled())
+    {
+        RDGTextureHandle outColor = builder.GetTexture("Mesh Pass Out Color");
 
-    RDGTextureHandle depth = builder.GetTexture("Depth");
+        RDGTextureHandle depth = builder.GetTexture("Depth");
 
-    RDGRenderPassHandle pass = builder.CreateRenderPass(GetName())
-        .Color(0, outColor, ATTACHMENT_LOAD_OP_LOAD, ATTACHMENT_STORE_OP_STORE, {0.0f, 0.0f, 0.0f, 0.0f})
-        .DepthStencil(depth, ATTACHMENT_LOAD_OP_LOAD, ATTACHMENT_STORE_OP_STORE, 1.0f, 0)
-        .Execute([&](RDGPassContext context) {
+        RDGRenderPassHandle pass = builder.CreateRenderPass(GetName())
+            .Color(0, outColor, ATTACHMENT_LOAD_OP_LOAD, ATTACHMENT_STORE_OP_STORE, {0.0f, 0.0f, 0.0f, 0.0f})
+            .DepthStencil(depth, ATTACHMENT_LOAD_OP_LOAD, ATTACHMENT_STORE_OP_STORE, 1.0f, 0)
+            .Execute([&](RDGPassContext context) {
 
-            Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
+                Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
 
-            RHICommandListRef command = context.command;    
-            command->SetGraphicsPipeline(pipeline);                                        
-            command->SetViewport({0, 0}, {windowExtent.width, windowExtent.height});
-            command->SetScissor({0, 0}, {windowExtent.width, windowExtent.height}); 
-            command->SetDepthBias(0.0f, 0.0f, 0.0f);          
-            command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
+                RHICommandListRef command = context.command;    
+                command->SetGraphicsPipeline(pipeline);                                        
+                command->SetViewport({0, 0}, {windowExtent.width, windowExtent.height});
+                command->SetScissor({0, 0}, {windowExtent.width, windowExtent.height}); 
+                command->SetDepthBias(0.0f, 0.0f, 0.0f);          
+                command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
 
-            meshPassProcessor->Draw(command);                      
-        })
-        .OutputRead(depth)  // 后续处理需要读深度
-        .Finish();
+                meshPassProcessor->Draw(command);                      
+            })
+            //.OutputRead(depth)  // 后续处理需要读深度
+            .Finish();
+    }
 }

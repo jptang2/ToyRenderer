@@ -36,14 +36,15 @@ void Init( inout BxDFContext Context, vec3 N, vec3 V, vec3 L )
 }
 
 //IBL/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-vec3 PreFilteredReflection(vec3 R, float roughness, samplerCube prefilteredMap)
+
+vec3 PreFilteredReflection(vec3 R, float roughness, textureCube prefilteredMap, sampler sampl)
 {
 	const float MAX_REFLECTION_LOD = 8.0; // todo: param/const
 	float lod = roughness * MAX_REFLECTION_LOD;
 	float lodf = floor(lod);
 	float lodc = ceil(lod);
-	vec3 a = textureLod(prefilteredMap, R, lodf).rgb;
-	vec3 b = textureLod(prefilteredMap, R, lodc).rgb;
+	vec3 a = textureLod(samplerCube(prefilteredMap, sampl), R, lodf).xyz;
+	vec3 b = textureLod(samplerCube(prefilteredMap, sampl), R, lodc).xyz;
 	return mix(a, b, lod - lodf);
 }
 
@@ -362,12 +363,15 @@ float Vis_SmithJoint(float a2, float NoV, float NoL)
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
-vec3 BasicBRDF(vec3 albedo, vec3 F0, float roughness, float metallic, vec3 N, vec3 V, vec3 L)
+vec3 ResolveBRDF(vec3 albedo, float roughness, float metallic, vec3 N, vec3 V, vec3 L)
 {
 	BxDFContext context;
     Init(context, N, V, L);
 
-	float a2 			= Pow4(roughness) ;                                          
+	if(context.NoL <= 0) return vec3(0.0f);
+
+	float a2 			= Pow4(roughness);  
+	vec3 F0 			= mix(vec3(0.04f), albedo, metallic);                                        
 
 	float D             = D_GGX(a2, context.NoH);        
     float Vis           = Vis_Smith(a2, context.NoV, context.NoL ); 
@@ -386,11 +390,15 @@ vec3 BasicBRDF(vec3 albedo, vec3 F0, float roughness, float metallic, vec3 N, ve
 	return f_r;
 }
 
-vec3 BasicBRDFDiffuse(vec3 albedo, vec3 F0, float roughness, float metallic, vec3 N, vec3 V, vec3 L)
+
+vec3 ResolveDiffuseBRDF(vec3 albedo, float roughness, float metallic, vec3 N, vec3 V, vec3 L)
 {
 	BxDFContext context;
     Init(context, N, V, L);
 
+	if(context.NoL <= 0) return vec3(0.0f);
+
+	vec3 F0 			= mix(vec3(0.04f), albedo, metallic);   
     vec3 F              = F_Schlick(F0, context.VoH );    
 
 	//vec3 f_diffuse    = Diffuse_Lambert(albedo);     
@@ -402,12 +410,15 @@ vec3 BasicBRDFDiffuse(vec3 albedo, vec3 F0, float roughness, float metallic, vec
 	return f_r;
 }
 
-vec3 BasicBRDFSpecular(vec3 F0, float roughness, vec3 N, vec3 V, vec3 L)
+vec3 ResolveSpecularBRDF(vec3 albedo, float roughness, float metallic, vec3 N, vec3 V, vec3 L)
 {
 	BxDFContext context;
     Init(context, N, V, L);
 
-	float a2 			= Pow4(roughness) ;                                          
+	if(context.NoL <= 0) return vec3(0.0f);
+
+	float a2 			= Pow4(roughness);  
+	vec3 F0 			= mix(vec3(0.04f), albedo, metallic);                                           
 
 	float D             = D_GGX(a2, context.NoH);        
     float Vis           = Vis_Smith(a2, context.NoV, context.NoL ); 
@@ -416,76 +427,6 @@ vec3 BasicBRDFSpecular(vec3 F0, float roughness, vec3 N, vec3 V, vec3 L)
 	vec3 f_specular     = D * Vis * F;              
 
 	return f_specular;
-}
-
-// 直接光照////////////////////////////////////////////////////////////////////////////
-
-vec3 DirectLight(
-    vec3 albedo, vec3 F0, float roughness, float metallic,
-    vec4 worldPos, vec3 N, vec3 V)
-{
-    //平行光源计算////////////////////////////////////////////////
-    vec3 dirColor = vec3(0.0f);
-	if(LIGHTS.lightSetting.directionalLightCnt != 0)	// 目前只支持一个
-    {
-        DirectionalLight dirLight = LIGHTS.directionalLights[0];
-
-        vec3 L = -normalize(dirLight.dir);    
-        float NoL = dot(N, L);
-
-        float dirShadow     = DirectionalShadow(worldPos);                    
-
-        vec3 radiance       = dirShadow * 
-                              dirLight.color * 
-                              dirLight.intencity * 
-                              max(0, NoL);                                                                          //辐射率 = 阴影值 * 光强 * 颜色 * 余弦
-
-        vec3 f_r;
-        //f_r = BasicBRDFDiffuse(albedo.rgb, F0, roughness, metallic, N, V, L);
-        f_r = BasicBRDF(albedo.rgb, F0, roughness, metallic, N, V, L);
-
-        vec3 surfaceColor   = f_r * radiance;
-
-        dirColor += max(vec3(0.0f), surfaceColor);	
-    }
-    
-	//点光源计算////////////////////////////////////////////////
-    vec3 pointColor             = vec3(0.0f);
-    {
-        ivec3 clusterGrid       = FetchLightClusterGrid(WorldToNDC(worldPos).xyz);
-        uvec2 clusterIndex      = FetchLightClusterIndex(clusterGrid);  //读取对应cluster的索引信息 
-
-        for(uint i = clusterIndex.x; i < clusterIndex.x + clusterIndex.y; i++)
-        {
-            PointLight pointLight = LIGHTS.pointLights[LIGHT_CLUSTER_INDEX.slot[i].lightID];
-
-            float pointDistance = length(worldPos.xyz - pointLight.pos);
-
-            vec3 L = normalize(pointLight.pos - worldPos.xyz);
-            float NoL = dot(N, L);
-
-			//float pShadow = 1.0f;
-            float pShadow       = PointShadow(pointLight, worldPos);  
-            float attenuation   = PointLightFalloff(pointDistance, pointLight.far);
-
-            vec3 radiance = pShadow * 
-                            pointLight.color * 
-                            pointLight.intencity *
-                            attenuation * 
-                            max(0, NoL);    //辐射率 = 阴影值 * 光强 * 颜色 * 衰减 * 余弦
-
-            vec3 f_r;
-            // f_r = BasicBRDFDiffuse(albedo.rgb, F0, roughness, metallic, N, V, L);
-            f_r = BasicBRDF(albedo.rgb, F0, roughness, metallic, N, V, L);
-
-            vec3 surfaceColor   = f_r * radiance;
-
-            pointColor          += max(vec3(0.0f), surfaceColor);	
-        }     
-    }
-	
-
-    return dirColor + pointColor;
 }
 
 #endif

@@ -24,7 +24,8 @@ public:
 	, queueFamilyIndex(queueFamilyIndex)
 	{}
 
-	virtual void WaitIdle() override final { vkQueueWaitIdle(handle); };
+	virtual void WaitIdle() override final { vkQueueWaitIdle(handle); }
+	virtual void* RawHandle() override final { return handle; };
 
 	const VkQueue& GetHandle() { return handle; }
 	uint32_t GetQueueFamilyIndex() { return queueFamilyIndex; }
@@ -52,14 +53,15 @@ class VulkanRHISwapchain : public RHISwapchain
 public:
 	VulkanRHISwapchain(const RHISwapchainInfo& info, VulkanRHIBackend& backend);
 
-	virtual uint32_t GetCurrentFrameIndex() override final { return currentIndex; };
-	virtual RHITextureRef GetTexture(uint32_t index) override final { return textures[index]; };
+	virtual uint32_t GetCurrentFrameIndex() override final { return currentIndex; }
+	virtual RHITextureRef GetTexture(uint32_t index) override final { return textures[index]; }
 	virtual RHITextureRef GetNewFrame(RHIFenceRef fence, RHISemaphoreRef signalSemaphore) override final;
 	virtual void Present(RHISemaphoreRef waitSemaphore) override final;
 
 	const VkSwapchainKHR& GetHandle() { return handle; }
 
 	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
 
 private:
 	VkSwapchainKHR handle;
@@ -92,12 +94,13 @@ public:
 	const VkCommandPool& GetHandle() { return handle; }
 
 	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
 
 private:
 	VkCommandPool handle;
 };
 
-//缓冲，纹理 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+//缓冲，纹理，着色器，加速结构 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class VulkanRHIBuffer : public RHIBuffer
 {
@@ -110,6 +113,7 @@ public:
 	virtual void UnMap() override final;
 
 	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
 
 private:
 	VkBuffer handle;
@@ -129,6 +133,7 @@ public:
 	const VkImage& GetHandle() { return handle; }
 
 	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
 
 private:
 	VkImage handle;
@@ -145,6 +150,7 @@ public:
 	const VkImageView& GetHandle() { return handle; }
 
 	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
 
 private:
 	VkImageView handle;
@@ -158,12 +164,11 @@ public:
 	const VkSampler& GetHandle() { return handle; }
 
 	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
 
 private:
 	VkSampler handle;
 };
-
-//着色器 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class VulkanRHIShader : public RHIShader
 {
@@ -175,10 +180,72 @@ public:
 	const VkShaderModule& GetHandle() { return handle; }
 
 	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
 
 private:
 	VkShaderModule handle;
 };
+
+class VulkanRHIShaderBindingTable : public RHIShaderBindingTable
+{
+public:
+	VulkanRHIShaderBindingTable(const RHIShaderBindingTableInfo& info, VulkanRHIBackend& backend);
+
+	const std::vector<VkPipelineShaderStageCreateInfo>& GetStages() { return stages; }
+	const std::vector<VkRayTracingShaderGroupCreateInfoKHR>& GetGroups() { return groups; }
+
+	uint32_t GetRayGenGroupSize()	{ return rayGenGroupSize; }
+	uint32_t GetHitGroupSize()		{ return hitGroupSize; }
+	uint32_t GetRayMissGroupSize()	{ return rayMissGroupSize; }
+
+	virtual void Destroy() override final;
+
+private:
+    std::vector<VkPipelineShaderStageCreateInfo>        stages;
+    std::vector<VkRayTracingShaderGroupCreateInfoKHR>   groups;
+	uint32_t rayGenGroupSize = 0;
+	uint32_t hitGroupSize = 0;
+	uint32_t rayMissGroupSize = 0;
+};
+
+class VulkanRHITopLevelAccelerationStructure : public RHITopLevelAccelerationStructure
+{
+public:
+	VulkanRHITopLevelAccelerationStructure(const RHITopLevelAccelerationStructureInfo& info, VulkanRHIBackend& backend);
+
+	const VkAccelerationStructureKHR& GetHandle() 	{ return handle; }
+	VkDeviceAddress GetAddress() 					{ return address; }
+
+	virtual void Update(const std::vector<RHIAccelerationStructureInstanceInfo>& instanceInfos) override final;	
+
+	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
+
+private:
+	VkAccelerationStructureKHR handle = VK_NULL_HANDLE;
+	VkDeviceAddress address;
+	RHIBufferRef accelerationStructureBuffer;	// 加速结构占用的内存
+	RHIBufferRef instanceBuffer;				// 实例信息内存
+};
+
+class VulkanRHIBottomLevelAccelerationStructure : public RHIBottomLevelAccelerationStructure
+{
+public:
+	VulkanRHIBottomLevelAccelerationStructure(const RHIBottomLevelAccelerationStructureInfo& info, VulkanRHIBackend& backend);
+
+	const VkAccelerationStructureKHR& GetHandle() 	{ return handle; }
+	VkDeviceAddress GetAddress() 					{ return address; }
+
+	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
+
+private:
+	VkAccelerationStructureKHR handle;
+	VkDeviceAddress address;
+	RHIBufferRef accelerationStructureBuffer;	// 加速结构占用的内存
+};
+
+//根签名，描述符 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 class VulkanRHIRootSignature : public RHIRootSignature
 {
@@ -211,6 +278,7 @@ public:
 	const VkDescriptorSet& GetHandle() { return handle; }
 
 	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
 
 private:
 	VkDescriptorSet handle;
@@ -227,6 +295,7 @@ public:
 	const VkFramebuffer& GetFrameBuffer() { return frameBuffer; }
 
 	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
 
 private:
 	VkRenderPass handle;
@@ -245,6 +314,7 @@ public:
 	void Bind(VkCommandBuffer commandBuffer);
 
 	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
 
 private:
 	VkPipeline handle;
@@ -293,15 +363,42 @@ public:
 	void Bind(VkCommandBuffer commandBuffer);
 
 	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
 
 private:
 	VkPipeline handle;
 	VkPipelineLayout pipelineLayout;
 };
 
-class VulkanRHIRaytracingPipeline : public RHIRayTracingPipeline
+class VulkanRHIRayTracingPipeline : public RHIRayTracingPipeline
 {
+public:
+	VulkanRHIRayTracingPipeline(const RHIRayTracingPipelineInfo& info, VulkanRHIBackend& backend);
 
+	VkPipelineLayout GetPipelineLayout() { return pipelineLayout; }
+
+	const VkPipeline& GetHandle() { return handle; }
+	const VkStridedDeviceAddressRegionKHR& GetRaygenRegion() 	{ return raygenRegion; }
+	const VkStridedDeviceAddressRegionKHR& GetRayMissRegion() 	{ return missRegion; }
+	const VkStridedDeviceAddressRegionKHR& GetHitRegion() 		{ return hitRegion; }
+	const VkStridedDeviceAddressRegionKHR& GetCallableRegion() 	{ return callableRegion; }
+
+	void Bind(VkCommandBuffer commandBuffer);
+
+	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
+
+private:
+	void BuildShaderGroupHandle();
+	VkStridedDeviceAddressRegionKHR raygenRegion{};
+    VkStridedDeviceAddressRegionKHR missRegion{};
+    VkStridedDeviceAddressRegionKHR hitRegion{};
+    VkStridedDeviceAddressRegionKHR callableRegion{};   //TODO 还未实现
+
+	RHIBufferRef shaderGroupHandleBuffer;	// 用于存储SBT的全部句柄
+
+	VkPipeline handle;
+	VkPipelineLayout pipelineLayout;
 };
 
 //同步 ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -316,6 +413,7 @@ public:
 	const VkFence& GetHandle() { return handle; }
 
 	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
 
 private:
 	VkFence handle;
@@ -329,6 +427,7 @@ public:
 	const VkSemaphore& GetHandle() { return handle; }
 
 	virtual void Destroy() override final;
+	virtual void* RawHandle() override final { return handle; };
 
 private:
 	VkSemaphore handle;
@@ -408,6 +507,27 @@ struct VulkanResourceTraits<RHIShader>
 };
 
 template<>
+struct VulkanResourceTraits<RHIShaderBindingTable>
+{
+	typedef VulkanRHIShaderBindingTable ConcreteType;
+	typedef std::shared_ptr<VulkanRHIShaderBindingTable> ConcretePointerType;
+};
+
+template<>
+struct VulkanResourceTraits<RHIBottomLevelAccelerationStructure>
+{
+	typedef VulkanRHIBottomLevelAccelerationStructure ConcreteType;
+	typedef std::shared_ptr<VulkanRHIBottomLevelAccelerationStructure> ConcretePointerType;
+};
+
+template<>
+struct VulkanResourceTraits<RHITopLevelAccelerationStructure>
+{
+	typedef VulkanRHITopLevelAccelerationStructure ConcreteType;
+	typedef std::shared_ptr<VulkanRHITopLevelAccelerationStructure> ConcretePointerType;
+};
+
+template<>
 struct VulkanResourceTraits<RHIRootSignature>
 {
 	typedef VulkanRHIRootSignature ConcreteType;
@@ -433,6 +553,13 @@ struct VulkanResourceTraits<RHIComputePipeline>
 {
 	typedef VulkanRHIComputePipeline ConcreteType;
 	typedef std::shared_ptr<VulkanRHIComputePipeline> ConcretePointerType;
+};
+
+template<>
+struct VulkanResourceTraits<RHIRayTracingPipeline>
+{
+	typedef VulkanRHIRayTracingPipeline ConcreteType;
+	typedef std::shared_ptr<VulkanRHIRayTracingPipeline> ConcretePointerType;
 };
 
 template<>

@@ -27,12 +27,13 @@ RHIGraphicsPipelineRef GBufferPassProcessor::OnCreatePipeline(const DrawPipeline
     pipelineInfo.rootSignature                  = pass->rootSignature;
     for(uint32_t i = 0; i < 4; i++) pipelineInfo.blendState.renderTargets[i].enable = false;
     pipelineInfo.colorAttachmentFormats[0]      = FORMAT_R8G8B8A8_UNORM;
-    pipelineInfo.colorAttachmentFormats[1]      = FORMAT_R8G8B8A8_UNORM;
-    pipelineInfo.colorAttachmentFormats[2]      = FORMAT_R8G8B8A8_UNORM;
-    pipelineInfo.colorAttachmentFormats[3]      = FORMAT_R16G16B16A16_SFLOAT;                                               
+    pipelineInfo.colorAttachmentFormats[1]      = FORMAT_R8G8B8A8_SNORM;
+    pipelineInfo.colorAttachmentFormats[2]      = FORMAT_R16G16B16A16_SFLOAT;
+    pipelineInfo.colorAttachmentFormats[3]      = FORMAT_R32G32_SFLOAT;      
+    pipelineInfo.colorAttachmentFormats[4]      = FORMAT_R32_UINT;                                             
     pipelineInfo.depthStencilAttachmentFormat   = EngineContext::Render()->GetDepthFormat();
 
-    //if(!pipelineInfo.vertexShader->GetReflectInfo().DefinedSymbol("VERTEX_INPUT"));   // 也可以根据反射信息来检查管线适配性
+    // if(!pipelineInfo.vertexShader->GetReflectInfo().DefinedSymbol("VERTEX_INPUT"));   // 也可以根据反射信息来检查管线适配性
 
     pipeline = GraphicsPipelineCache::Get()->Allocate(pipelineInfo).pipeline;     // 按原本提交的管线状态
     if(pipeline) return pipeline;                                                       // TODO 给定的着色器能否满足管线需要其实可以在材质绑定着色器的时候检查和设置标志位？
@@ -46,7 +47,7 @@ RHIGraphicsPipelineRef GBufferPassProcessor::OnCreatePipeline(const DrawPipeline
     if(pipeline) return pipeline;
 
     if(pipelineState.clusterRender) return pass->clusterPipeline;                       // 用默认管线
-    else                            return pass->pipeline;                                                      
+    else                            return pass->pipeline;                                   
 }
 
 void GBufferPass::Init()
@@ -74,13 +75,24 @@ void GBufferPass::Init()
     pipelineInfo.colorAttachmentFormats[0]      = FORMAT_R8G8B8A8_UNORM;
     pipelineInfo.colorAttachmentFormats[1]      = FORMAT_R8G8B8A8_SNORM;
     pipelineInfo.colorAttachmentFormats[2]      = FORMAT_R16G16B16A16_SFLOAT;
-    pipelineInfo.colorAttachmentFormats[3]      = FORMAT_R32G32_SFLOAT;                                       
+    pipelineInfo.colorAttachmentFormats[3]      = FORMAT_R32G32_SFLOAT;           
+    pipelineInfo.colorAttachmentFormats[4]      = FORMAT_R32_UINT;                              
     pipelineInfo.depthStencilState              = { COMPARE_FUNCTION_LESS_EQUAL, true, true };
     pipelineInfo.depthStencilAttachmentFormat   = EngineContext::Render()->GetDepthFormat();
     pipeline                                    = GraphicsPipelineCache::Get()->Allocate(pipelineInfo).pipeline;    // 普通mesh的默认绘制管线
 
     pipelineInfo.vertexShader                   = clusterVertexShader.shader;
     clusterPipeline                             = GraphicsPipelineCache::Get()->Allocate(pipelineInfo).pipeline;    // cluster的默认绘制管线
+
+    Extent2D extent = EngineContext::Render()->GetWindowsExtent();
+    historyNormalTex = EngineContext::RHI()->CreateTexture({
+        .format = FORMAT_R8G8B8A8_SNORM,
+        .extent = {extent.width, extent.height, 1},
+        .arrayLayers = 1,
+        .mipLevels = 1,
+        .memoryUsage = MEMORY_USAGE_GPU_ONLY,
+        .type = RESOURCE_TYPE_RW_TEXTURE | RESOURCE_TYPE_TEXTURE
+    });
 }   
 
 void GBufferPass::Build(RDGBuilder& builder) 
@@ -121,6 +133,18 @@ void GBufferPass::Build(RDGBuilder& builder)
         .Import(EngineContext::RenderResource()->GetVelocityTexture(), RESOURCE_STATE_UNDEFINED)
         .Finish();
 
+    RDGTextureHandle objectID = builder.CreateTexture("G-Buffer Object ID")
+        .Import(EngineContext::RenderResource()->GetObjectIDTexture(), RESOURCE_STATE_UNDEFINED)
+        .Finish();
+
+    RDGTextureHandle historyObjectID = builder.CreateTexture("History G-Buffer Object ID")
+        .Import(EngineContext::RenderResource()->GetPrevObjectIDTexture(), RESOURCE_STATE_UNDEFINED)
+        .Finish();
+
+    RDGTextureHandle historyNormal = builder.CreateTexture("History G-Buffer Normal/Metallic")
+        .Import(historyNormalTex, RESOURCE_STATE_UNDEFINED)
+        .Finish();
+
     // RDGTextureHandle pos = builder.CreateTexture("G-Buffer Position")
     //     .Exetent({extent.width, extent.height, 1})
     //     .Format(FORMAT_R16G16B16A16_SFLOAT)
@@ -146,25 +170,42 @@ void GBufferPass::Build(RDGBuilder& builder)
 
     RDGTextureHandle depth = builder.GetTexture("Depth");
 
-    RDGRenderPassHandle pass = builder.CreateRenderPass(GetName())
-        .Color(0, diffuse, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, {0.0f, 0.0f, 0.0f, 0.0f})
-        .Color(1, normal, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, {0.0f, 0.0f, 0.0f, 0.0f})
-        .Color(2, emission, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, {0.0f, 0.0f, 0.0f, 0.0f})
-        .Color(3, velocity, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, {0.0f, 0.0f, 0.0f, 0.0f})
-        .DepthStencil(depth, ATTACHMENT_LOAD_OP_LOAD, ATTACHMENT_STORE_OP_STORE, 1.0f, 0)
-        .Execute([&](RDGPassContext context) {
+    if(IsEnabled())
+    {
+        RDGCopyPassHandle copyPass0 = builder.CreateCopyPass(GetName() + " Copy Object ID")
+            .From(objectID)
+            .To(historyObjectID)
+            .OutputRead(historyObjectID)
+            .Finish();
 
-            Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
+        RDGCopyPassHandle copyPass1 = builder.CreateCopyPass(GetName() + " Copy Normal")
+            .From(normal)
+            .To(historyNormal)
+            .Finish();
 
-            RHICommandListRef command = context.command;  
-            command->SetGraphicsPipeline(pipeline);                                          
-            command->SetViewport({0, 0}, {windowExtent.width, windowExtent.height});
-            command->SetScissor({0, 0}, {windowExtent.width, windowExtent.height}); 
-            command->SetDepthBias(0.0f, 0.0f, 0.0f); 
-            command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
+        RDGRenderPassHandle pass = builder.CreateRenderPass(GetName())
+            .Color(0, diffuse, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, {0.0f, 0.0f, 0.0f, 0.0f})
+            .Color(1, normal, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, {0.0f, 0.0f, 0.0f, 0.0f})
+            .Color(2, emission, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, {0.0f, 0.0f, 0.0f, 0.0f})
+            .Color(3, velocity, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, {0.0f, 0.0f, 0.0f, 0.0f})
+            .Color(4, objectID, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, {0.0f, 0.0f, 0.0f, 0.0f})
+            .DepthStencil(depth, ATTACHMENT_LOAD_OP_LOAD, ATTACHMENT_STORE_OP_STORE, 1.0f, 0)
+            .Execute([&](RDGPassContext context) {
 
-            meshPassProcessor->Draw(command);                      
-        })
-        .OutputRead(depth)  // 后续处理需要读深度
-        .Finish();
+                Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
+
+                RHICommandListRef command = context.command;  
+                command->SetGraphicsPipeline(pipeline);                                          
+                command->SetViewport({0, 0}, {windowExtent.width, windowExtent.height});
+                command->SetScissor({0, 0}, {windowExtent.width, windowExtent.height}); 
+                command->SetDepthBias(0.0f, 0.0f, 0.0f); 
+                command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
+
+                meshPassProcessor->Draw(command);                      
+            })
+            .OutputRead(depth)  // 后续处理需要读深度
+            .OutputRead(velocity)
+            .OutputRead(objectID)
+            .Finish();
+    }
 }

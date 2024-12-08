@@ -2,12 +2,28 @@
 
 #include "RHIStructs.h"
 
+#include "Function/Global/Definations.h"
+
 #include <cassert>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <vector>
+
+
+#if ENABLE_DEBUG_MODE
+#define COMMANDLIST_DEBUG_OUTPUT() do {  \
+        printf("RHICommandList[%d]: %s\n", currentCommandIndex, __FUNCTION__);  \
+        currentCommandIndex++;  \
+    } while(0)  
+#define COMMANDLIST_DEBUG_RESET_INDEX() do {  \
+        currentCommandIndex = 0;  \
+    } while(0) 
+#else 
+#define COMMANDLIST_DEBUG_OUTPUT() do {} while(0)
+#define COMMANDLIST_DEBUG_RESET_INDEX() do {} while(0)
+#endif
 
 struct RHICommandImmediate;
 struct RHICommand;
@@ -71,9 +87,11 @@ public:
 
     void SetDepthBias(float constantBias, float slopeBias, float clampBias);
 
-    void SetGraphicsPipeline(RHIGraphicsPipelineRef graphicsState);
+    void SetGraphicsPipeline(RHIGraphicsPipelineRef graphicsPipeline);
 
-    void SetComputePipeline(RHIComputePipelineRef computeState);	
+    void SetComputePipeline(RHIComputePipelineRef computePipeline);	
+
+    void SetRayTracingPipeline(RHIRayTracingPipelineRef rayTracingPipeline);	
 
     void PushConstants(void* data, uint16_t size, ShaderFrequency frequency);
 
@@ -87,6 +105,8 @@ public:
 
 	void DispatchIndirect(RHIBufferRef argumentBuffer, uint32_t argumentOffset = 0);
 
+    void TraceRays(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
+
     void Draw(uint32_t vertexCount, uint32_t instanceCount = 1, uint32_t firstVertex = 0, uint32_t firstInstance = 0);
 
     void DrawIndexed(uint32_t indexCount, uint32_t instanceCount = 1, uint32_t firstIndex = 0, uint32_t vertexOffset = 0, uint32_t firstInstance = 0);
@@ -94,6 +114,8 @@ public:
     void DrawIndirect(RHIBufferRef argumentBuffer, uint32_t offset, uint32_t drawCount);
 
     void DrawIndexedIndirect(RHIBufferRef argumentBuffer, uint32_t offset, uint32_t drawCount);
+
+    void* RawHandle();
 
     //ImGui /////////////////////////////////////////////////////////////////////////////////////
 
@@ -106,6 +128,10 @@ protected:
 
     inline void AddCommand(RHICommand* command) { commands.push_back(command); }
     std::vector<RHICommand*> commands;
+
+#if ENABLE_DEBUG_MODE
+    int currentCommandIndex = 0;
+#endif
 };
 typedef std::shared_ptr<RHICommandList> RHICommandListRef;
 
@@ -368,10 +394,10 @@ struct RHICommandSetDepthBias : public RHICommand
     
 struct RHICommandSetGraphicsPipeline : public RHICommand 
 {
-    RHIGraphicsPipelineRef graphicsState;
+    RHIGraphicsPipelineRef graphicsPipeline;
 
-    RHICommandSetGraphicsPipeline(RHIGraphicsPipelineRef graphicsState)
-    : graphicsState(graphicsState) 
+    RHICommandSetGraphicsPipeline(RHIGraphicsPipelineRef graphicsPipeline)
+    : graphicsPipeline(graphicsPipeline) 
     {}
 
     virtual void Execute(RHICommandContextRef context) override final;
@@ -379,10 +405,21 @@ struct RHICommandSetGraphicsPipeline : public RHICommand
 
 struct RHICommandSetComputePipeline : public RHICommand 
 {
-    RHIComputePipelineRef computeState;
+    RHIComputePipelineRef computePipeline;
 
-    RHICommandSetComputePipeline(RHIComputePipelineRef computeState) 
-    : computeState(computeState)
+    RHICommandSetComputePipeline(RHIComputePipelineRef computePipeline) 
+    : computePipeline(computePipeline)
+    {}
+
+    virtual void Execute(RHICommandContextRef context) override final;
+};
+
+struct RHICommandSetRayTracingPipeline : public RHICommand 
+{
+    RHIRayTracingPipelineRef rayTracingPipeline;
+
+    RHICommandSetRayTracingPipeline(RHIRayTracingPipelineRef rayTracingPipeline) 
+    : rayTracingPipeline(rayTracingPipeline)
     {}
 
     virtual void Execute(RHICommandContextRef context) override final;
@@ -469,6 +506,21 @@ struct RHICommandDispatchIndirect : public RHICommand
     RHICommandDispatchIndirect(RHIBufferRef argumentBuffer, uint32_t argumentOffset) 
     : argumentBuffer(argumentBuffer)
     , argumentOffset(argumentOffset)
+    {}
+
+    virtual void Execute(RHICommandContextRef context) override final;
+};
+
+struct RHICommandTraceRays : public RHICommand 
+{
+    uint32_t groupCountX;
+    uint32_t groupCountY;
+    uint32_t groupCountZ;
+
+    RHICommandTraceRays(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) 
+    : groupCountX(groupCountX)
+    , groupCountY(groupCountY)
+    , groupCountZ(groupCountZ)
     {}
 
     virtual void Execute(RHICommandContextRef context) override final;

@@ -19,7 +19,7 @@ MeshRendererComponent::~MeshRendererComponent()
     }
 }
 
-void MeshRendererComponent::Load()
+void MeshRendererComponent::OnLoad()
 {
     BeginLoadAssetBind()
     ResizeAssetArray(materials)
@@ -28,7 +28,7 @@ void MeshRendererComponent::Load()
     EndLoadAssetBind
 }
 
-void MeshRendererComponent::Save()
+void MeshRendererComponent::OnSave()
 {
     BeginSaveAssetBind()
     SaveAssetBind(model)
@@ -36,9 +36,9 @@ void MeshRendererComponent::Save()
     EndSaveAssetBind
 }
 
-void MeshRendererComponent::Init()
+void MeshRendererComponent::OnInit()
 {
-    Component::Init();
+    Component::OnInit();
 
     materials.resize(model->GetSubmeshCount() + 1);  
     objectInfos.resize(model->GetSubmeshCount());
@@ -48,8 +48,10 @@ void MeshRendererComponent::Init()
     }
 }
 
-void MeshRendererComponent::Tick(float deltaTime)
+void MeshRendererComponent::OnUpdate(float deltaTime)
 {
+    InitComponentIfNeed();
+
     std::shared_ptr<TransformComponent> transformComponent = TryGetComponent<TransformComponent>();
     if(!transformComponent) return;
 
@@ -124,6 +126,29 @@ void MeshRendererComponent::CollectDrawBatch(std::vector<DrawBatch>& batches)
                 .clusterGroupID = submesh.meshClusterGroupID,
                 .material = materials[i]
             });
+        }
+    }
+}
+
+void MeshRendererComponent::CollectAccelerationStructureInstance(std::vector<RHIAccelerationStructureInstanceInfo>& instances)
+{
+    std::shared_ptr<TransformComponent> transformComponent = TryGetComponent<TransformComponent>();
+    if(!transformComponent) return;
+
+    for(uint32_t i = 0; i < model->GetSubmeshCount(); i++)
+    {   
+        auto& submesh = model->Submesh(i);
+
+        if(materials[i] != nullptr)
+        {
+            RHIAccelerationStructureInstanceInfo info = {};
+            info.instanceIndex = objectIDs[i];
+            info.mask = 0xFF;
+            info.shaderBindingTableOffset = 0;
+            info.blas = submesh.blas;
+            Math::Mat3x4(transformComponent->GetModelMat(), &info.transform[0][0]);
+
+            instances.push_back(info);
         }
     }
 }

@@ -55,11 +55,7 @@ void main()
     vec4 worldPos   = DepthToWorld(uv);  // 从UV重建的世界坐标会有一些精度误差，不算大
 
     // 光照参数计算 //////////////////////////////////
-    
-    float a2    = pow(roughness, 4) ;                           //粗糙度4次方
-    vec3 F0     = mix(vec3(0.04f), diffuse.rgb, metallic);      //菲涅尔反射率，表征对不同波长光的折射差异（也就是镜面反射颜色）
 
-	vec4 viewPos    = WorldToView(worldPos);
 	vec3 N          = normalize(normal);                        //法线
 	vec3 V          = normalize((CAMERA.pos - worldPos).xyz);	//视线
     vec3 R          = normalize(reflect(-V, N));                //反射
@@ -67,13 +63,13 @@ void main()
     // 直接光照计算 //////////////////////////////////
 
     vec3 directLightColor = 
-        DirectLight(
-        diffuse, F0, roughness, metallic,
-        worldPos, N, V);
+        DirectionalLighting(diffuse, roughness, metallic, worldPos, N, V) * DirectionalShadow(worldPos) + 
+        PointLighting(diffuse, roughness, metallic, worldPos, N, V);
 
     // 间接光照计算 //////////////////////////////////
-    // TODO
-    vec3 indirectLightColor = vec3(0.0f);
+
+    vec3 indirectLightColor = 
+        IndirectLighting(diffuse.xyz, roughness, metallic, worldPos, N, V);
 
     // 输出 //////////////////////////////////
     vec3 outColor           = directLightColor + indirectLightColor + emission;	
@@ -85,16 +81,18 @@ void main()
     uvec2 clusterIndex      = FetchLightClusterIndex(clusterGrid);  //读取对应cluster的索引信息 
 
     vec4 finalColor = vec4(0.0f);
-    if(SETTING.mode == 0) finalColor = vec4(outColor, 1.0f);
-    if(SETTING.mode == 1) finalColor = vec4(vec3(N * 0.5f + 0.5f), 1.0f);
-    if(SETTING.mode == 2) finalColor = vec4(roughness, metallic, 0.0f, 1.0f);
-    if(SETTING.mode == 3) finalColor = worldPos;
-    if(SETTING.mode == 4) finalColor = vec4(vec3(directionalShadow), 1.0f);
-    if(SETTING.mode == 5) finalColor = vec4(vec3(FetchDepth(uv)), 1.0f);
-    if(SETTING.mode == 6) finalColor = CascadeColors[cascadeLevel];
-    if(SETTING.mode == 7) finalColor = vec4(vec3(clusterIndex.y / float(MAX_LIGHTS_PER_CLUSTER)), 1.0f);
-    if(SETTING.mode == 8) finalColor = vec4(clusterGrid.xy / vec2(LIGHT_CLUSTER_WIDTH, LIGHT_CLUSTER_HEIGHT), 0.0f, 1.0f);
-    if(SETTING.mode == 9) finalColor = vec4(vec3(clusterGrid.z / float(LIGHT_CLUSTER_DEPTH)), 1.0f);
+    if(SETTING.mode == 0)   finalColor = vec4(outColor, 1.0f);
+    if(SETTING.mode == 1)   finalColor = vec4(vec3(N * 0.5f + 0.5f), 1.0f);
+    if(SETTING.mode == 2)   finalColor = vec4(roughness, metallic, 0.0f, 1.0f);
+    if(SETTING.mode == 3)   finalColor = worldPos;
+    if(SETTING.mode == 4)   finalColor = vec4(vec3(directionalShadow), 1.0f);
+    if(SETTING.mode == 5)   finalColor = vec4(vec3(FetchDepth(uv)), 1.0f);
+    if(SETTING.mode == 6)   finalColor = CascadeColors[cascadeLevel];
+    if(SETTING.mode == 7)   finalColor = vec4(vec3(clusterIndex.y / float(MAX_LIGHTS_PER_CLUSTER)), 1.0f);
+    if(SETTING.mode == 8)   finalColor = vec4(clusterGrid.xy / vec2(LIGHT_CLUSTER_WIDTH, LIGHT_CLUSTER_HEIGHT), 0.0f, 1.0f);
+    if(SETTING.mode == 9)   finalColor = vec4(vec3(clusterGrid.z / float(LIGHT_CLUSTER_DEPTH)), 1.0f);
+    if(SETTING.mode == 10)  finalColor = vec4(indirectLightColor, 1.0f);
+    if(SETTING.mode == 11)  finalColor = vec4(IndirectIrradiance(diffuse.xyz, roughness, metallic, worldPos, N, V), 1.0f);
 
     imageStore(FINAL_COLOR, pixel, finalColor);
 }

@@ -2,6 +2,7 @@
 
 #include "Core/Util/IndexAlloctor.h"
 #include "Function/Global/Definations.h"
+#include "Function/Render/RHI/RHIResource.h"
 #include "Function/Render/RHI/RHIStructs.h"
 #include "Function/Render/RenderResource/RenderStructs.h"
 #include "Buffer.h"
@@ -27,6 +28,19 @@ typedef struct BindlessResourceInfo
 	uint64_t bufferOffset = 0;	// 仅buffer使用
 	uint64_t bufferRange = 0;
 } BindlessResourceInfo;
+
+typedef struct VolumeLightTextures
+{
+    TextureRef diffuseTex;       // 需要缓存G-Buffer信息才能做烘焙？
+    TextureRef normalTex;
+    TextureRef emissionTex;
+    TextureRef positionTex;
+    
+    TextureRef radianceTex;
+    TextureRef irradianceTex;
+    TextureRef depthTex;
+    
+} VolumeLightTextures;
 
 enum BindlessSlot
 {
@@ -55,6 +69,7 @@ enum PerFrameBindingID
 {
 	PER_FRAME_BINDING_GLOBAL_SETTING = 0,
 
+    PER_FRAME_BINDING_TLAS,
 	PER_FRAME_BINDING_CAMERA,
 	PER_FRAME_BINDING_OBJECT,
     PER_FRAME_BINDING_MATERIAL,
@@ -63,12 +78,16 @@ enum PerFrameBindingID
     PER_FRAME_BINDING_LIGHT_CLUSTER_INDEX,
     PER_FRAME_BINDING_DIRECTIONAL_SHADOW,
     PER_FRAME_BINDING_POINT_SHADOW,
+    PER_FRAME_BINDING_VOLUME_LIGHT_IRRADIANCE,
+	PER_FRAME_BINDING_VOLUME_LIGHT_DEPTH,
+    PER_FRAME_BINDING_SKYBOX_IBL,
     PER_FRAME_BINDING_MESH_CLUSTER,
     PER_FRAME_BINDING_MESH_CLUSTER_GROUP,
     PER_FRAME_BINDING_MESH_CLUSTER_DRAW_INFO,
     PER_FRAME_BINDING_DEPTH,
     PER_FRAME_BINDING_DEPTH_PYRAMID,
     PER_FRAME_BINDING_VELOCITY,
+    PER_FRAME_BINDING_OBJECT_ID,
     PER_FRAME_BINDING_VERTEX,
     
 	PER_FRAME_BINDING_BINDLESS_POSITION,
@@ -120,6 +139,9 @@ public:
     uint32_t AllocatePointLightID()                         { return pointLightIDAlloctor.Allocate(); }      
     void ReleasePointLightID(uint32_t id)                   { pointLightIDAlloctor.Release(id); }  
 
+    uint32_t AllocateVolumeLightID()                        { return volumeLightIDAlloctor.Allocate(); }      
+    void ReleaseVolumeLightID(uint32_t id)                  { volumeLightIDAlloctor.Release(id); } 
+
     IndexRange AllocateMeshClusterID(uint32_t size)         { return multiFrameResource.meshClusterBuffer.Allocate(size); }      
     void ReleaseMeshClusterID(IndexRange range)             { multiFrameResource.meshClusterBuffer.Release(range); }  
 
@@ -135,16 +157,23 @@ public:
     RHITextureRef GetLightClusterGridTexture()              { return multiFrameResource.lightClusterGridTexture->texture; }
     RHITextureRef GetDirectionalShadowTexture(uint32_t id)  { return multiFrameResource.dirShadowTextures[id]->texture; }
     RHITextureRef GetPointShadowTexture(uint32_t id)        { return multiFrameResource.pointShadowTextures[id]->texture; }
-    RHITextureRef GetDepthTexture()                         { return multiFrameResource.depthTexture->texture; }
+    RHITextureRef GetPointShadowDepthTexture(uint32_t id)   { return multiFrameResource.pointShadowDepthTextures[id]->texture; }
+    RHITextureRef GetIBLTexture(uint32_t id)                { return multiFrameResource.skyboxIBLTexuture[id]->texture; }
+    RHITextureRef GetDepthTexture()                         { return multiFrameResource.depthTexture[0]->texture; }
+    RHITextureRef GetPrevDepthTexture()                     { return multiFrameResource.depthTexture[1]->texture; }
     RHITextureRef GetDepthPyramidTexture(uint32_t id)       { return multiFrameResource.depthPyramidTexture[id]->texture; }
     RHITextureRef GetVelocityTexture()                      { return multiFrameResource.velocityTexture->texture; }
+    RHITextureRef GetObjectIDTexture()                      { return multiFrameResource.objectIDTexture[0]->texture; }
+    RHITextureRef GetPrevObjectIDTexture()                  { return multiFrameResource.objectIDTexture[1]->texture; }
 
     void SetRenderGlobalSetting(const RenderGlobalSetting& globalSetting);
+    void SetTLAS(const RHITopLevelAccelerationStructureRef& tlas);
     void SetCameraInfo(const CameraInfo& cameraInfo);
     void SetObjectInfo(const ObjectInfo& objectInfo, uint32_t objectID);
     void SetDirectionalLightInfo(const DirectionalLightInfo& directionalLightInfo, uint32_t cascade);
     void SetPointLightInfo(const PointLightInfo& pointLightInfo, uint32_t pointLightID);
     void SetVolumeLightInfo(const VolumeLightInfo& volumeLightInfo, uint32_t volumeLightID);
+    void SetVolumeLightTextures(const VolumeLightTextures& volumeLightTextures, uint32_t volumeLightID);
     void SetLightSetting(const LightSetting& lightSetting);
     void SetMaterialInfo(const MaterialInfo& materialInfo, uint32_t materialID);
     void SetMeshClusterInfo(const std::vector<MeshClusterInfo>& meshClusterInfo, uint32_t baseMeshClusterID);
@@ -193,9 +222,12 @@ private:
         TextureRef lightClusterGridTexture;                                 // 纹理不会有冲突
         std::array<TextureRef, DIRECTIONAL_SHADOW_CASCADE_LEVEL> dirShadowTextures;        
         std::array<TextureRef, MAX_POINT_SHADOW_COUNT> pointShadowTextures;   
-        TextureRef depthTexture;
+        std::array<TextureRef, MAX_POINT_SHADOW_COUNT> pointShadowDepthTextures;   
+        std::array<TextureRef, 2> skyboxIBLTexuture;    // diffuse, specular
+        std::array<TextureRef, 2> depthTexture;         // current, history
         std::array<TextureRef, 2> depthPyramidTexture;  // MIN, MAX 
         TextureRef velocityTexture;
+        std::array<TextureRef, 2> objectIDTexture;      // current, history
         std::vector<SamplerRef> samplers; 
     };
     MultiFrameResource multiFrameResource;
@@ -203,7 +235,7 @@ private:
     // 全部的资源索引分配器
     std::array<IndexAlloctor, BINDLESS_SLOT_MAX_ENUM> bindlessIDAlloctor;
     IndexAlloctor pointLightIDAlloctor;
-    IndexAlloctor volumeLightInfoIDAlloctor;
+    IndexAlloctor volumeLightIDAlloctor;
 
     // 逐帧资源的根签名
     RHIRootSignatureRef perFrameRootSignature;

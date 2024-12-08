@@ -20,7 +20,7 @@ public:
     void Warn(std::string message)   { logger->warn(message); }
     void Fatal(std::string message)  { logger->critical(message); throw std::runtime_error(message); }
 
-    std::shared_ptr<spdlog::logger> GetLogger() { return logger; };
+    std::shared_ptr<spdlog::logger> GetLogger() { return logger; }
 
 private:
     std::shared_ptr<spdlog::logger> logger;

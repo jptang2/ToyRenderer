@@ -1,13 +1,14 @@
 #pragma once
 
 #include "Core/Serialize/Serializable.h"
+#include "Function/Render/RenderResource/RenderStructs.h"
 
 #include <memory>
 #include <string>
 
 class Entity;
 
-enum ComponentType
+enum ComponentType			
 {
 	UNDEFINED_COMPONENT = 0,
 
@@ -15,6 +16,7 @@ enum ComponentType
 	CAMERA_COMPONENT,
 	POINT_LIGHT_COMPONENT,
 	DIRECTIONAL_LIGHT_COMPONENT,
+	VOLUME_LIGHT_COMPONENT,
 	MESH_RENDERER_COMPONENT,
 	SKYBOX_COMPONENT,
 
@@ -27,10 +29,12 @@ public:
 	Component() = default;
 	virtual ~Component() {};
 
-	virtual void Load() {};						// 文件操作接口，负责序列化时加载和存储
-	virtual void Save() {};
-	virtual void Init() { init = true; };		// 循环接口，执行功能逻辑，Init保证在Tick之前一定会被执行一次
-	virtual void Tick(float deltaTime) = 0;
+	virtual void OnLoad() {};						// 文件操作接口，负责序列化时加载和存储
+	virtual void OnSave() {};
+	virtual void OnInit() { init = true; }			// 初始化接口
+	virtual void OnUpdate(float deltaTime) = 0;		// 循环接口，执行功能逻辑
+
+	inline bool Inited() 						{ return init; }
 
 	virtual std::string GetTypeName()			{ return "Undefined"; }
 	virtual ComponentType GetType()				{ return UNDEFINED_COMPONENT; }
@@ -44,6 +48,7 @@ public:
 
 private:
 	bool init = false;
+	
 	std::weak_ptr<Entity> entity;	 
 	friend class Entity;
 
@@ -55,3 +60,5 @@ private:
 #define EnableComponentEditourUI() \
 friend class ComponentWidget;
 
+#define InitComponentIfNeed() \
+if (!Inited()) OnInit();

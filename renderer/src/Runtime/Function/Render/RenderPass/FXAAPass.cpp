@@ -17,13 +17,15 @@ void FXAAPass::Init()
     rootSignature = backend->CreateRootSignature(rootSignatureInfo);
 
     RHIComputePipelineInfo pipelineInfo     = {};
-    pipelineInfo.computeShader              = computeShader.shader;
     pipelineInfo.rootSignature              = rootSignature;
+    pipelineInfo.computeShader              = computeShader.shader;
     computePipeline   = backend->CreateComputePipeline(pipelineInfo);
 }   
 
 void FXAAPass::Build(RDGBuilder& builder) 
 {
+    enable = IsEnabled() ? 1.0f : 0.0f;
+
     Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
 
     RDGTextureHandle inColor = builder.GetTexture("Bloom Out Color");

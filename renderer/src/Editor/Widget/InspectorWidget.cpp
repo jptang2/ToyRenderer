@@ -4,6 +4,7 @@
 #include "Function/Global/EngineContext.h"
 #include "PassWidget.h"
 #include "TimerWidget.h"
+#include "RDGGraphWidget.h"
 
 #include <cstdint>
 #include <imgui.h>
@@ -58,6 +59,7 @@ void InspectorWidget::InspectorUI()
 
 void InspectorWidget::PassUI()
 {	
+	RDGGraphWidget::UI();
 	for(auto& pass : EngineContext::Render()->GetPasses())
 	{
 		if(pass) PassWidget::UI(pass);

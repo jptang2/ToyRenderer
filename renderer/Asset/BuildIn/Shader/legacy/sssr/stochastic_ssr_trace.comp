@@ -186,6 +186,15 @@ vec4 trace_Hiz( int start_level,
     return vec4(currentUV, 1.0 / currentDr, valid ? 1.0f : 0.0f);
 }
 
+// Compute PDF of reflection (2 * dot( V, H ) * H - V).
+// [Heitz 2014, "Importance Sampling Microfacet-Based BSDFs using the Distribution of Visible Normals"]
+float RayPDFToReflectionRayPDF(float VoH, float RayPDF)
+{
+	float ReflectPDF = RayPDF / (4.0 * clamp(VoH, 0.0f, 1.0f));
+
+	return ReflectPDF;
+}
+
 #define THREADS_X 32
 #define THREADS_Y 32
 #define THREADS_Z 1
@@ -241,7 +250,12 @@ void main() {
 
     vec4 newSample      = ImportanceSampleGGX( Xi, a2 );
     vec3 H              = TangentToWorld(newSample.xyz, N);   //半程向量
-    pdf                 = newSample.a;
+    // vec4 newSample      = ImportanceSampleGGX(seed, a2);
+    // vec3 H              = normalize(TangentToWorld(newSample.xyz, N));      //半程向量
+    float HPDF          = newSample.a;
+    float VoH           = clamp(dot(V, H), 0.0f, 1.0f);
+    pdf                 = RayPDFToReflectionRayPDF(VoH, HPDF);
+    // pdf                 = newSample.a;
     L                   = 2.0 * dot(V, H) * H - V;
 
     vec4 tarceResult    = trace_Hiz( SSSRSetting.start_mip, SSSRSetting.max_mip, SSSRSetting.end_mip, SSSRSetting.max_loop, SSSRSetting.thickness, worldPos.xyz, L);

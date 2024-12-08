@@ -112,7 +112,8 @@ public:
 
     uint32_t indexID = 0;
 
-    inline uint32_t IndexNum() { return indexNum; }
+    inline uint32_t IndexNum()      { return indexNum; }
+    inline uint32_t TriangleNum()   { return indexNum / 3; }
     
 private:
     uint32_t indexNum = 0;

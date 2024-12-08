@@ -62,9 +62,18 @@ public:
     void SetVertexShader(ShaderRef shader)                  { vertexShader = shader; }
     void SetGeometryShader(ShaderRef shader)                { geometryShader = shader; }
     void SetFragmentShader(ShaderRef shader)                { fragmentShader = shader; }
-    ShaderRef GetVertexShader()                             { return vertexShader; }
-    ShaderRef GetGeometryShader()                           { return geometryShader; }
-    ShaderRef GetFragmentShader()                           { return fragmentShader; }
+
+    inline Vec4 GetDiffuse() const                          { return this->diffuse; }
+    inline Vec4 GetEmission() const                         { return this->emission; }
+    inline float GetRoughness() const                       { return this->roughness; }
+    inline float GetMetallic() const                        { return this->metallic; }
+    inline float GetAlphaClip() const                       { return this->alphaClip; }
+    inline int32_t GetInt(uint32_t index) const             { return ints[index]; }
+    inline float GetFloat(uint32_t index) const             { return floats[index]; }
+    inline Vec4 GetColor(uint32_t index) const              { return colors[index]; }
+    inline ShaderRef GetVertexShader() const                { return vertexShader; }
+    inline ShaderRef GetGeometryShader() const              { return geometryShader; }
+    inline ShaderRef GetFragmentShader() const              { return fragmentShader; }
 
     // 渲染管线设置
     uint32_t RenderQueue()                                  { return renderQueue; }

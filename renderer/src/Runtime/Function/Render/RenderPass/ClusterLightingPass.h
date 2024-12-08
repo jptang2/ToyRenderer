@@ -14,7 +14,7 @@ public:
 
 	virtual std::string GetName() override final { return "Cluster Based Lighting"; }
 
-	virtual PassType GetType() override final { return CLUSTER_LIGHTING_PASS; };
+	virtual PassType GetType() override final { return CLUSTER_LIGHTING_PASS; }
 
 private:
     Shader computeShader;

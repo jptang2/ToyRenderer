@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <set>
 #include <vector>
 
@@ -26,7 +27,7 @@ public:
         std::vector<Type*> InEdges() { return graph->InEdges<Type>(ID()); }
 
         template<typename Type = Edge>
-        std::vector<Type*> OutEdges() { return graph->OutEdges<Type>(ID()); };
+        std::vector<Type*> OutEdges() { return graph->OutEdges<Type>(ID()); }
 
     private:
         NodeID id;
@@ -44,10 +45,10 @@ public:
         inline EdgeID ID() { return id; }
 
         template<typename Type = Node>
-        inline Type* From() { return graph->GetNode<Type>(from); };
+        inline Type* From() { return graph->GetNode<Type>(from); }
 
         template<typename Type = Node>
-        inline Type* To()   { return graph->GetNode<Type>(to); };
+        inline Type* To()   { return graph->GetNode<Type>(to); }
 
     private:
         EdgeID id;
@@ -69,7 +70,7 @@ public:
 
     void Link(NodeRef from, NodeRef to, EdgeRef edge);
     
-    void Remove(NodeRef node)                       { return Remove(node->ID()); };         // 删除时会自动删除相关联的边并析构
+    void Remove(NodeRef node)                       { return Remove(node->ID()); }         // 删除时会自动删除相关联的边并析构
     void Remove(NodeID id);
 
     template<typename Type = Node, typename... Args>
@@ -103,11 +104,35 @@ public:
         return dynamic_cast<Type*>(nodes[id]); 
     }
 
+    template<typename Type = Node>
+    inline std::vector<Type*> GetNodes() 
+    { 
+        std::vector<Type*> castNodes;
+        for(auto& node : nodes)
+        {
+            Type* castNode =  dynamic_cast<Type*>(node);
+            if (castNode != nullptr)    castNodes.push_back(castNode);
+        }
+        return castNodes;
+    }
+
     template<typename Type = Edge>
     inline Type* GetEdge(EdgeID id) 
     { 
         return dynamic_cast<Type*>(edges[id]); 
     };
+
+    template<typename Type = Edge>
+    inline std::vector<Type*> GetEdges() 
+    { 
+        std::vector<Type*> castEdges;
+        for(auto& edge : edges)
+        {
+            Type* castEdge =  dynamic_cast<Type*>(edge);
+            if (castEdge != nullptr)    castEdges.push_back(castEdge);
+        }
+        return castEdges;
+    }
 
     template<typename Type = Edge>
     std::vector<Type*> OutEdges(NodeID id)
@@ -152,4 +177,4 @@ private:
     std::map<NodeID, std::set<EdgeID>> outEdges;
     std::map<NodeID, std::set<EdgeID>> inEdges;
 };
-
+typedef std::shared_ptr<DependencyGraph> DependencyGraphRef;

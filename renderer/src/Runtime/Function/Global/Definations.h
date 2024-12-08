@@ -1,6 +1,7 @@
 #pragma once
 
-#include <string>
+#define ENABLE_DEBUG_MODE 0                         //启用调试模式
+#define ENABLE_RAY_TRACING 1                        //启用硬件光追
 
 #define FRAMES_IN_FLIGHT 3							//帧缓冲数目
 #define WINDOW_WIDTH 2048                           //32 * 64   16 * 128
@@ -37,14 +38,20 @@
 #define LIGHT_CLUSTER_HEIGHT (WINDOW_HEIGHT / LIGHT_CLUSTER_GRID_SIZE)  // Y轴
 #define LIGHT_CLUSTER_NUM   (LIGHT_CLUSTER_WIDTH * LIGHT_CLUSTER_HEIGHT * LIGHT_CLUSTER_DEPTH)
 
-// #define DDGI_IRRADIANCE_PROBE_SIZE 8                //DDGI使用的辐照度贴图，单个probe的纹理尺寸
-// #define DDGI_DEPTH_PROBE_SIZE 16                    //DDGI使用的深度贴图，单个probe的纹理尺寸
+#define DIFFUSE_IBL_SIZE 32							//漫反射IBL尺寸
+#define SPECULAR_IBL_SIZE 128						//镜面反射IBL尺寸
 
-// #define HALF_SIZE_SSSR false                        //SSSR是否使用半精度
+#define MIN_RAY_TRACING_DISTANCE 0.001              //光追最短追踪距离
+#define MAX_RAY_TRACING_DISTANCE 10000.0            //光追最长追踪距离
 
-// #define VOLUMETRIC_FOG_SIZE_X 320                   //体积雾使用的屏幕空间texture3d的分辨率
-// #define VOLUMETRIC_FOG_SIZE_Y 180
-// #define VOLUMETRIC_FOG_SIZE_Z 128
+#define DDGI_IRRADIANCE_PROBE_SIZE 8                //DDGI使用的辐照度贴图，单个probe的纹理尺寸
+#define DDGI_DEPTH_PROBE_SIZE 16                    //DDGI使用的深度贴图，单个probe的纹理尺寸
+
+#define HALF_SIZE_SSSR false                        //SSSR是否使用半精度
+
+#define VOLUMETRIC_FOG_SIZE_X 320                   //体积雾使用的屏幕空间texture3d的分辨率
+#define VOLUMETRIC_FOG_SIZE_Y 180
+#define VOLUMETRIC_FOG_SIZE_Z 128
 
 
 

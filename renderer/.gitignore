@@ -1,11 +1,9 @@
-# Xmake cache
 .xmake/
 build/
 
-# MacOS Cache
 .DS_Store
 
-
+.cache/
 vsxmake2019/
 vsxmake2022/
 .VSCodeCounter/

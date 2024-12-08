@@ -14,14 +14,14 @@ public:
 
 	virtual std::string GetName() override final { return "Exposure"; }
 
-	virtual PassType GetType() override final { return EXPOSURE_PASS; };
+	virtual PassType GetType() override final { return EXPOSURE_PASS; }
 
 private:
     bool enableStatistics = false;
 
     float minLuminance = 1.0f / 128.0f;
-    float maxLuminance = 4.0f;
-    float adjustSpeed = 0.01f;
+    float maxLuminance = 32.0f;
+    float adjustSpeed = 0.05f;
 
     struct ExposureSetting
     {

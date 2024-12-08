@@ -80,6 +80,8 @@ struct SubmeshData
 
     IndexRange meshClusterID = { 0, 0 };            // 提交的一组cluster的ID范围
     IndexRange meshClusterGroupID = { 0, 0 };       // 提交的一组cluster group的ID范围
+
+    RHIBottomLevelAccelerationStructureRef blas;
 };
 
 // 目前Model并不提供从程序写入模型文件的功能

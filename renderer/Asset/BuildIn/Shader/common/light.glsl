@@ -109,6 +109,7 @@ float DirectionalShadow(vec4 worldPos)
 	int cascadeIndex = CascadeLevel(worldPos);
 
     DirectionalLight dirLight = LIGHTS.directionalLights[cascadeIndex];
+	if(!(dirLight.castShadow > 0)) return 1.0f;	// 不投射阴影
 
     vec3 dirLightVec = -normalize(dirLight.dir);    
 
@@ -138,8 +139,11 @@ float DirectionalShadow(vec4 worldPos)
 }
 
 // 获取点光源阴影值
-float PointShadow(in PointLight pointLight, vec4 worldPos)
+float PointShadow(uint lightID, vec4 worldPos)
 {
+	if(lightID == 0) return 0.0f;	// 0为无效ID
+
+	PointLight pointLight = LIGHTS.pointLights[lightID];
 	if(pointLight.shadowID >= MAX_POINT_SHADOW_COUNT) return 1.0f;	//无效阴影索引
 
 	vec3 pointLightVec = normalize(pointLight.pos - worldPos.xyz);
@@ -167,6 +171,278 @@ float PointShadow(in PointLight pointLight, vec4 worldPos)
 float PointLightFalloff(float dist, float radius)
 {
 	return pow(clamp(1.0f - pow(dist / radius, 4), 0.0, 1.0), 2) / (dist * dist + 1.0f);
+}
+
+
+#if(ENABLE_RAY_TRACING != 0)	// 光追版本的光源阴影获取
+
+float RtDirectionalShadow(vec4 worldPos)
+{
+    float dirShadow = 1.0f;
+    if(LIGHTS.lightSetting.directionalLightCnt != 0)	
+    {
+        DirectionalLight dirLight = LIGHTS.directionalLights[0];
+        vec3 L = -normalize(dirLight.dir);    
+        
+		if(dirLight.castShadow > 0)  dirShadow = VisibilityTest(worldPos.xyz, worldPos.xyz + L * MAX_RAY_TRACING_DISTANCE) ? 0.0f : 1.0f; 
+    }
+    return dirShadow;
+}
+
+float RtPointShadow(uint lightID, vec4 worldPos)
+{
+    if(lightID == 0) return 0.0f;	// 0为无效ID
+
+	PointLight pointLight = LIGHTS.pointLights[lightID];
+
+    float pointShadow = VisibilityTest(worldPos.xyz, pointLight.pos) ? 0.0f : 1.0f; 
+    return pointShadow;	     // 光追就不考虑点光源是否开启投射阴影了
+}
+
+#endif
+
+
+
+// 直接光照////////////////////////////////////////////////////////////////////////////
+
+// 平行光源光照计算, 不计算阴影
+vec3 DirectionalLighting(
+    vec3 albedo, float roughness, float metallic,
+    vec4 worldPos, vec3 N, vec3 V)
+{
+    vec3 dirColor = vec3(0.0f);
+	if(LIGHTS.lightSetting.directionalLightCnt != 0)	// 目前只支持一个
+    {
+        DirectionalLight dirLight = LIGHTS.directionalLights[0];
+
+        vec3 L = -normalize(dirLight.dir);    
+        float NoL = saturate(dot(N, L));
+
+        float dirShadow     = 1.0f;
+		//float dirShadow = DirectionalShadow(worldPos);               
+
+        vec3 radiance = dirShadow *           //辐射率 = 阴影值 * 光强 * 颜色
+                        dirLight.color * 
+                        dirLight.intencity;        
+
+        vec3 f_r = ResolveBRDF(albedo.xyz, roughness, metallic, N, V, L);
+
+        dirColor += max(vec3(0.0f), f_r * radiance * NoL);	
+    }
+    return dirColor;
+}
+
+vec3 DirectionalDiffuseLighting(
+    vec3 albedo, float roughness, float metallic,
+    vec4 worldPos, vec3 N, vec3 V)
+{
+    vec3 dirColor = vec3(0.0f);
+	if(LIGHTS.lightSetting.directionalLightCnt != 0)	// 目前只支持一个
+    {
+        DirectionalLight dirLight = LIGHTS.directionalLights[0];
+
+        vec3 L = -normalize(dirLight.dir);    
+        float NoL = saturate(dot(N, L));
+
+        float dirShadow     = 1.0f;
+		//float dirShadow = DirectionalShadow(worldPos);               
+
+        vec3 radiance = dirShadow *           //辐射率 = 阴影值 * 光强 * 颜色
+                        dirLight.color * 
+                        dirLight.intencity;        
+
+        vec3 f_r = ResolveDiffuseBRDF(albedo.xyz, roughness, metallic, N, V, L);
+
+        dirColor += max(vec3(0.0f), f_r * radiance * NoL);	
+    }
+    return dirColor;
+}
+
+// 点光源光照计算, 不计算阴影
+vec3 PointLighting(
+    vec3 albedo, float roughness, float metallic,
+    vec4 worldPos, vec3 N, vec3 V, uint lightID)
+{
+	if(lightID == 0) return vec3(0.0f);	// 0为无效ID
+
+    PointLight pointLight = LIGHTS.pointLights[lightID];
+
+    float pointDistance = length(worldPos.xyz - pointLight.pos);
+
+    vec3 L = normalize(pointLight.pos - worldPos.xyz);
+    float NoL = saturate(dot(N, L));
+
+    float pShadow = 1.0f;
+    //float pShadow       = PointShadow(lightID, worldPos);  
+    float attenuation   = PointLightFalloff(pointDistance, pointLight.far);
+
+    vec3 radiance = pShadow *               //辐射率 = 阴影值 * 光强 * 颜色 * 衰减
+                    pointLight.color * 
+                    pointLight.intencity *
+                    attenuation;   
+
+    vec3 f_r = ResolveBRDF(albedo.xyz, roughness, metallic, N, V, L);
+
+    return max(vec3(0.0f), f_r * radiance * NoL);	
+}
+
+// 点光源光照计算, 使用cluster based lighting, 计算阴影
+vec3 PointLighting(
+    vec3 albedo, float roughness, float metallic,
+    vec4 worldPos, vec3 N, vec3 V)
+{
+    vec3 pointColor = vec3(0.0f);
+    {
+        ivec3 clusterGrid   = FetchLightClusterGrid(WorldToNDC(worldPos).xyz);
+        uvec2 clusterIndex  = FetchLightClusterIndex(clusterGrid);      //读取对应cluster的索引信息 
+
+        for(uint i = clusterIndex.x; i < clusterIndex.x + clusterIndex.y; i++)
+        {
+            uint lightID = LIGHT_CLUSTER_INDEX.slot[i].lightID;
+
+            pointColor  +=  PointLighting(albedo, roughness, metallic, worldPos, N, V, lightID) * 
+                            PointShadow(lightID, worldPos);
+        }     
+    }
+	return pointColor;
+}
+
+vec3 PointDiffuseLighting(
+    vec3 albedo, float roughness, float metallic,
+    vec4 worldPos, vec3 N, vec3 V, uint lightID)
+{
+	if(lightID == 0) return vec3(0.0f);	// 0为无效ID
+
+    PointLight pointLight = LIGHTS.pointLights[lightID];
+
+    float pointDistance = length(worldPos.xyz - pointLight.pos);
+
+    vec3 L = normalize(pointLight.pos - worldPos.xyz);
+    float NoL = saturate(dot(N, L));
+
+    float pShadow = 1.0f;
+    //float pShadow       = PointShadow(lightID, worldPos);  
+    float attenuation   = PointLightFalloff(pointDistance, pointLight.far);
+
+    vec3 radiance = pShadow *               //辐射率 = 阴影值 * 光强 * 颜色 * 衰减
+                    pointLight.color * 
+                    pointLight.intencity *
+                    attenuation;   
+
+    vec3 f_r = ResolveDiffuseBRDF(albedo.xyz, roughness, metallic, N, V, L);
+
+    return max(vec3(0.0f), f_r * radiance * NoL);	
+}
+
+vec3 PointDiffuseLighting(
+    vec3 albedo, float roughness, float metallic,
+    vec4 worldPos, vec3 N, vec3 V)
+{
+    vec3 pointColor = vec3(0.0f);
+    {
+        ivec3 clusterGrid   = FetchLightClusterGrid(WorldToNDC(worldPos).xyz);
+        uvec2 clusterIndex  = FetchLightClusterIndex(clusterGrid);      //读取对应cluster的索引信息 
+
+        for(uint i = clusterIndex.x; i < clusterIndex.x + clusterIndex.y; i++)
+        {
+            uint lightID = LIGHT_CLUSTER_INDEX.slot[i].lightID;
+
+            pointColor  +=  PointDiffuseLighting(albedo, roughness, metallic, worldPos, N, V, lightID) * 
+                            PointShadow(lightID, worldPos);
+        }     
+    }
+	return pointColor;
+}
+
+// 间接光照////////////////////////////////////////////////////////////////////////////
+
+vec3 IndirectIrradiance(
+    vec3 albedo, float roughness, float metallic,
+    vec4 worldPos, vec3 N, vec3 V)
+{
+    vec3 indirectIrradiance = vec3(0.0f);
+    for(int i = 0; i < LIGHTS.lightSetting.volumeLightCnt; i++)
+    {
+		uint volumeLightID = LIGHTS.lightSetting.volumeLightIDs[i];
+
+        VolumeLight volumeLight = LIGHTS.volumeLights[volumeLightID];
+        if(volumeLight.setting.enable &&
+           PointIntersectBox(worldPos.xyz, volumeLight.setting.boundingBox))    //需要在包围盒范围内
+        {
+            indirectIrradiance = FetchDDGIIrradiance(	volumeLight.setting, worldPos.xyz, N, V, 
+														VOLUME_LIGHT_IRRADIANCE[volumeLightID], VOLUME_LIGHT_DEPTH[volumeLightID], SAMPLER[0]);
+            break;  //暂时只用一个的，没处理重叠情况
+        }
+    }
+    return indirectIrradiance;
+}
+
+vec3 IndirectLighting(
+    vec3 albedo, float roughness, float metallic,
+    vec4 worldPos, vec3 N, vec3 V)
+{
+   	float a2 			= Pow4(roughness);  
+	vec3 F0 			= mix(vec3(0.04f), albedo, metallic);
+
+    vec3 indirectColor = vec3(0.0f);          
+
+	// DDGI
+    {
+        vec3 indirectIrradiance = IndirectIrradiance(albedo, roughness, metallic, worldPos, N, V);
+
+        float NoV = saturate(dot(N, V));
+
+        vec3 k_specular = FresnelSchlickRoughness(NoV, F0, roughness); 
+        vec3 k_diffuse  = 1.0 - k_specular;     //BRDF积分项里每个radiance对应的kD是不同的（k_specular = F 视角相关），把kD移出积分是一个近似估计
+
+        vec3 f_diffuse  = Diffuse_Lambert(albedo);  
+
+        vec3 diffuseColor = (1.0 - metallic) * k_diffuse * f_diffuse * indirectIrradiance;      //  ?
+        // vec3 diffuseColor = albedo / PI * indirectIrradiance;                                // 所有表面都当完美漫反射表面计算
+
+        indirectColor = diffuseColor;
+    }
+
+    //环境光照计算，已经在SSSR里完成了
+    /*
+    vec3 ambientColor = vec3(0.0);
+    {
+        float NoV = clamp(dot(N, V), 0.00001, 0.99999);
+
+        vec3 kS = FresnelSchlickRoughness(NoV, F0, roughness); 
+        vec3 kD = 1.0 - kS;
+
+        //漫反射IBL
+        vec3 irradiance = texture(DIFFUSE_IBL_SAMPLER, N).rgb;
+        vec3 diffuse    = irradiance * albedo.rgb;
+        vec3 diffuseColor = kD * diffuse; //漫反射环境光照得到的颜色
+
+        //镜面反射IBL
+        vec2 brdf = texture(BRDF_LUT, vec2(NoV, roughness)).rg;
+        brdf = pow(brdf, vec2(1.0/2.2));      //gamma矫正
+        vec3 reflection = PreFilteredReflection(R, roughness, SPECULAR_IBL_SAMPLER).rgb;	
+	    vec3 specularColor = reflection * (kS * brdf.x + brdf.y);
+
+        ambientColor = diffuseColor + specularColor;
+    }
+
+    //对于大场景的IBL不对，暂时先用定值
+    {
+        float NoV = clamp(dot(N, V), 0.00001, 0.99999);
+
+        vec3 kS = FresnelSchlickRoughness(NoV, F0, roughness); 
+        vec3 kD = 1.0 - kS;
+
+        //漫反射IBL
+        vec3 irradiance  = vec3(0.2);
+        vec3 diffuse = irradiance * albedo.rgb;
+        vec3 diffuseColor = kD * diffuse;    //漫反射环境光照得到的颜色
+
+        ambientColor = diffuseColor * ao;
+    }
+    */
+
+    return indirectColor;
 }
 
 #endif

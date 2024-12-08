@@ -17,15 +17,17 @@
 CEREAL_REGISTER_TYPE(DirectionalLightComponent)
 CEREAL_REGISTER_POLYMORPHIC_RELATION(Component, DirectionalLightComponent)
 
-void DirectionalLightComponent::Init()
+void DirectionalLightComponent::OnInit()
 {
-	Component::Init();
+	Component::OnInit();
 	
 	for (int i = 0; i < 4; i++) updateCnts[i] = updateFrequences[i];	//初始时先统一绘制一轮
 }
 
-void DirectionalLightComponent::Tick(float deltaTime)
+void DirectionalLightComponent::OnUpdate(float deltaTime)
 { 
+	InitComponentIfNeed();
+
 	// cascade的更新计数
 	for (int i = 0; i < DIRECTIONAL_SHADOW_CASCADE_LEVEL; i++)
 	{	
@@ -41,8 +43,8 @@ void DirectionalLightComponent::UpdateMatrix()
     std::shared_ptr<TransformComponent> transform = TryGetComponent<TransformComponent>();
     if(transform)
     {
-        front = transform->GetTransform().Front();
-        up = transform->GetTransform().Up();
+        front = transform->Front();
+        up = transform->Up();
     }
     else 
     {
@@ -153,6 +155,7 @@ void DirectionalLightComponent::UpdateCascades()
 			lightInfos[i].color = color;
             lightInfos[i].intencity = intencity;
             lightInfos[i].fogScattering = fogScattering;
+			lightInfos[i].castShadow = castShadow;
 			lightInfos[i].dir = lightDir;
 
 			//更新裁切视锥

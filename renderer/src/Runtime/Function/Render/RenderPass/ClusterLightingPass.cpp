@@ -3,6 +3,7 @@
 #include "Function/Global/EngineContext.h"
 #include "Function/Render/RDG/RDGHandle.h"
 #include "Function/Render/RHI/RHIStructs.h"
+#include "Function/Render/RenderPass/RenderPass.h"
 
 void ClusterLightingPass::Init()
 {
@@ -17,35 +18,41 @@ void ClusterLightingPass::Init()
     rootSignature = backend->CreateRootSignature(rootSignatureInfo);
 
     RHIComputePipelineInfo pipelineInfo     = {};
-    pipelineInfo.computeShader              = computeShader.shader;
     pipelineInfo.rootSignature              = rootSignature;
+    pipelineInfo.computeShader              = computeShader.shader;
     computePipeline   = backend->CreateComputePipeline(pipelineInfo);
 }   
 
 void ClusterLightingPass::Build(RDGBuilder& builder) 
 {
-    RDGTextureHandle lightClusterGrid = builder.CreateTexture("Light Cluster Grid")
-        .Import(EngineContext::RenderResource()->GetLightClusterGridTexture(), RESOURCE_STATE_UNDEFINED)
-        .Finish();
+    if( IsEnabled() && 
+        !EngineContext::Render()->IsPassEnabled(RESTIR_PASS) &&
+        !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS) && 
+        !EngineContext::Render()->IsPassEnabled(PATH_TRACING_PASS))
+    {
+        RDGTextureHandle lightClusterGrid = builder.CreateTexture("Light Cluster Grid")
+            .Import(EngineContext::RenderResource()->GetLightClusterGridTexture(), RESOURCE_STATE_UNDEFINED)
+            .Finish();
 
-    RDGBufferHandle lightClusterIndex = builder.CreateBuffer("Light Cluster Index")
-        .Import(EngineContext::RenderResource()->GetLightClusterIndexBuffer(), RESOURCE_STATE_UNDEFINED)
-        .Finish();
+        RDGBufferHandle lightClusterIndex = builder.CreateBuffer("Light Cluster Index")
+            .Import(EngineContext::RenderResource()->GetLightClusterIndexBuffer(), RESOURCE_STATE_UNDEFINED)
+            .Finish();
 
-    RDGComputePassHandle pass = builder.CreateComputePass(GetName())
-        //.RootSignature(rootSignature)
-        .ReadWrite(0, 0, 0, lightClusterGrid)   // 不提供根签名时，此处仅用于设置屏障
-        .ReadWrite(0, 0, 0, lightClusterIndex)
-        .Execute([&](RDGPassContext context) {       
+        RDGComputePassHandle pass = builder.CreateComputePass(GetName())
+            //.RootSignature(rootSignature)
+            .ReadWrite(0, 0, 0, lightClusterGrid)   // 不提供根签名时，此处仅用于设置屏障
+            .ReadWrite(0, 0, 0, lightClusterIndex)
+            .Execute([&](RDGPassContext context) {       
 
-            RHICommandListRef command = context.command; 
-            command->SetComputePipeline(computePipeline);
-            command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);
-            command->Dispatch(  1, 
-                                1, 
-                                LIGHT_CLUSTER_DEPTH);
-        })
-        .OutputReadWrite(lightClusterGrid)
-        .OutputReadWrite(lightClusterIndex)
-        .Finish();
+                RHICommandListRef command = context.command; 
+                command->SetComputePipeline(computePipeline);
+                command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);
+                command->Dispatch(  1, 
+                                    1, 
+                                    LIGHT_CLUSTER_DEPTH);
+            })
+            .OutputReadWrite(lightClusterGrid)
+            .OutputReadWrite(lightClusterIndex)
+            .Finish();
+    }
 }

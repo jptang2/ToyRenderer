@@ -21,6 +21,9 @@ typedef std::shared_ptr<class RHITexture> RHITextureRef;
 typedef std::shared_ptr<class RHITextureView> RHITextureViewRef;
 typedef std::shared_ptr<class RHISampler> RHISamplerRef;
 typedef std::shared_ptr<class RHIShader> RHIShaderRef;
+typedef std::shared_ptr<class RHIShaderBindingTable> RHIShaderBindingTableRef;
+typedef std::shared_ptr<class RHITopLevelAccelerationStructure> RHITopLevelAccelerationStructureRef;
+typedef std::shared_ptr<class RHIBottomLevelAccelerationStructure> RHIBottomLevelAccelerationStructureRef;
 typedef std::shared_ptr<class RHIRootSignature> RHIRootSignatureRef;
 typedef std::shared_ptr<class RHIDescriptorSet> RHIDescriptorSetRef;
 typedef std::shared_ptr<class RHIRenderPass> RHIRenderPassRef;
@@ -40,15 +43,18 @@ enum RHIResourceType : uint32_t	// 此处的倒序也是有效的析构顺序
 	RHI_TEXTURE,
 	RHI_TEXTURE_VIEW,
 	RHI_SAMPLER,
-
 	RHI_SHADER,
+	RHI_SHADER_BINDING_TABLE,
+	RHI_TOP_LEVEL_ACCELERATION_STRUCTURE,
+	RHI_BOTTOM_LEVEL_ACCELERATION_STRUCTURE,
+
 	RHI_ROOT_SIGNATURE,
 	RHI_DESCRIPTOR_SET,
 	
 	RHI_RENDER_PASS,
-	RHI_GRAPHICS_PIPELINE_STATE,
-	RHI_COMPUTE_PIPELINE_STATE,
-	RHI_RAY_TRACING_PIPELINE_STATE,
+	RHI_GRAPHICS_PIPELINE,
+	RHI_COMPUTE_PIPELINE,
+	RHI_RAY_TRACING_PIPELINE,
 
 	RHI_QUEUE,
 	RHI_SURFACE,
@@ -109,6 +115,7 @@ enum BufferCreationFlagBits : uint32_t
 {
 	BUFFER_CREATION_NONE = 0x00000000,
 	BUFFER_CREATION_PERSISTENT_MAP = 0x00000001,
+	BUFFER_CREATION_FORCE_ALIGNMENT = 0x00000002,	// 使用256字节的内存对齐
 
 	BUFFER_CREATION_MAX_ENUM = 0x7FFFFFFF,	//
 };
@@ -576,6 +583,17 @@ typedef struct RHIIndirectCommand
     uint32_t    firstInstance;
 } RHIIndirectCommand;
 
+typedef struct RHIAccelerationStructureInstanceInfo
+{
+	float    	transform[3][4] = { 0.0f };
+
+    uint32_t    instanceIndex;
+    uint32_t    mask;
+    uint32_t    shaderBindingTableOffset;
+    RHIBottomLevelAccelerationStructureRef    blas;
+
+} RHIAccelerationStructureInstanceInfo;
+
 typedef struct Extent2D 
 {
     uint32_t    width;
@@ -585,6 +603,11 @@ typedef struct Extent2D
 	{
 		return 	a.width == b.width &&
 				a.height == b.height;
+	}
+
+	const uint32_t MipSize() const 
+	{ 
+		return (uint32_t)(std::floor(std::log2(std::max(width, height)))) + 1; 
 	}
 
 } Extent2D;
@@ -600,6 +623,11 @@ typedef struct Extent3D
 		return 	a.width == b.width &&
 				a.height == b.height &&
 				a.depth == b.depth;
+	}
+	
+	const uint32_t MipSize() const 
+	{ 
+		return (uint32_t)(std::floor(std::log2(std::max(width, std::max(height, depth))))) + 1; 
 	}
 
 } Extent3D;
@@ -809,6 +837,48 @@ typedef struct RHIShaderInfo
 	std::vector<uint8_t> code;
 } RHIShaderInfo;
 
+typedef struct RHIShaderBindingTableInfo
+{
+	void AddRayGenGroup(RHIShaderRef rayGenShader) { rayGenGroups.push_back(rayGenShader); }
+	void AddHitGroup(	RHIShaderRef closestHitShader,
+						RHIShaderRef anyHitShader,
+						RHIShaderRef intersectionShader) 
+	{ 
+		hitGroups.push_back({closestHitShader, anyHitShader, intersectionShader}); 
+	}
+	void AddMissGroup(RHIShaderRef rayMissShader) { missGroups.push_back(rayMissShader); }
+	
+	struct HitGroup
+	{
+		RHIShaderRef closestHitShader;
+		RHIShaderRef anyHitShader;
+		RHIShaderRef intersectionShader;
+	};
+
+	std::vector<RHIShaderRef> rayGenGroups;
+	std::vector<HitGroup> hitGroups;
+	std::vector<RHIShaderRef> missGroups;
+
+} RHIShaderBindingTableInfo;
+
+typedef struct RHITopLevelAccelerationStructureInfo
+{
+	uint32_t maxInstance;
+	std::vector<RHIAccelerationStructureInstanceInfo> instanceInfos;
+
+} RHITopLevelAccelerationStructureInfo;
+
+typedef struct RHIBottomLevelAccelerationStructureInfo
+{
+	RHIBufferRef vertexBuffer;
+	RHIBufferRef indexBuffer;
+	uint32_t triangleNum;
+	uint32_t vertexStride = 0;
+	uint32_t indexOffset = 0;
+	uint32_t vertexOffset = 0;
+
+} RHIBottomLevelAccelerationStructureInfo;
+
 typedef struct ShaderResourceEntry 
 {
 	// std::string name;
@@ -888,8 +958,8 @@ typedef struct RHIRootSignatureInfo
 	RHIRootSignatureInfo& AddEntry(const ShaderResourceEntry& entry);
 	RHIRootSignatureInfo& AddEntry(const RHIRootSignatureInfo& other);
 	RHIRootSignatureInfo& AddEntryFromReflect(RHIShaderRef shader);
-	const std::vector<PushConstantInfo>& GetPushConstants() const { return pushConstants; };
-	const std::vector<ShaderResourceEntry>& GetEntries() const { return entries; };
+	const std::vector<PushConstantInfo>& GetPushConstants() const { return pushConstants; }
+	const std::vector<ShaderResourceEntry>& GetEntries() const { return entries; }
 
 protected:
 	std::vector<ShaderResourceEntry> entries;
@@ -907,7 +977,7 @@ typedef struct RHIDescriptorUpdateInfo
 	RHIBufferRef buffer;
 	RHITextureViewRef textureView;
 	RHISamplerRef sampler;
-	//TODO 光追加速结构
+	RHITopLevelAccelerationStructureRef tlas;
 
 	uint64_t bufferOffset = 0;	// 仅buffer使用
 	uint64_t bufferRange = 0;
@@ -1110,13 +1180,15 @@ typedef struct RHIComputePipelineInfo
 
 typedef struct RHIRayTracingPipelineInfo
 {
-	RHIShaderRef 					rayGenShader;
-	RHIShaderRef					anyHitShader;
-	RHIShaderRef					closestHitShader;
-	RHIShaderRef					rayMissShader;
-	RHIShaderRef					intersectionShader;
+	RHIShaderBindingTableRef 		shaderBindingTable;
 
 	RHIRootSignatureRef				rootSignature;
+
+	friend bool operator== (const RHIRayTracingPipelineInfo& a, const RHIRayTracingPipelineInfo& b)
+	{
+		return  a.shaderBindingTable.get() == b.shaderBindingTable.get() &&
+				a.rootSignature.get() == b.rootSignature.get();
+	}
 
 } RHIRayTracingPipelineInfo;
 

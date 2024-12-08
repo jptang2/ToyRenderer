@@ -3,15 +3,16 @@
 #include "Function/Global/EngineContext.h"
 #include "Function/Render/RHI/RHIResource.h"
 #include "Function/Render/RHI/RHIStructs.h"
+#include <cstdint>
 
 RDGBufferPool::PooledBuffer RDGBufferPool::Allocate(const RHIBufferInfo& info)
 {
     RDGBufferPool::PooledBuffer ret;
 
     auto& buffers = pooledBuffers[info];
-    for(auto iter = buffers.begin(); iter != buffers.end(); iter++) // 搜索符合条件的，主要是size
+    for(auto iter = buffers.begin(); iter != buffers.end(); iter++) 
     {
-        if(iter->buffer->GetInfo().size >= info.size)
+        if(iter->buffer->GetInfo().size >= info.size)   // 搜索符合条件的，尺寸
         {
             ret = *iter;
             buffers.erase(iter);
@@ -40,10 +41,13 @@ RDGTexturePool::PooledTexture RDGTexturePool::Allocate(const RHITextureInfo& inf
 {
     RDGTexturePool::PooledTexture ret;
 
-    auto& textures = pooledTextures[info];
+    RHITextureInfo tempInfo = info;
+    if(tempInfo.mipLevels == 0) tempInfo.mipLevels = tempInfo.extent.MipSize();     // 处理一下自动的mipLevels
+
+    auto& textures = pooledTextures[tempInfo];
     for(auto iter = textures.begin(); iter != textures.end(); iter++) 
     {
-        ret = *iter;                    // 没有什么需要筛选的，固定尺寸了
+        ret = *iter;                    
         textures.erase(iter);
         pooledSize--;
         return ret;
@@ -51,7 +55,7 @@ RDGTexturePool::PooledTexture RDGTexturePool::Allocate(const RHITextureInfo& inf
     
     LOG_DEBUG("RHITexture not found in cache, creating new.");
     ret = {
-        .texture = EngineContext::RHI()->CreateTexture(info),
+        .texture = EngineContext::RHI()->CreateTexture(tempInfo),
         .state = RESOURCE_STATE_UNDEFINED,
     };
     allocatedSize++;

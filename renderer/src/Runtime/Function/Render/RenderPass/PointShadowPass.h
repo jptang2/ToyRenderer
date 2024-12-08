@@ -19,7 +19,7 @@ public:
 
 	virtual std::string GetName() override final { return "Point Shadow"; }
 
-    virtual PassType GetType() override final { return POINT_SHADOW_PASS; };
+    virtual PassType GetType() override final { return POINT_SHADOW_PASS; }
 
     virtual std::vector<MeshPassProcessorRef> GetMeshPassProcessors() override final   { return meshPassProcessors; } 
 

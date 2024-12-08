@@ -18,8 +18,8 @@ void DeferredLightingPass::Init()
     rootSignature = backend->CreateRootSignature(rootSignatureInfo);
 
     RHIComputePipelineInfo pipelineInfo     = {};
-    pipelineInfo.computeShader              = computeShader.shader;
     pipelineInfo.rootSignature              = rootSignature;
+    pipelineInfo.computeShader              = computeShader.shader; 
     computePipeline   = backend->CreateComputePipeline(pipelineInfo);
 }   
 
@@ -27,9 +27,9 @@ void DeferredLightingPass::Build(RDGBuilder& builder)
 {
     Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
 
-    RDGTextureHandle diffuse    = builder.GetTexture("G-Buffer Diffuse/Roughness");
-    RDGTextureHandle normal     = builder.GetTexture("G-Buffer Normal/Metallic");
-    RDGTextureHandle emission   = builder.GetTexture("G-Buffer Emission");
+    RDGTextureHandle diffuse        = builder.GetTexture("G-Buffer Diffuse/Roughness");
+    RDGTextureHandle normal         = builder.GetTexture("G-Buffer Normal/Metallic");
+    RDGTextureHandle emission       = builder.GetTexture("G-Buffer Emission");
 
     RDGTextureHandle outColor = builder.CreateTexture("Mesh Pass Out Color") 
         .Exetent({windowExtent.width, windowExtent.height, 1})
@@ -41,22 +41,28 @@ void DeferredLightingPass::Build(RDGBuilder& builder)
         .AllowRenderTarget()
         .Finish();  
 
-    RDGComputePassHandle pass = builder.CreateComputePass(GetName())
-        .RootSignature(rootSignature)
-        .ReadWrite(1, 0, 0, diffuse)
-        .ReadWrite(1, 1, 0, normal)
-        .ReadWrite(1, 2, 0, emission)
-        .ReadWrite(1, 3, 0, outColor)
-        .Execute([&](RDGPassContext context) {       
+    if( IsEnabled() &&
+        !EngineContext::Render()->IsPassEnabled(RESTIR_PASS) &&
+        !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS) && 
+        !EngineContext::Render()->IsPassEnabled(PATH_TRACING_PASS))
+    {
+        RDGComputePassHandle pass = builder.CreateComputePass(GetName())
+            .RootSignature(rootSignature)
+            .ReadWrite(1, 0, 0, diffuse)
+            .ReadWrite(1, 1, 0, normal)
+            .ReadWrite(1, 2, 0, emission)
+            .ReadWrite(1, 3, 0, outColor)
+            .Execute([&](RDGPassContext context) {       
 
-            RHICommandListRef command = context.command; 
-            command->SetComputePipeline(computePipeline);
-            command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);
-            command->BindDescriptorSet(context.descriptors[1], 1);
-            command->PushConstants(&setting, sizeof(DeferredLightingSetting), SHADER_FREQUENCY_COMPUTE);
-            command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                EngineContext::Render()->GetWindowsExtent().height / 16, 
-                                1);
-        })
-        .Finish();
+                RHICommandListRef command = context.command; 
+                command->SetComputePipeline(computePipeline);
+                command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);
+                command->BindDescriptorSet(context.descriptors[1], 1);
+                command->PushConstants(&setting, sizeof(DeferredLightingSetting), SHADER_FREQUENCY_COMPUTE);
+                command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
+                                    EngineContext::Render()->GetWindowsExtent().height / 16, 
+                                    1);
+            })
+            .Finish();
+    }
 }

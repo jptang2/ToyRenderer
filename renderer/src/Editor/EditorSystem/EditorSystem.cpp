@@ -3,6 +3,7 @@
 #include "Platform/Input/InputSystem.h"
 #include "Widget/HierarchyWidget.h"
 #include "Widget/InspectorWidget.h"
+#include "Widget/RDGGraphWidget.h"
 
 void EditorSystem::Init()
 {

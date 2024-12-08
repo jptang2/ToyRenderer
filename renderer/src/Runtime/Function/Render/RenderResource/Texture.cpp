@@ -65,7 +65,7 @@ Texture::Texture(TextureType type, RHIFormat format, Extent3D extent, uint32_t a
 , arrayLayer(arrayLayer)
 {
     this->mipLevels = mipLevels == 0 ? 
-                        (uint32_t)(std::floor(std::log2(std::max(extent.width, extent.height)))) + 1 : 
+                        extent.MipSize() : 
                         mipLevels;
     InitRHI();
 }

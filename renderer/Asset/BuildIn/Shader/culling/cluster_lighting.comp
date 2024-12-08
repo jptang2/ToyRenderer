@@ -47,8 +47,8 @@ void main()
 
 	// view space的包围盒
 	BoundingBox box;
-	box.max_bound = max(nearMin, max(nearMax, max(farMin, farMax)));
-	box.min_bound = min(nearMin, min(nearMax, min(farMin, farMax)));
+	box.maxBound = max(nearMin, max(nearMax, max(farMin, farMax)));
+	box.minBound = min(nearMin, min(nearMax, min(farMin, farMax)));
 
 	//光源剔除////////////////////////////////////////////////////////////////////////////////////////////////////
 

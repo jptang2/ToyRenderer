@@ -1,5 +1,6 @@
 #include "DepthPass.h"
 #include "Function/Global/EngineContext.h"
+#include "Function/Render/RDG/RDGHandle.h"
 #include "Function/Render/RHI/RHIStructs.h"
 
 void DepthPassProcessor::OnCollectBatch(const DrawBatch& batch)
@@ -35,7 +36,7 @@ void DepthPass::Init()
     pipelineInfo.primitiveType      = PRIMITIVE_TYPE_TRIANGLE_LIST;
     pipelineInfo.rasterizerState    = { FILL_MODE_SOLID, CULL_MODE_BACK, DEPTH_CLIP, 0.0f, 0.0f };                    
     pipelineInfo.depthStencilState              = { COMPARE_FUNCTION_LESS_EQUAL, true, true };
-    pipelineInfo.depthStencilAttachmentFormat   = FORMAT_D32_SFLOAT;
+    pipelineInfo.depthStencilAttachmentFormat   = EngineContext::Render()->GetDepthFormat();
     pipeline                                    = GraphicsPipelineCache::Get()->Allocate(pipelineInfo).pipeline;    // 普通mesh的默认绘制管线
 
     pipelineInfo.vertexShader                   = clusterVertexShader.shader;
@@ -47,6 +48,16 @@ void DepthPass::Build(RDGBuilder& builder)
     RDGTextureHandle depth = builder.CreateTexture("Depth")
         .Import(EngineContext::RenderResource()->GetDepthTexture(), RESOURCE_STATE_UNDEFINED)
         .Finish();  
+
+    RDGTextureHandle prevDepth = builder.CreateTexture("Previous Depth")
+        .Import(EngineContext::RenderResource()->GetPrevDepthTexture(), RESOURCE_STATE_UNDEFINED)
+        .Finish();  
+
+    RDGCopyPassHandle copyPass = builder.CreateCopyPass(GetName() + " Copy")
+        .From(depth)
+        .To(prevDepth)
+        .OutputRead(prevDepth)
+        .Finish();
 
     RDGRenderPassHandle pass = builder.CreateRenderPass(GetName())
         .DepthStencil(depth, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, 1.0f, 0)

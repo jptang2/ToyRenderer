@@ -8,7 +8,7 @@ void Entity::Load()
 {
     for (auto& component : components)
     {
-        component->Load();
+        component->OnLoad();
     }
 }
 
@@ -16,7 +16,7 @@ void Entity::Save()
 {
     for (auto& component : components)
     {
-        component->Save();
+        component->OnSave();
     }
 }
 
@@ -24,16 +24,7 @@ void Entity::Init()
 {
     for (auto& component : components)
     {
-        if(!component->init) component->Init();
-    }
-}
-
-void Entity::Tick(float deltaTime)
-{
-    for (auto& component : components)
-    {
-        if(!component->init) component->Init(); // 保证已经初始化
-        component->Tick(deltaTime);
+        if(!component->init) component->OnInit();
     }
 }
 

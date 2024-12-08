@@ -12,10 +12,11 @@ public:
 	CameraComponent() {};
 	~CameraComponent() {};
 
-	virtual void Init() override;
-	virtual void Tick(float deltaTime) override;
+	virtual void OnInit() override;
+	virtual void OnUpdate(float deltaTime) override;
 
 	bool IsActiveCamera();
+	bool IsMoved() 											{ return move; }
 
 	inline void SetFov(float fovy) 							{ this->fovy = fovy; }
 
@@ -63,6 +64,7 @@ private:
     Frustum frustum;
 
 	CameraInfo cameraInfo;
+	bool move = false;
 
 	void InputMove(float deltaTime);
 

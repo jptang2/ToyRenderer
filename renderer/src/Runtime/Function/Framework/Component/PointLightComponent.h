@@ -14,19 +14,19 @@ public:
 	PointLightComponent() = default;
 	~PointLightComponent();
 
-	virtual void Init() override;
-	virtual void Tick(float deltaTime) override;
+	virtual void OnInit() override;
+	virtual void OnUpdate(float deltaTime) override;
 
     void SetScale(float scale)                      { this->far = scale; }
     void SetColor(Vec3 color)                       { this->color = color; }
     void SetIntencity(float intencity)              { this->intencity = intencity; }
     void SetCastShadow(bool castShadow)             { this->castShadow = castShadow; }
+    void SetFogScattering(float fogScattering)      { this->fogScattering = fogScattering; }
     void SetEnable(bool enable)                     { this->enable = enable; }
 
     virtual std::string GetTypeName() override		{ return "Point Light Component"; }
 	virtual ComponentType GetType() override	    { return POINT_LIGHT_COMPONENT; }
 
-	inline BoundingBox GetBoundingBox()	const		{ return box; }
 	inline BoundingSphere GetBoundingSphere() const	{ return sphere; }
     float GetConstantBias()						    { return constantBias; }
 	float GetSlopeBias()						    { return slopeBias; }
@@ -44,16 +44,15 @@ private:
     float near = 0.1f;          //光源设置
     float far = 25.0f;
     Vec3 color = Vec3::Ones();
-    float intencity = 50.0f;
+    float intencity = 2.0f;
     float evsm[2] = {10, 15};
     float fogScattering = 0.02f;
 	bool castShadow = true;	        //此光源是否投射阴影
 	bool enable = true;		        //此光源是否启用
 	float constantBias = 0.005f;    //固定偏移
     float slopeBias = 0.0;
-
-	BoundingBox box;                //包围盒包围球
-	BoundingSphere sphere;
+           
+	BoundingSphere sphere;          //包围球
 
     PointLightInfo info;            //向GPU提交的光源信息
 

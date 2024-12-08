@@ -57,7 +57,7 @@ public:
     PooledBuffer Allocate(const RHIBufferInfo& info);
     void Release(const PooledBuffer& pooledBuffer);
 
-    inline uint32_t PooledSize()    { return pooledSize; };
+    inline uint32_t PooledSize()    { return pooledSize; }
     inline uint32_t AllocatedSize() { return allocatedSize; }
     void Clear()                    { pooledBuffers.clear(); pooledSize = 0; }
 
@@ -107,7 +107,7 @@ public:
     PooledTexture Allocate(const RHITextureInfo& info);
     void Release(const PooledTexture& pooledTexture);
 
-    inline uint32_t PooledSize()    { return pooledSize; };
+    inline uint32_t PooledSize()    { return pooledSize; }
     inline uint32_t AllocatedSize() { return allocatedSize; }
     void Clear()                    { pooledTextures.clear(); pooledSize = 0; }
 
@@ -218,11 +218,11 @@ public:
     inline uint32_t AllocatedSize() { return allocatedSize; }
     void Clear()                    { pooledDescriptors.clear(); pooledSize = 0; }
 
-    static std::shared_ptr<RDGDescriptorSetPool> Get()
-    {
-        static std::shared_ptr<RDGDescriptorSetPool> pool;
-        if(pool == nullptr) pool = std::make_shared<RDGDescriptorSetPool>();
-        return pool;
+    static std::shared_ptr<RDGDescriptorSetPool> Get(uint32_t index)    // 描述符池需要FRAMES_IN_FLIGHT每帧一个，不然下一帧修改可能影响上一帧还未完成的渲染！！！
+    {                                                                   
+        static std::shared_ptr<RDGDescriptorSetPool> pool[3];
+        if(pool[index] == nullptr) pool[index] = std::make_shared<RDGDescriptorSetPool>();
+        return pool[index];
     }
 
 private:

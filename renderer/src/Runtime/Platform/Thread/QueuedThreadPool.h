@@ -17,7 +17,7 @@ class QueuedThreadPool
 {
 public: 
 	QueuedThreadPool() = default;
-	~QueuedThreadPool() { Destroy(); };
+	~QueuedThreadPool() { Destroy(); }
 
 	static QueuedThreadPoolRef Create(
         uint32_t numThreads, 
@@ -27,7 +27,7 @@ public:
 
 	void Destroy();
 	void AddQueuedWork(QueuedWorkRef queuedWork);
-	int32_t GetNumThreads() const { return allThreads.size(); };
+	int32_t GetNumThreads() const { return allThreads.size(); }
 
 private:
 	std::priority_queue<QueuedWorkRef, std::vector<QueuedWorkRef>, QueuedWork::Compare> works = {};      // 所有暂未执行的任务

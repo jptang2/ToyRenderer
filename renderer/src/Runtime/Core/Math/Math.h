@@ -187,16 +187,21 @@ namespace Math
         return mat;
     }
 
-
-
-
-
-
-
-
-
-
-
+    static void Mat3x4(Mat4 mat, float* newMat)
+    {
+        newMat[0] = mat.row(0).x();
+        newMat[1] = mat.row(0).y();
+        newMat[2] = mat.row(0).z();
+        newMat[3] = mat.row(0).w();
+        newMat[4] = mat.row(1).x();
+        newMat[5] = mat.row(1).y();
+        newMat[6] = mat.row(1).z();
+        newMat[7] = mat.row(1).w();
+        newMat[8] = mat.row(2).x();
+        newMat[9] = mat.row(2).y();
+        newMat[10] = mat.row(2).z();
+        newMat[11] = mat.row(2).w();
+    }
 
     static inline uint32_t Align(uint32_t value, uint32_t alignment)
     {

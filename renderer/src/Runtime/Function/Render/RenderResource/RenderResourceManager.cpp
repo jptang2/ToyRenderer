@@ -29,14 +29,14 @@ uint32_t RenderResourceManager::AllocateBindlessID(const BindlessResourceInfo& r
     for(auto& resource : perFrameResources)
     {
         resource.descriptorSet->UpdateDescriptor({
-        .binding = BindlessSlotToPerFrameBinding(slot),
-        .index = index,
-        .resourceType = resoruceInfo.resourceType,
-        .buffer = resoruceInfo.buffer,
-        .textureView = resoruceInfo.textureView,
-        .sampler = resoruceInfo.sampler,
-        .bufferOffset = resoruceInfo.bufferOffset,
-        .bufferRange = resoruceInfo.bufferRange});
+            .binding = BindlessSlotToPerFrameBinding(slot),
+            .index = index,
+            .resourceType = resoruceInfo.resourceType,
+            .buffer = resoruceInfo.buffer,
+            .textureView = resoruceInfo.textureView,
+            .sampler = resoruceInfo.sampler,
+            .bufferOffset = resoruceInfo.bufferOffset,
+            .bufferRange = resoruceInfo.bufferRange});
     }
 
     return index;
@@ -50,6 +50,18 @@ void RenderResourceManager::ReleaseBindlessID(uint32_t id, BindlessSlot slot)
 void RenderResourceManager::SetRenderGlobalSetting(const RenderGlobalSetting& globalSetting)
 {
     multiFrameResource.globalSettingBuffer.SetData(globalSetting);
+}
+
+void RenderResourceManager::SetTLAS(const RHITopLevelAccelerationStructureRef& tlas)
+{
+    for(auto& resource : perFrameResources)
+    {
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_TLAS,
+            .index = 0,
+            .resourceType = RESOURCE_TYPE_RAY_TRACING,
+            .tlas = tlas});
+    }
 }
 
 void RenderResourceManager::SetCameraInfo(const CameraInfo& cameraInfo)
@@ -84,6 +96,24 @@ void RenderResourceManager::SetVolumeLightInfo(const VolumeLightInfo& volumeLigh
         &volumeLightInfo, 
         sizeof(VolumeLightInfo), 
         VOLUME_LIGHT_OFFSET + volumeLightID * sizeof(VolumeLightInfo));    
+}
+
+void RenderResourceManager::SetVolumeLightTextures(const VolumeLightTextures& volumeLightTextures, uint32_t volumeLightID)
+{
+    for(auto& resource : perFrameResources)
+    {
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_VOLUME_LIGHT_IRRADIANCE,
+            .index = volumeLightID,
+            .resourceType = RESOURCE_TYPE_TEXTURE,
+            .textureView = volumeLightTextures.irradianceTex->textureView});
+
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_VOLUME_LIGHT_DEPTH,
+            .index = volumeLightID,
+            .resourceType = RESOURCE_TYPE_TEXTURE,
+            .textureView = volumeLightTextures.depthTex->textureView});
+    }
 }
 
 void RenderResourceManager::SetLightSetting(const LightSetting& lightSetting)
@@ -154,19 +184,25 @@ void RenderResourceManager::InitGlobalResources()
 
     RHIRootSignatureInfo info = {};
     info.AddEntry({0, PER_FRAME_BINDING_GLOBAL_SETTING, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
-        .AddEntry({0, PER_FRAME_BINDING_CAMERA, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
+        //.AddEntry({0, PER_FRAME_BINDING_TLAS, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RAY_TRACING})
+        .AddEntry({0, PER_FRAME_BINDING_CAMERA, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_UNIFORM_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_OBJECT, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_MATERIAL, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_LIGHT, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_LIGHT_CLUSTER_GRID, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_TEXTURE})
         .AddEntry({0, PER_FRAME_BINDING_LIGHT_CLUSTER_INDEX, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_DIRECTIONAL_SHADOW, DIRECTIONAL_SHADOW_CASCADE_LEVEL, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
-        .AddEntry({0, PER_FRAME_BINDING_POINT_SHADOW, MAX_POINT_SHADOW_COUNT, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE_CUBE})
+        .AddEntry({0, PER_FRAME_BINDING_POINT_SHADOW, MAX_POINT_SHADOW_COUNT * 2, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE_CUBE})
+        .AddEntry({0, PER_FRAME_BINDING_VOLUME_LIGHT_IRRADIANCE, MAX_VOLUME_LIGHT_COUNT, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
+        .AddEntry({0, PER_FRAME_BINDING_VOLUME_LIGHT_DEPTH, MAX_VOLUME_LIGHT_COUNT, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
+        .AddEntry({0, PER_FRAME_BINDING_SKYBOX_IBL, 2, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE_CUBE})
         .AddEntry({0, PER_FRAME_BINDING_MESH_CLUSTER, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_MESH_CLUSTER_GROUP, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_MESH_CLUSTER_DRAW_INFO, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
-        .AddEntry({0, PER_FRAME_BINDING_DEPTH, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
+        .AddEntry({0, PER_FRAME_BINDING_DEPTH, 2, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
         .AddEntry({0, PER_FRAME_BINDING_DEPTH_PYRAMID, 2, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
+        .AddEntry({0, PER_FRAME_BINDING_VELOCITY, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})    
+        .AddEntry({0, PER_FRAME_BINDING_OBJECT_ID, 2, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})   
         .AddEntry({0, PER_FRAME_BINDING_VERTEX, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_BINDLESS_POSITION, MAX_BINDLESS_RESOURCE_SIZE, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_BINDLESS_NORMAL, MAX_BINDLESS_RESOURCE_SIZE, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
@@ -184,6 +220,10 @@ void RenderResourceManager::InitGlobalResources()
         .AddEntry({0, PER_FRAME_BINDING_BINDLESS_TEXTURE_2D_ARRAY, MAX_BINDLESS_RESOURCE_SIZE, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
         .AddEntry({0, PER_FRAME_BINDING_BINDLESS_TEXTURE_CUBE, MAX_BINDLESS_RESOURCE_SIZE, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
         .AddEntry({0, PER_FRAME_BINDING_BINDLESS_TEXTURE_3D, MAX_BINDLESS_RESOURCE_SIZE, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE});
+
+#if ENABLE_RAY_TRACING
+        info.AddEntry({0, PER_FRAME_BINDING_TLAS, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RAY_TRACING});
+#endif
 
     perFrameRootSignature = EngineContext::RHI()->CreateRootSignature(info);
     for(auto& resource : perFrameResources) resource.descriptorSet = perFrameRootSignature->CreateDescriptorSet(0);
@@ -241,7 +281,34 @@ void RenderResourceManager::InitGlobalResources()
                 6, 1);
         }
 
-        multiFrameResource.depthTexture = std::make_shared<Texture>( 
+        for(auto& texture : multiFrameResource.pointShadowDepthTextures)
+        {
+            texture = std::make_shared<Texture>( 
+                TEXTURE_TYPE_CUBE, 
+                FORMAT_D32_SFLOAT,
+                Extent3D(POINT_SHADOW_SIZE, POINT_SHADOW_SIZE, 1),
+                6, 1);
+        }
+
+        multiFrameResource.skyboxIBLTexuture[0] = std::make_shared<Texture>( 
+            TEXTURE_TYPE_CUBE, 
+            EngineContext::Render()->GetHdrColorFormat(),
+            Extent3D(DIFFUSE_IBL_SIZE, DIFFUSE_IBL_SIZE, 1),
+            6, 1);
+
+        multiFrameResource.skyboxIBLTexuture[1] = std::make_shared<Texture>( 
+            TEXTURE_TYPE_CUBE, 
+            EngineContext::Render()->GetHdrColorFormat(),
+            Extent3D(SPECULAR_IBL_SIZE, SPECULAR_IBL_SIZE, 1),
+            6, 0);  // mip为0自动生成全mip
+
+        multiFrameResource.depthTexture[0] = std::make_shared<Texture>( 
+            TEXTURE_TYPE_2D, 
+            EngineContext::Render()->GetDepthFormat(),
+            Extent3D(windowExtent.width, windowExtent.height, 1),
+            1, 1);
+
+        multiFrameResource.depthTexture[1] = std::make_shared<Texture>( 
             TEXTURE_TYPE_2D, 
             EngineContext::Render()->GetDepthFormat(),
             Extent3D(windowExtent.width, windowExtent.height, 1),
@@ -249,7 +316,7 @@ void RenderResourceManager::InitGlobalResources()
 
         multiFrameResource.depthPyramidTexture[0] = std::make_shared<Texture>( 
             TEXTURE_TYPE_2D, 
-            FORMAT_R32_SFLOAT,
+            FORMAT_R32_SFLOAT,     
             Extent3D(windowExtent.width, windowExtent.height, 1),
             1, 0);  // mip为0自动生成全mip
 
@@ -262,6 +329,18 @@ void RenderResourceManager::InitGlobalResources()
         multiFrameResource.velocityTexture = std::make_shared<Texture>( 
             TEXTURE_TYPE_2D, 
             FORMAT_R32G32_SFLOAT,
+            Extent3D(windowExtent.width, windowExtent.height, 1),
+            1, 1);
+
+        multiFrameResource.objectIDTexture[0] = std::make_shared<Texture>( 
+            TEXTURE_TYPE_2D, 
+            FORMAT_R32_UINT,
+            Extent3D(windowExtent.width, windowExtent.height, 1),
+            1, 1);
+
+        multiFrameResource.objectIDTexture[1] = std::make_shared<Texture>( 
+            TEXTURE_TYPE_2D, 
+            FORMAT_R32_UINT,
             Extent3D(windowExtent.width, windowExtent.height, 1),
             1, 1);
     }
@@ -294,7 +373,7 @@ void RenderResourceManager::InitGlobalResources()
         resource.descriptorSet->UpdateDescriptor({
             .binding = PER_FRAME_BINDING_CAMERA,
             .index = 0,
-            .resourceType = RESOURCE_TYPE_RW_BUFFER,
+            .resourceType = RESOURCE_TYPE_UNIFORM_BUFFER,
             .buffer = resource.cameraBuffer.buffer});
 
         resource.descriptorSet->UpdateDescriptor({
@@ -328,6 +407,18 @@ void RenderResourceManager::InitGlobalResources()
             .buffer = resource.lightClusterIndexBuffer.buffer});
 
         resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_SKYBOX_IBL,
+            .index = 0,
+            .resourceType = RESOURCE_TYPE_TEXTURE,
+            .textureView = multiFrameResource.skyboxIBLTexuture[0]->textureView});
+
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_SKYBOX_IBL,
+            .index = 1,
+            .resourceType = RESOURCE_TYPE_TEXTURE,
+            .textureView = multiFrameResource.skyboxIBLTexuture[1]->textureView});
+
+        resource.descriptorSet->UpdateDescriptor({
             .binding = PER_FRAME_BINDING_MESH_CLUSTER,
             .index = 0,
             .resourceType = RESOURCE_TYPE_RW_BUFFER,
@@ -349,7 +440,13 @@ void RenderResourceManager::InitGlobalResources()
             .binding = PER_FRAME_BINDING_DEPTH,
             .index = 0,
             .resourceType = RESOURCE_TYPE_TEXTURE,
-            .textureView = multiFrameResource.depthTexture->textureView});
+            .textureView = multiFrameResource.depthTexture[0]->textureView});
+
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_DEPTH,
+            .index = 1,
+            .resourceType = RESOURCE_TYPE_TEXTURE,
+            .textureView = multiFrameResource.depthTexture[1]->textureView});
 
         resource.descriptorSet->UpdateDescriptor({
             .binding = PER_FRAME_BINDING_DEPTH_PYRAMID,
@@ -362,6 +459,24 @@ void RenderResourceManager::InitGlobalResources()
             .index = 1,
             .resourceType = RESOURCE_TYPE_TEXTURE,
             .textureView = multiFrameResource.depthPyramidTexture[1]->textureView});
+
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_VELOCITY,
+            .index = 0,
+            .resourceType = RESOURCE_TYPE_TEXTURE,
+            .textureView = multiFrameResource.velocityTexture->textureView});
+
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_OBJECT_ID,
+            .index = 0,
+            .resourceType = RESOURCE_TYPE_TEXTURE,
+            .textureView = multiFrameResource.objectIDTexture[0]->textureView});    
+
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_OBJECT_ID,
+            .index = 1,
+            .resourceType = RESOURCE_TYPE_TEXTURE,
+            .textureView = multiFrameResource.objectIDTexture[1]->textureView});    
 
         resource.descriptorSet->UpdateDescriptor({
             .binding = PER_FRAME_BINDING_VERTEX,
@@ -386,6 +501,15 @@ void RenderResourceManager::InitGlobalResources()
                 .resourceType = RESOURCE_TYPE_TEXTURE_CUBE,
                 .textureView = multiFrameResource.pointShadowTextures[i]->textureView});
         }   
+
+        for (uint32_t i = 0; i < multiFrameResource.pointShadowDepthTextures.size(); i++) 
+        {
+            resource.descriptorSet->UpdateDescriptor({
+                .binding = PER_FRAME_BINDING_POINT_SHADOW,
+                .index = i + MAX_POINT_SHADOW_COUNT,        // 放在和阴影同一个描述符
+                .resourceType = RESOURCE_TYPE_TEXTURE_CUBE,
+                .textureView = multiFrameResource.pointShadowDepthTextures[i]->textureView});
+        } 
 
         for (uint32_t i = 0; i < multiFrameResource.samplers.size(); i++) 
         {

@@ -48,7 +48,7 @@ public:
     ~EngineContext() {};
 
     static std::shared_ptr<EngineContext> Init();
-    static void MainLoop()                                          { context->MainLoopInternal(); };
+    static void MainLoop()                                          { context->MainLoopInternal(); }
     static void Destroy()                                           { context->DestroyInternal(); context = nullptr; }
     static bool Destroyed()                                         { return context == nullptr; }
     static uint32_t CurrentFrameIndex()                             { return context->currentFrameIndex; }
