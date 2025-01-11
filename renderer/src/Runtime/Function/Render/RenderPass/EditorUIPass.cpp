@@ -4,6 +4,7 @@
 
 #include "Function/Render/RHI/RHIStructs.h"
 #include "imgui.h"
+#include "ImGuizmo.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 #include <string>
@@ -34,7 +35,7 @@ void EditorUIPass::Build(RDGBuilder& builder)
                 ImGui_ImplVulkan_NewFrame();
                 ImGui_ImplGlfw_NewFrame();
                 ImGui::NewFrame();
-                // IMGUIZMO_NAMESPACE::BeginFrame();
+                IMGUIZMO_NAMESPACE::BeginFrame();
 
                 EngineContext::Editor()->UI();
 

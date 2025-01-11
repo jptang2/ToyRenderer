@@ -108,11 +108,13 @@ void InspectorWidget::InfoUI()
 		ImGui::Text("Average frame time : %f ms", totalFrameTime / frameTimes.size());
 		ImGui::Text("Average frame fps : %f ", 1000.0f / (totalFrameTime / frameTimes.size()));
 
-		ImGui::Separator();
+		// ImGui::Separator();
 	}
 
 	// 火焰图
 	{
+		ImGui::SeparatorText("Flame Graph");
+
 		static bool update = false;
 		static std::shared_ptr<TimeScopes> previousTimer;
 

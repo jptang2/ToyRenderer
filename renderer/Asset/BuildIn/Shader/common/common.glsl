@@ -63,6 +63,12 @@
 #define VOLUMETRIC_FOG_SIZE_Y 180
 #define VOLUMETRIC_FOG_SIZE_Z 128
 
+#define CLIPMAP_VOXEL_COUNT 128                     //clipmap的边长
+#define CLIPMAP_MIN_VOXEL_SIZE                      //clipmap的mip0层级体素尺寸
+#define CLIPMAP_MIPLEVEL 5                          //clipmap的mip层级
+
+#define MAX_GIZMO_PRIMITIVE_COUNT 102400            //gizmo可以绘制的最大图元数目
+
 ///////////////////////////////////////////////////////////////////////////////
 
 #define PER_FRAME_BINDING_GLOBAL_SETTING                0
@@ -86,28 +92,67 @@
 #define PER_FRAME_BINDING_VELOCITY                      18
 #define PER_FRAME_BINDING_OBJECT_ID                     19
 #define PER_FRAME_BINDING_VERTEX                        20
-#define PER_FRAME_BINDING_BINDLESS_POSITION             21
-#define PER_FRAME_BINDING_BINDLESS_NORMAL               22
-#define PER_FRAME_BINDING_BINDLESS_TANGENT              23
-#define PER_FRAME_BINDING_BINDLESS_TEXCOORD             24
-#define PER_FRAME_BINDING_BINDLESS_COLOR                25
-#define PER_FRAME_BINDING_BINDLESS_BONE_INDEX           26
-#define PER_FRAME_BINDING_BINDLESS_BONE_WEIGHT          27
-#define PER_FRAME_BINDING_BINDLESS_ANIMATION            28
-#define PER_FRAME_BINDING_BINDLESS_INDEX                29
-#define PER_FRAME_BINDING_BINDLESS_SAMPLER              30
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_1D           31
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_1D_ARRAY     32
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_2D           33
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_2D_ARRAY     34
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_CUBE         35
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_3D           36
+#define PER_FRAME_BINDING_GIZMO                         21
+#define PER_FRAME_BINDING_BINDLESS_POSITION             22
+#define PER_FRAME_BINDING_BINDLESS_NORMAL               23
+#define PER_FRAME_BINDING_BINDLESS_TANGENT              24
+#define PER_FRAME_BINDING_BINDLESS_TEXCOORD             25
+#define PER_FRAME_BINDING_BINDLESS_COLOR                26
+#define PER_FRAME_BINDING_BINDLESS_BONE_INDEX           27
+#define PER_FRAME_BINDING_BINDLESS_BONE_WEIGHT          28
+#define PER_FRAME_BINDING_BINDLESS_ANIMATION            29
+#define PER_FRAME_BINDING_BINDLESS_INDEX                30
+#define PER_FRAME_BINDING_BINDLESS_SAMPLER              31
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_1D           32
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_1D_ARRAY     33
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_2D           34
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_2D_ARRAY     35
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_CUBE         36
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_3D           37
 
 #if(ENABLE_RAY_TRACING != 0)
 #extension GL_EXT_ray_tracing : enable
 #extension GL_EXT_ray_query : enable
 layout(set = 0, binding = PER_FRAME_BINDING_TLAS) uniform accelerationStructureEXT TLAS;
 #endif
+
+struct RHIIndexedIndirectCommand 
+{
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int vertexOffset;
+    uint firstInstance;
+};
+
+struct RHIIndirectCommand 
+{
+    uint vertexCount;
+    uint instanceCount;
+    uint firstVertex;
+    uint firstInstance;
+};
+
+struct GlobalIconInfo           //图标的bindless索引
+{
+    // uint documentationIcon;
+    // uint worldIcon;
+    // uint entityIcon;
+    uint cameraIcon;
+    uint directionalLightIcon;
+    uint pointLightIcon;
+    // uint spotLightIcon;
+    // uint skyLightIcon;
+    // uint materialIcon;
+    // uint textIcon;
+    // uint decalIcon;
+    // uint postProcessVolumeIcon;
+    // uint exponentialHeightFogIcon;
+    // uint volumetricCloudIcon;
+    // uint atmosphericFogIcon;
+    // uint skyAtmosphereIcon;
+
+};
 
 struct Object 
 {
@@ -170,6 +215,8 @@ struct DirectionalLight
 {
     mat4 view;
     mat4 proj;
+    vec3 pos;
+    float _padding0;
     vec3 dir;
     float depth;              
 
@@ -178,7 +225,7 @@ struct DirectionalLight
     
     float fogScattering;   
     uint castShadow;        
-    float _padding[2];   
+    float _padding1[2];   
 
     Frustum frustum;            
     BoundingSphere sphere;
@@ -257,6 +304,40 @@ struct LightSetting
     uint volumeLightIDs[MAX_VOLUME_LIGHT_COUNT];
 };
 
+struct GizmoBoxInfo 
+{
+    vec3 center;
+    float _padding0;
+    vec3 extent;
+    float _padding1;
+    vec4 color;
+};
+
+struct GizmoSphereInfo 
+{
+    vec3 center;
+    float radious;
+    vec4 color;
+};
+
+struct GizmoLineInfo 
+{
+    vec3 from;
+    float _padding0;
+    vec3 to;
+    float _padding1;
+    vec4 color;
+};
+
+struct GizmoBillboardInfo 
+{
+    vec3 center;
+    uint textureID;
+    vec2 extent;
+    vec2 _padding;
+    vec4 color;
+};
+
 struct MeshCluster
 {
     uint vertexID;		      
@@ -292,6 +373,8 @@ layout(set = 0, binding = PER_FRAME_BINDING_GLOBAL_SETTING) buffer global_settin
     uint totalTicks;
     float totalTickTime;
     float minFrameTime;
+
+    GlobalIconInfo icons;
 
 } GLOBAL_SETTING;
 
@@ -392,6 +475,16 @@ layout(set = 0, binding = PER_FRAME_BINDING_VERTEX) readonly buffer vertices {
     VertexStream slot[MAX_PER_FRAME_RESOURCE_SIZE];
 
 } VERTICES;
+
+layout(set = 0, binding = PER_FRAME_BINDING_GIZMO) buffer gizmoDrawData 
+{ 
+    RHIIndexedIndirectCommand command[4];
+    GizmoBoxInfo boxes[MAX_GIZMO_PRIMITIVE_COUNT];
+    GizmoSphereInfo spheres[MAX_GIZMO_PRIMITIVE_COUNT];
+    GizmoLineInfo lines[MAX_GIZMO_PRIMITIVE_COUNT];
+    GizmoBillboardInfo worldBillboards[MAX_GIZMO_PRIMITIVE_COUNT];
+
+} GIZMO_DRAW_DATA;
 
 layout(set = 0, binding = PER_FRAME_BINDING_BINDLESS_POSITION) readonly buffer positions { 
 
@@ -907,6 +1000,7 @@ uint FetchObjectIDTex(in ivec2 pixel) {
 //     return texture(COLOR_DEFERRED_SAMPLER, coord).xyza;    
 // }
 
+#include "gizmo.glsl"
 #include "ray_query.glsl"
 #include "ddgi.glsl"
 #include "coordinate.glsl"

@@ -14,6 +14,7 @@
 #include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <queue>
@@ -42,7 +43,7 @@ void InitStressTestScene()
         std::shared_ptr<TransformComponent> transformComponent                  = directionalLight->TryGetComponent<TransformComponent>();
         std::shared_ptr<DirectionalLightComponent> directionalLightComponent    = directionalLight->AddComponent<DirectionalLightComponent>();
 
-        transformComponent->SetRotation({30.0f, -60.0f, 0.0f});
+        transformComponent->SetRotation({0.0f, 30.0f, -60.0f});
         directionalLightComponent->SetUpdateFrequency(0, 1);
         directionalLightComponent->SetUpdateFrequency(1, 2);
         directionalLightComponent->SetUpdateFrequency(2, 5);
@@ -74,7 +75,7 @@ void InitStressTestScene()
         cameraComponent->SetFov(75.0f);
 
         transformComponent->SetPosition({-2.0f, 3.0f, 11.0f});
-        transformComponent->SetRotation({37.0f, 5.0f, 0.0f});
+        transformComponent->SetRotation({0.0f, 37.0f, 5.0f});
 
         std::vector<std::string> skyboxPaths;
         skyboxPaths.push_back("Asset/BuildIn/Texture/skybox/Factory_Sunset_Sky_Dome_LDR/px.png");
@@ -123,10 +124,10 @@ void InitScene()
         std::shared_ptr<CameraComponent> cameraComponent                = camera->AddComponent<CameraComponent>();
 
         // transformComponent->SetPosition({-30.767f, 5.027f, 12.705f});
-        // transformComponent->SetRotation({17.0f, -24.0f, 0.0f});
+        // transformComponent->SetRotation({0.0f, 17.0f, -24.0f});
 
         transformComponent->SetPosition({-13.898f, 3.495f, -10.011f});
-        transformComponent->SetRotation({-58.5f, -8.5f, 0.0f});
+        transformComponent->SetRotation({0.0f, -58.5f, -8.5f});
     }
 
     // Directional light
@@ -137,7 +138,8 @@ void InitScene()
         std::shared_ptr<DirectionalLightComponent> directionalLightComponent    = directionalLight->AddComponent<DirectionalLightComponent>();
         std::shared_ptr<SkyboxComponent> skyboxComponent                        = directionalLight->AddComponent<SkyboxComponent>();
 
-        transformComponent->SetRotation({30.0f, -60.0f, 0.0f});
+        transformComponent->SetPosition({-20.0f, 3.0f, 0.0f});
+        transformComponent->SetRotation({0.0f, 30.0f, -60.0f});
 
         directionalLightComponent->SetIntencity(3.7f);
         // directionalLightComponent->SetFogScattering(0.0f);
@@ -170,6 +172,7 @@ void InitScene()
         volumeLightComponent->SetUpdateFrequence(0);
         volumeLightComponent->SetProbeCounts({21, 10, 18});
         volumeLightComponent->SetGridStep({6.0f, 6.0f, 6.0f});
+        volumeLightComponent->SetVisulaize(false);
     }
 
     // Volume light 1
@@ -183,6 +186,7 @@ void InitScene()
 
         volumeLightComponent->SetEnergyPreservation(0.95f);
         volumeLightComponent->SetUpdateFrequence(0);
+        volumeLightComponent->SetVisulaize(false);
     }
 
 
@@ -303,7 +307,7 @@ void InitScene()
         std::shared_ptr<MeshRendererComponent> meshRendererComponent    = entity->AddComponent<MeshRendererComponent>();
 
         transformComponent->SetPosition({-27.0f, 2.5f, -6.0f});
-        transformComponent->SetRotation({0.0f, 0.0f, 90.0f});
+        transformComponent->SetRotation({90.0f, 0.0f, 0.0f});
         transformComponent->SetScale({3.0f, 3.0f, 3.0f});
 
         ModelProcessSetting processSetting =  {
@@ -429,7 +433,7 @@ void InitScene()
         std::shared_ptr<MeshRendererComponent> meshRendererComponent   = entity->AddComponent<MeshRendererComponent>();
 
         transformComponent->SetPosition({-20.1f, -0.2f, 7.9f});
-        transformComponent->SetRotation({-90.0f, 0.0f, 0.0f});
+        transformComponent->SetRotation({0.0f, -90.0f, 0.0f});
         transformComponent->SetScale({2.0f, 2.0f, 2.0f});
 
         ModelProcessSetting processSetting =  {

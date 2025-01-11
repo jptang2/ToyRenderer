@@ -3,6 +3,7 @@
 #include "Platform/Input/InputSystem.h"
 #include "Widget/HierarchyWidget.h"
 #include "Widget/InspectorWidget.h"
+#include "Widget/GizmoWidget.h"
 #include "Widget/RDGGraphWidget.h"
 
 void EditorSystem::Init()
@@ -17,5 +18,7 @@ void EditorSystem::UI()
     {
         HierarchyWidget::UI();
         InspectorWidget::UI();
-    }
+        GizmoWidget::UI();
+    } 
+    // else GizmoWidget::DisableUI();
 }

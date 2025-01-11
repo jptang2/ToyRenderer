@@ -142,7 +142,7 @@ void main()
 				{
 					res.samples[i].w = (1.0 / res.samples[i].pHat) * (1.0 / z) * res.samples[i].sumWeights;	// 无偏就是这两行的区别
 					//res.samples[i].w = (1.0 / res.samples[i].pHat) * (1.0 / res.numStreamSamples) * res.samples[i].sumWeights;	
-					// 由于错误的考虑了p_hat为0的采样，有偏的实际上会偏暗
+					// 由于错误的考虑了pHat为0的采样，有偏的实际上会偏暗
 				}
 				else {
 					CleanReservoir(res, i);			

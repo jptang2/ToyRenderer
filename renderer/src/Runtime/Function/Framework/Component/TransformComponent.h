@@ -13,6 +13,7 @@ public:
 	virtual void OnInit() override;
 	virtual void OnUpdate(float deltaTime) override;
 
+	inline void SetTransform(Mat4 mat) 					{ transform = Transform(mat); }
 	inline void SetPosition(Vec3 position) 				{ transform.SetPosition(position); }
 	inline void SetScale(Vec3 scale) 					{ transform.SetScale(scale); }
 	inline void SetRotation(Quaternion rotation) 		{ transform.SetRotation(rotation); }

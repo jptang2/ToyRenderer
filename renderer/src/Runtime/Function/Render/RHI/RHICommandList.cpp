@@ -146,6 +146,13 @@ void RHICommandList::SetDepthBias(float constantBias, float slopeBias, float cla
     else ADD_COMMAND(SetDepthBias, constantBias, slopeBias, clampBias);
 }
 
+void RHICommandList::SetLineWidth(float width)
+{
+    COMMANDLIST_DEBUG_OUTPUT();
+    if(info.byPass) info.context->SetLineWidth(width);
+    else ADD_COMMAND(SetLineWidth, width);
+}
+
 void RHICommandList::SetGraphicsPipeline(RHIGraphicsPipelineRef graphicsPipeline) 
 {
     COMMANDLIST_DEBUG_OUTPUT();
@@ -339,6 +346,8 @@ void RHICommandSetViewport::Execute(RHICommandContextRef context) { context->Set
 void RHICommandSetScissor::Execute(RHICommandContextRef context) { context->SetScissor(min, max); }
 
 void RHICommandSetDepthBias::Execute(RHICommandContextRef context) { context->SetDepthBias(constantBias, slopeBias, clampBias); }
+
+void RHICommandSetLineWidth::Execute(RHICommandContextRef context) { context->SetLineWidth(width); }
 
 void RHICommandSetGraphicsPipeline::Execute(RHICommandContextRef context) { context->SetGraphicsPipeline(graphicsPipeline); }
 

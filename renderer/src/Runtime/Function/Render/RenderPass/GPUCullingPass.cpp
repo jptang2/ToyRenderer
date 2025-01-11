@@ -105,9 +105,9 @@ void GPUCullingPass::Build(RDGBuilder& builder)
                 .OutputIndirectDraw(clusrterDrawCommands);
         }
     }
-    cullingSettingBuffer.SetData(cullingSetting);
+    cullingSettingBuffer[EngineContext::CurrentFrameIndex()].SetData(cullingSetting);
     RDGBufferHandle cullingSettings = builder.CreateBuffer("Culling Setting Buffer")
-        .Import(cullingSettingBuffer.buffer, RESOURCE_STATE_UNDEFINED)
+        .Import(cullingSettingBuffer[EngineContext::CurrentFrameIndex()].buffer, RESOURCE_STATE_UNDEFINED)
         .Finish();
 
     pass0Builder

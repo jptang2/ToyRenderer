@@ -152,6 +152,7 @@ void DirectionalLightComponent::UpdateCascades()
 			lightInfos[i].depth = (camera->GetNear() + splitDist * clipRange);
 			lightInfos[i].view = lightViewMatrix;
 			lightInfos[i].proj = lightOrthoMatrix;
+			lightInfos[i].pos = TryGetComponent<TransformComponent>()->GetPosition();
 			lightInfos[i].color = color;
             lightInfos[i].intencity = intencity;
             lightInfos[i].fogScattering = fogScattering;

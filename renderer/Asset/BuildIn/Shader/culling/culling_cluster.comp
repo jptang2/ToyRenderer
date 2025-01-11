@@ -3,23 +3,6 @@
 
 #include "../common/common.glsl"
 
-struct RHIIndexedIndirectCommand 
-{
-    uint indexCount;
-    uint instanceCount;
-    uint firstIndex;
-    int vertexOffset;
-    uint firstInstance;
-};
-
-struct RHIIndirectCommand 
-{
-    uint vertexCount;
-    uint instanceCount;
-    uint firstVertex;
-    uint firstInstance;
-};
-
 struct IndirectSetting
 {
     uint processSize;              
@@ -102,6 +85,7 @@ layout(push_constant) uniform CullingLodSetting {
 	uint disableVirtualMeshCulling;	
 	uint disableOcclusionCulling;
 	uint disableFrustrumCulling;
+	uint showBoundingBox;
 } SETTING;
 
 #define DEPTH_PASS_INDEX 0
@@ -187,6 +171,9 @@ void main()
 				MESH_CLUSTER_DRAW_INFOS.slot[
 					CLUSTER_DRAW_COMMANDS[i].command[
 						clusterInfo.commandID].firstInstance + offset] = drawInfo;
+
+				if(SETTING.showBoundingBox != 0) AddGizmoBox(worldSphere.centerRadius.xyz, vec3(worldSphere.centerRadius.w), vec4(0.0f, 0.0f, 1.0f, 1.0f));
+				// if(SETTING.showBoundingBox != 0) AddGizmoSphere(worldSphere.centerRadius.xyz, worldSphere.centerRadius.w, vec4(0.0f, 0.0f, 1.0f, 1.0f));
 			}
 		}
 	}

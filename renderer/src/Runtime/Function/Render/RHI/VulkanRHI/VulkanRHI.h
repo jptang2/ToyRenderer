@@ -203,6 +203,8 @@ public:
 
     virtual void SetDepthBias(float constantBias, float slopeBias, float clampBias) override final;
 
+    virtual void SetLineWidth(float width) override final;
+
     virtual void SetGraphicsPipeline(RHIGraphicsPipelineRef graphicsPipeline) override final;
 
     virtual void SetComputePipeline(RHIComputePipelineRef computePipeline) override final;	

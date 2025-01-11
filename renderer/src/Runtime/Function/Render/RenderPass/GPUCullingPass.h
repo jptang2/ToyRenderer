@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Function/Global/Definations.h"
 #include "Function/Render/RenderResource/Buffer.h"
 #include "Function/Render/RenderResource/RenderStructs.h"
 
@@ -34,7 +35,7 @@ private:
 		uint32_t passType [MAX_SUPPORTED_MESH_PASS_COUNT];
 		uint32_t passOffset [MAX_SUPPORTED_MESH_PASS_COUNT];
 	};
-	Buffer<CullingSetting> cullingSettingBuffer;
+	std::array<Buffer<CullingSetting>, FRAMES_IN_FLIGHT> cullingSettingBuffer;
 	CullingSetting cullingSetting;
 
 	struct CullingLodSetting
@@ -44,6 +45,7 @@ private:
 		uint32_t disableVirtualMeshCulling = 0;	// 强制虚拟几何体使用LOD0,在ReSTIR中需要光栅G-Buffer和加速结构的几何一致
 		uint32_t disableOcclusionCulling = 0;
 		uint32_t disableFrustrumCulling = 0;
+		uint32_t showBoundingBox = 0;
 	};
 	CullingLodSetting lodSetting = {};
 

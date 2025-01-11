@@ -30,6 +30,7 @@ void PassWidget::UI(std::shared_ptr<RenderPass> pass)
         case GPU_CULLING_PASS:          GPUCullingPassUI(std::static_pointer_cast<GPUCullingPass>(pass));                   break;
         case POINT_SHADOW_PASS:                                                                                                         break;
         case DIRECTIONAL_SHADOW_PASS:                                                                                                   break;
+        case CLIPMAP_PASS:              ClipmapPassUI(std::static_pointer_cast<ClipmapPass>(pass));                         break;
         case G_BUFFER_PASS:             GBufferPassUI(std::static_pointer_cast<GBufferPass>(pass));                         break;
         case DEFERRED_LIGHTING_PASS:    DeferredLightingPassUI(std::static_pointer_cast<DeferredLightingPass>(pass));       break;
         case SSSR_PASS:                 SSSRPassUI(std::static_pointer_cast<SSSRPass>(pass));                               break;
@@ -38,6 +39,7 @@ void PassWidget::UI(std::shared_ptr<RenderPass> pass)
         case SVGF_PASS:                 SVGFPassUI(std::static_pointer_cast<SVGFPass>(pass));                               break;
         case FORWARD_PASS:                                                                                                              break;
         case TRANSPARENT_PASS:                                                                                                          break;
+        case CLIPMAP_VISUALIZE_PASS:    ClipmapVisualizePassUI(std::static_pointer_cast<ClipmapVisualizePass>(pass));       break;
         case PATH_TRACING_PASS:         PathTracingPassUI(std::static_pointer_cast<PathTracingPass>(pass));                 break;
         case BLOOM_PASS:                BloomPassUI(std::static_pointer_cast<BloomPass>(pass));                             break;
         case FXAA_PASS:                 FXAAPassUI(std::static_pointer_cast<FXAAPass>(pass));                               break;
@@ -74,14 +76,19 @@ void PassWidget::GPUCullingPassUI(std::shared_ptr<GPUCullingPass> pass)
     bool disableVirtualMeshCulling = pass->lodSetting.disableVirtualMeshCulling > 0 ? true : false;
     bool disableFrustrumCulling = pass->lodSetting.disableFrustrumCulling > 0 ? true : false;
     bool disableOcclusionCulling = pass->lodSetting.disableOcclusionCulling > 0 ? true : false;
+    bool showBoundingBox = pass->lodSetting.showBoundingBox > 0 ? true : false;
 
     ImGui::Checkbox("Disable virtual mesh culling", &disableVirtualMeshCulling);
     ImGui::Checkbox("Disable frustrum culling", &disableFrustrumCulling);
     ImGui::Checkbox("Disable occlusion culling", &disableOcclusionCulling);
+    ImGui::Checkbox("Show bounding box", &showBoundingBox);
+
 
     pass->lodSetting.disableVirtualMeshCulling = disableVirtualMeshCulling ? 1 : 0;
     pass->lodSetting.disableFrustrumCulling = disableFrustrumCulling ? 1 : 0;
     pass->lodSetting.disableOcclusionCulling = disableOcclusionCulling ? 1 : 0;
+    pass->lodSetting.showBoundingBox = showBoundingBox ? 1 : 0;
+    
 
     ImGui::Checkbox("Statistics", &pass->enableStatistics);
 	if (pass->enableStatistics)
@@ -204,6 +211,12 @@ void PassWidget::GPUCullingPassUI(std::shared_ptr<GPUCullingPass> pass)
 void PassWidget::GBufferPassUI(std::shared_ptr<GBufferPass> pass)
 {
 
+}
+
+void PassWidget::ClipmapPassUI(std::shared_ptr<ClipmapPass> pass)
+{
+    ImGui::Checkbox("Attach to camera", &pass->attachToCamera);
+    if(ImGui::Button("Full update")) pass->fullUpdate = true;
 }
 
 void PassWidget::DeferredLightingPassUI(std::shared_ptr<DeferredLightingPass> pass)
@@ -359,6 +372,18 @@ void PassWidget::SVGFPassUI(std::shared_ptr<SVGFPass> pass)
     pass->setting.disocclusionFix = disocclusionFix ? 1 : 0;
     pass->setting.antiFirefly = antiFirefly ? 1 : 0;
     pass->setting.historyClamp = historyClamp ? 1 : 0;
+}
+
+void PassWidget::ClipmapVisualizePassUI(std::shared_ptr<ClipmapVisualizePass> pass)
+{
+    if (ImGui::RadioButton("Rasterize Voxel", pass->mode == 0))
+		pass->mode = 0;
+	ImGui::SameLine();
+    if (ImGui::RadioButton("Ray tracing", pass->mode == 1))
+		pass->mode = 1;
+
+    ImGui::DragInt("Min visualize mipLevel", &pass->setting.minMip, 0.1f, 0, 10);
+    ImGui::DragInt("Max visualize mipLevel", &pass->setting.maxMip, 0.1f, 0, 10);
 }
 
 void PassWidget::PathTracingPassUI(std::shared_ptr<PathTracingPass> pass)

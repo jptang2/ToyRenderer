@@ -8,6 +8,7 @@
 #include "Function/Render/RenderPass/DepthPyramidPass.h"
 #include "Function/Render/RenderPass/DirectionalShadowPass.h"
 #include "Function/Render/RenderPass/PointShadowPass.h"
+#include "Function/Render/RenderPass/ClipmapPass.h"
 #include "Function/Render/RenderPass/DDGIPass.h"
 #include "Function/Render/RenderPass/GBufferPass.h"
 #include "Function/Render/RenderPass/ReprojectionPass.h"
@@ -17,6 +18,7 @@
 #include "Function/Render/RenderPass/ReSTIRPass.h"
 #include "Function/Render/RenderPass/SVGFPass.h"
 #include "Function/Render/RenderPass/ForwardPass.h"
+#include "Function/Render/RenderPass/ClipmapVisualizePass.h"
 #include "Function/Render/RenderPass/DDGIVisualizePass.h"
 #include "Function/Render/RenderPass/BloomPass.h"
 #include "Function/Render/RenderPass/FXAAPass.h"
@@ -25,6 +27,7 @@
 #include "Function/Render/RenderPass/PostProcessingPass.h"
 #include "Function/Render/RenderPass/RayTracingBasePass.h"
 #include "Function/Render/RenderPass/PathTracingPass.h"
+#include "Function/Render/RenderPass/GizmoPass.h"
 #include "Function/Render/RenderPass/EditorUIPass.h"
 #include "Function/Render/RenderPass/PresentPass.h"
 #include "Function/Render/RenderPass/RenderPass.h"
@@ -94,6 +97,7 @@ void RenderSystem::InitPasses()
     passes[DEPTH_PYRAMID_PASS]                  = std::make_shared<DepthPyramidPass>();
     passes[POINT_SHADOW_PASS]                   = meshPasses[MESH_POINT_SHADOW_PASS];
     passes[DIRECTIONAL_SHADOW_PASS]             = meshPasses[MESH_DIRECTIONAL_SHADOW_PASS];
+    passes[CLIPMAP_PASS]                        = nullptr;
     passes[DDGI_PASS]                           = nullptr;
     passes[G_BUFFER_PASS]                       = meshPasses[MESH_G_BUFFER_PASS];
     passes[REPROJECTION_PASS]                   = std::make_shared<ReprojectionPass>();
@@ -103,6 +107,7 @@ void RenderSystem::InitPasses()
     passes[SSSR_PASS]                           = std::make_shared<SSSRPass>();
     passes[VOLUMETIRC_FOG_PASS]                 = std::make_shared<VolumetricFogPass>();
     passes[FORWARD_PASS]                        = meshPasses[MESH_FORWARD_PASS];
+    passes[CLIPMAP_VISUALIZE_PASS]              = nullptr;
     passes[DDGI_VISUALIZE_PASS]                 = nullptr;
     passes[TRANSPARENT_PASS]                    = nullptr;
     passes[PATH_TRACING_PASS]                   = nullptr;
@@ -112,19 +117,24 @@ void RenderSystem::InitPasses()
     passes[EXPOSURE_PASS]                       = std::make_shared<ExposurePass>();
     passes[POST_PROCESSING_PASS]                = std::make_shared<PostProcessingPass>();
     passes[RAY_TRACING_BASE_PASS]               = nullptr;
+    passes[GIZMO_PASS]                          = std::make_shared<GizmoPass>();
     passes[EDITOR_UI_PASS]                      = std::make_shared<EditorUIPass>();
     passes[PRESENT_PASS]                        = std::make_shared<PresentPass>();
 
     //passes[BLOOM_PASS]->SetEnable(false);       //TODO 暂时禁用，有单位问题
 
 #if ENABLE_RAY_TRACING
+    passes[CLIPMAP_PASS]                    = std::make_shared<ClipmapPass>(); 
     passes[DDGI_PASS]                       = std::make_shared<DDGIPass>();     
     passes[RESTIR_PASS]                     = std::make_shared<ReSTIRPass>();
     passes[SVGF_PASS]                       = std::make_shared<SVGFPass>();
+    passes[CLIPMAP_VISUALIZE_PASS]          = std::make_shared<ClipmapVisualizePass>();
     passes[DDGI_VISUALIZE_PASS]             = std::make_shared<DDGIVisualizePass>();
     passes[PATH_TRACING_PASS]               = std::make_shared<PathTracingPass>();
     passes[RAY_TRACING_BASE_PASS]           = std::make_shared<RayTracingBasePass>();
 
+    passes[CLIPMAP_PASS]->SetEnable(false);
+    passes[CLIPMAP_VISUALIZE_PASS]->SetEnable(false);
     passes[RESTIR_PASS]->SetEnable(false);
     passes[PATH_TRACING_PASS]->SetEnable(false);  
     passes[RAY_TRACING_BASE_PASS]->SetEnable(false);      

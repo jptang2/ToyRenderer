@@ -42,10 +42,10 @@ void VertexBuffer::SetBufferData(void* data, uint32_t size, RHIBufferRef& buffer
     if(!buffer || buffer->GetInfo().size < size)  // 创建buffer
     {
         buffer = EngineContext::RHI()->CreateBuffer({
-        .size = size,
-        .memoryUsage = MEMORY_USAGE_CPU_TO_GPU,
-        .type = RESOURCE_TYPE_RW_BUFFER | RESOURCE_TYPE_VERTEX_BUFFER,
-        .creationFlag = BUFFER_CREATION_PERSISTENT_MAP});
+            .size = size,
+            .memoryUsage = MEMORY_USAGE_CPU_TO_GPU,
+            .type = RESOURCE_TYPE_RW_BUFFER | RESOURCE_TYPE_VERTEX_BUFFER,
+            .creationFlag = BUFFER_CREATION_PERSISTENT_MAP});
 
         if(id != 0) EngineContext::RenderResource()->ReleaseBindlessID(id, (BindlessSlot)slot);
         id = EngineContext::RenderResource()->AllocateBindlessID({

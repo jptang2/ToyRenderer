@@ -11,6 +11,27 @@
 // 声明各类在GPU和CPU间传递信息的数据结构
 // 注意buffer的字节对齐问题
 
+typedef struct GlobalIconInfo           //图标的bindless索引
+{
+    // uint32_t documentationIcon;
+    // uint32_t worldIcon;
+    // uint32_t entityIcon;
+    uint32_t cameraIcon;
+    uint32_t directionalLightIcon;
+    uint32_t pointLightIcon;
+    // uint32_t spotLightIcon;
+    // uint32_t skyLightIcon;
+    // uint32_t materialIcon;
+    // uint32_t textIcon;
+    // uint32_t decalIcon;
+    // uint32_t postProcessVolumeIcon;
+    // uint32_t exponentialHeightFogIcon;
+    // uint32_t volumetricCloudIcon;
+    // uint32_t atmosphericFogIcon;
+    // uint32_t skyAtmosphereIcon;
+
+} GlobalIconInfo;
+
 typedef struct RenderGlobalSetting
 {
     uint32_t skyboxMaterialID = 0;      //天空盒的材质ID
@@ -18,6 +39,8 @@ typedef struct RenderGlobalSetting
     uint32_t totalTicks = 0;            //运行帧数
     float totalTickTime = 0;            //运行时间
     float minFrameTime = 0;             //最小帧用时，毫秒单位
+
+    GlobalIconInfo icons;
     
 } RenderGlobalSetting;
 
@@ -116,6 +139,8 @@ typedef struct DirectionalLightInfo
 {
     Mat4 view;
     Mat4 proj;
+    Vec3 pos;
+    float _padding0;
     Vec3 dir;
     float depth;                //平行光源级联的划分深度，对齐Vec4
 
@@ -124,7 +149,7 @@ typedef struct DirectionalLightInfo
     
     float fogScattering;        //体积雾散射系数
     uint32_t castShadow;        //是否投射阴影，非零值有效
-    float _padding[2];
+    float _padding1[2];
 
     Frustum frustum;            //视锥，用于计算剔除      
     BoundingSphere sphere;
@@ -231,6 +256,52 @@ typedef struct LightIndex
     uint32_t index;             //光源索引信息，索引LightInfo内的实际光源信息  
 
 } LightIndex;
+
+typedef struct GizmoBoxInfo 
+{
+    Vec3 center;
+    float _padding0;
+    Vec3 extent;
+    float _padding1;
+    Vec4 color;
+
+} GizmoBoxInfo;
+
+typedef struct GizmoSphereInfo 
+{
+    Vec3 center;
+    float radious;
+    Vec4 color;
+
+} GizmoSphereInfo;
+
+typedef struct GizmoLineInfo 
+{
+    Vec3 from;
+    float _padding0;
+    Vec3 to;
+    float _padding1;
+    Vec4 color;
+} GizmoLineInfo;
+
+struct GizmoBillboardInfo 
+{
+    Vec3 center;
+    uint32_t textureID;
+    Vec2 extent;
+    Vec2 _padding;
+    Vec4 color;
+};
+
+typedef struct GizmoDrawData    // 间接绘制Gizmo信息
+{ 
+    RHIIndexedIndirectCommand command[4];
+    GizmoBoxInfo boxes[MAX_GIZMO_PRIMITIVE_COUNT];
+    GizmoSphereInfo spheres[MAX_GIZMO_PRIMITIVE_COUNT];
+    GizmoLineInfo lines[MAX_GIZMO_PRIMITIVE_COUNT];
+    GizmoBillboardInfo worldBillboards[MAX_GIZMO_PRIMITIVE_COUNT];
+
+} GizmoDrawData;
 
 typedef struct MeshClusterInfo
 {

@@ -1256,6 +1256,11 @@ void VulkanRHICommandContext::SetDepthBias(float constantBias, float slopeBias, 
     vkCmdSetDepthBias(handle, constantBias, clampBias, slopeBias);
 }
 
+void VulkanRHICommandContext::SetLineWidth(float width)
+{
+    vkCmdSetLineWidth(handle, width);
+}
+
 void VulkanRHICommandContext::SetGraphicsPipeline(RHIGraphicsPipelineRef graphicsPipeline) 
 {
     this->graphicsPipeline = ResourceCast(graphicsPipeline).get();

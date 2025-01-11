@@ -15,6 +15,7 @@ void RenderResourceManager::Init()
     for(auto& alloctor : bindlessIDAlloctor) alloctor = IndexAlloctor(MAX_BINDLESS_RESOURCE_SIZE);
 
     InitGlobalResources();
+    LoadIcons();
 }  
 
 void RenderResourceManager::Destroy()
@@ -49,7 +50,9 @@ void RenderResourceManager::ReleaseBindlessID(uint32_t id, BindlessSlot slot)
 
 void RenderResourceManager::SetRenderGlobalSetting(const RenderGlobalSetting& globalSetting)
 {
-    multiFrameResource.globalSettingBuffer.SetData(globalSetting);
+    RenderGlobalSetting setting = globalSetting;
+    setting.icons = iconInfo;
+    multiFrameResource.globalSettingBuffer.SetData(setting);
 }
 
 void RenderResourceManager::SetTLAS(const RHITopLevelAccelerationStructureRef& tlas)
@@ -144,6 +147,14 @@ void RenderResourceManager::SetVertexInfo(const VertexInfo& vertexInfo, uint32_t
     multiFrameResource.vertexBuffer.SetData(vertexInfo, vertexID);
 }
 
+void RenderResourceManager::SetGizmoDataCommand(void* data, int size)
+{
+    perFrameResources[EngineContext::CurrentFrameIndex()].gizmoBuffer.SetData(
+        data,
+        size * sizeof(RHIIndexedIndirectCommand),
+        0);    
+}
+
 RHIShaderRef RenderResourceManager::GetOrCreateRHIShader(const std::string& path, ShaderFrequency frequency, const std::string& entry)
 {
     auto iter = shaderMap.find(path);
@@ -172,6 +183,11 @@ RHIBufferRef RenderResourceManager::GetLightClusterIndexBuffer()
 { 
     return perFrameResources[EngineContext::CurrentFrameIndex()].lightClusterIndexBuffer.buffer;
 } 
+
+RHIBufferRef RenderResourceManager::GetGizmoDataBuffer()
+{
+    return perFrameResources[EngineContext::CurrentFrameIndex()].gizmoBuffer.buffer;
+}
 
 RHIDescriptorSetRef RenderResourceManager::GetPerFrameDescriptorSet() 
 { 
@@ -204,6 +220,7 @@ void RenderResourceManager::InitGlobalResources()
         .AddEntry({0, PER_FRAME_BINDING_VELOCITY, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})    
         .AddEntry({0, PER_FRAME_BINDING_OBJECT_ID, 2, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})   
         .AddEntry({0, PER_FRAME_BINDING_VERTEX, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
+        .AddEntry({0, PER_FRAME_BINDING_GIZMO, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})  
         .AddEntry({0, PER_FRAME_BINDING_BINDLESS_POSITION, MAX_BINDLESS_RESOURCE_SIZE, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_BINDLESS_NORMAL, MAX_BINDLESS_RESOURCE_SIZE, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_BINDLESS_TANGENT, MAX_BINDLESS_RESOURCE_SIZE, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
@@ -395,6 +412,12 @@ void RenderResourceManager::InitGlobalResources()
             .buffer = resource.lightBuffer.buffer});
 
         resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_GIZMO,
+            .index = 0,
+            .resourceType = RESOURCE_TYPE_RW_BUFFER,
+            .buffer = resource.gizmoBuffer.buffer});
+
+        resource.descriptorSet->UpdateDescriptor({
             .binding = PER_FRAME_BINDING_LIGHT_CLUSTER_GRID,
             .index = 0,
             .resourceType = RESOURCE_TYPE_RW_TEXTURE,
@@ -520,4 +543,41 @@ void RenderResourceManager::InitGlobalResources()
                 .sampler = multiFrameResource.samplers[i]->sampler});
         }
     }
+}
+
+void RenderResourceManager::LoadIcons()
+{
+    // icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/documentation.png"));
+    // icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/world.png"));
+    // icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/entity.png"));
+    icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/camera.png"));
+    icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/directionalLight.png"));
+    icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/pointLight.png"));
+    // icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/spotLight.png"));
+    // icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/skyLight.png"));
+    // icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/material.png"));
+    // icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/text.png"));
+    // icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/decal.png"));
+    // icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/postProcessVolume.png"));
+    // icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/exponentialHeightFog.png"));
+    // icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/volumetricCloud.png"));
+    // icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/atmosphericFog.png"));
+    // icons.push_back(std::make_shared<Texture>("Asset/BuildIn/Texture/icon/skyAtmosphere.png"));
+
+    // iconInfo.documentationIcon          = icons[0]->textureID;
+    // iconInfo.worldIcon                  = icons[1]->textureID;
+    // iconInfo.entityIcon                 = icons[2]->textureID;
+    iconInfo.cameraIcon                 = icons[0]->textureID;
+    iconInfo.directionalLightIcon       = icons[1]->textureID;
+    iconInfo.pointLightIcon             = icons[2]->textureID;
+    // iconInfo.spotLightIcon              = icons[6]->textureID;
+    // iconInfo.skyLightIcon               = icons[7]->textureID;
+    // iconInfo.materialIcon               = icons[8]->textureID;
+    // iconInfo.textIcon                   = icons[9]->textureID;
+    // iconInfo.decalIcon                  = icons[10]->textureID;
+    // iconInfo.postProcessVolumeIcon      = icons[11]->textureID;
+    // iconInfo.exponentialHeightFogIcon   = icons[12]->textureID;
+    // iconInfo.volumetricCloudIcon        = icons[13]->textureID;
+    // iconInfo.atmosphericFogIcon         = icons[14]->textureID;
+    // iconInfo.skyAtmosphereIcon          = icons[15]->textureID;
 }

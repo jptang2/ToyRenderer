@@ -8,14 +8,15 @@ target("renderer")
     add_files("src/**.cpp", "thirdparty/**.cpp", "thirdparty/**.c")
     add_includedirs("src/Runtime/")
     add_includedirs("src/Editor/")
-    add_includedirs("thirdparty/volk", 
-                    "thirdparty/imgui", 
-                    "thirdparty/vma", 
-                    "thirdparty/spirv_reflect", 
-                    "thirdparty/smhasher/src", 
+    add_includedirs("thirdparty/vma",
+                    "thirdparty/volk",
+                    "thirdparty/imgui",
+                    "thirdparty/imguizmo", 
                     "thirdparty/implot", 
                     "thirdparty/imgui-flame-graph",
-                    "thirdparty/imgui-node-editor")                
+                    "thirdparty/imgui-node-editor",
+                    "thirdparty/spirv_reflect", 
+                    "thirdparty/smhasher/src")                
     add_packages("vulkansdk", "glfw", "imgui", "stb", "assimp", "cereal", "spdlog", "eventpp", "meshoptimizer", "metis", "mikktspace", "eigen", "stduuid")
 
 --

@@ -89,9 +89,9 @@ private:
     {
         uint32_t lightID; 			// 光源索引
         
-        float pHat;					// 重要性采样权重，也就是pdf
-        float sumWeights;			// 已处理的(pHat / sampleP)权重和
-        float w;					// 被积函数在当前采样点对应的权重
+        float pHat;					// 当前光源的重要性采样权重，也就是targetPdf
+        float sumWeights;			// 已处理的(pHat / proposalPdf)权重和
+        float w;					// 被积函数在当前采样点对应的权重，同时也就是重采样重要性采样的realPdf(SIR PDF)的倒数
     };
 
     struct Reservoir 
@@ -101,5 +101,5 @@ private:
     };
 
     Buffer<RestirSetting> restirSettingBuffer;
-    ArrayBuffer<Reservoir, WINDOW_WIDTH * WINDOW_HEIGHT> reservoirsBuffer[3] = {};
+    ArrayBuffer<Reservoir, WINDOW_WIDTH * WINDOW_HEIGHT> reservoirsBuffer[FRAMES_IN_FLIGHT] = {};
 };

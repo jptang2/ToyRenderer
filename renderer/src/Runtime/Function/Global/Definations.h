@@ -53,6 +53,11 @@
 #define VOLUMETRIC_FOG_SIZE_Y 180
 #define VOLUMETRIC_FOG_SIZE_Z 128
 
+#define CLIPMAP_VOXEL_COUNT 128                     //clipmap的边长
+#define CLIPMAP_MIN_VOXEL_SIZE 0.1                  //clipmap的mip0层级体素尺寸
+#define CLIPMAP_MIPLEVEL 5                          //clipmap的mip层级
+
+#define MAX_GIZMO_PRIMITIVE_COUNT 102400            //gizmo可以绘制的最大图元数目
 
 
 // #define ENABLE_RAY_TRACING false					//是否启用光追

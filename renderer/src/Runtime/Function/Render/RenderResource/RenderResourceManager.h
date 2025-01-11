@@ -89,6 +89,7 @@ enum PerFrameBindingID
     PER_FRAME_BINDING_VELOCITY,
     PER_FRAME_BINDING_OBJECT_ID,
     PER_FRAME_BINDING_VERTEX,
+    PER_FRAME_BINDING_GIZMO,
     
 	PER_FRAME_BINDING_BINDLESS_POSITION,
     PER_FRAME_BINDING_BINDLESS_NORMAL,
@@ -179,10 +180,12 @@ public:
     void SetMeshClusterInfo(const std::vector<MeshClusterInfo>& meshClusterInfo, uint32_t baseMeshClusterID);
     void SetMeshClusterGroupInfo(const std::vector<MeshClusterGroupInfo>& meshClusterGroupInfo, uint32_t baseMeshClusterGroupID);
     void SetVertexInfo(const VertexInfo& vertexInfo, uint32_t vertexID);
+    void SetGizmoDataCommand(void* data, int size);
 
     RHIShaderRef GetOrCreateRHIShader(const std::string& path, ShaderFrequency frequency, const std::string& entry = "main");  
     RHIBufferRef GetGlobalClusterDrawInfoBuffer();
     RHIBufferRef GetLightClusterIndexBuffer();
+    RHIBufferRef GetGizmoDataBuffer();
 
     RHIRootSignatureRef GetPerFrameRootSignature()  { return perFrameRootSignature; }
     RHIDescriptorSetRef GetPerFrameDescriptorSet();
@@ -204,6 +207,7 @@ private:
         Buffer<CameraInfo> cameraBuffer;                                    // 有固定槽位分配的buffer，且更新频率高
         ArrayBuffer<ObjectInfo, MAX_PER_FRAME_OBJECT_SIZE> objectBuffer;
         Buffer<LightInfo> lightBuffer;
+        Buffer<GizmoDrawData> gizmoBuffer = Buffer<GizmoDrawData>(RESOURCE_TYPE_RW_BUFFER | RESOURCE_TYPE_INDIRECT_BUFFER);;
     };
     std::array<PerFrameResource, FRAMES_IN_FLIGHT> perFrameResources;
 
@@ -240,7 +244,12 @@ private:
     // 逐帧资源的根签名
     RHIRootSignatureRef perFrameRootSignature;
 
+    // 图标纹理
+    std::vector<TextureRef> icons;
+    GlobalIconInfo iconInfo;
+
     void InitGlobalResources(); // 负责创建全局（帧间）的渲染资源
+    void LoadIcons();           // 加载图标资源
 };
 
 void SetMeshClusterGroupInfo(const std::vector<MeshClusterGroupInfo>& meshClusterGroupInfo, uint32_t baseMeshClusterGroupID);  

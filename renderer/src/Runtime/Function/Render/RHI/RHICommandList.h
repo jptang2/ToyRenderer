@@ -87,6 +87,8 @@ public:
 
     void SetDepthBias(float constantBias, float slopeBias, float clampBias);
 
+    void SetLineWidth(float width);
+
     void SetGraphicsPipeline(RHIGraphicsPipelineRef graphicsPipeline);
 
     void SetComputePipeline(RHIComputePipelineRef computePipeline);	
@@ -387,6 +389,17 @@ struct RHICommandSetDepthBias : public RHICommand
     : constantBias(constantBias)
     , slopeBias(slopeBias)
     , clampBias(clampBias)
+    {}
+
+    virtual void Execute(RHICommandContextRef context) override final;
+};
+
+struct RHICommandSetLineWidth : public RHICommand 
+{
+    float width;
+
+    RHICommandSetLineWidth(float width) 
+    : width(width)
     {}
 
     virtual void Execute(RHICommandContextRef context) override final;

@@ -856,8 +856,43 @@ RDGRenderPassBuilder& RDGRenderPassBuilder::Read(uint32_t set, uint32_t binding,
     edge->binding = binding;
     edge->index = index;
     edge->type = RESOURCE_TYPE_TEXTURE;
+    edge->viewType = viewType;
 
     graph->Link(graph->GetNode(texture.ID()), pass, edge);
+
+    return *this;
+}
+
+RDGRenderPassBuilder& RDGRenderPassBuilder::ReadWrite(uint32_t set, uint32_t binding, uint32_t index, RDGBufferHandle buffer, uint32_t offset, uint32_t size)
+{
+    RDGBufferEdgeRef edge = graph->CreateEdge<RDGBufferEdge>();
+    edge->state = RESOURCE_STATE_UNORDERED_ACCESS;
+    edge->offset = offset;
+    edge->size = size;
+    edge->asShaderReadWrite = true;
+    edge->set = set;
+    edge->binding = binding;
+    edge->index = index;
+    edge->type = RESOURCE_TYPE_RW_BUFFER;
+
+    graph->Link(pass, graph->GetNode(buffer.ID()), edge);
+
+    return *this;
+}
+
+RDGRenderPassBuilder& RDGRenderPassBuilder::ReadWrite(uint32_t set, uint32_t binding, uint32_t index, RDGTextureHandle texture, TextureViewType viewType, TextureSubresourceRange subresource)
+{
+    RDGTextureEdgeRef edge = graph->CreateEdge<RDGTextureEdge>();
+    edge->state = RESOURCE_STATE_UNORDERED_ACCESS;
+    edge->subresource = subresource;
+    edge->asShaderReadWrite = true;
+    edge->set = set;
+    edge->binding = binding;
+    edge->index = index;
+    edge->type = RESOURCE_TYPE_RW_TEXTURE;
+    edge->viewType = viewType;
+
+    graph->Link(pass, graph->GetNode(texture.ID()), edge);
 
     return *this;
 }

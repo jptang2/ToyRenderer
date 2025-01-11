@@ -6,12 +6,13 @@ Transform::Transform(Mat4 matrix)
 {
     // 从矩阵分解
     position = matrix.block<3,1>(0,3);
-    scale(0) = matrix.block<1,1>(0,0)(0,0);
-    scale(1) = matrix.block<1,1>(1,1)(0,0);
-    scale(2) = matrix.block<1,1>(2,2)(0,0);
-    rotation = Quaternion(matrix.block<3,3>(0,0));     // 三维旋转矩阵直接转四元数
+    scale(0) = sqrt(pow(matrix(0,0), 2) + pow(matrix(1,0), 2) + pow(matrix(2,0), 2));
+    scale(1) = sqrt(pow(matrix(0,1), 2) + pow(matrix(1,1), 2) + pow(matrix(2,1), 2));
+    scale(2) = sqrt(pow(matrix(0,2), 2) + pow(matrix(1,2), 2) + pow(matrix(2,2), 2));
+    rotation = Quaternion(matrix.block<3,3>(0,0) * scale.asDiagonal().inverse());     
     rotation.normalize();
-
+    eulerAngle = Math::ToEulerAngle(rotation);
+    UpdateVector();
 }
 
 Mat4 Transform::GetMatrix() const
@@ -21,7 +22,6 @@ Mat4 Transform::GetMatrix() const
     // model.rotate(rotation);
     // model.translate(position);
     // return model.matrix();
- 
 
     Mat4 transform = Mat4::Identity();
     transform.block<3,3>(0,0) = rotation.toRotationMatrix() * scale.asDiagonal();

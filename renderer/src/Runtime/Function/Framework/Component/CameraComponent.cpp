@@ -52,7 +52,7 @@ void CameraComponent::InputMove(float deltaTime)
 		Vec2 offset = -EngineContext::Input()->GetMouseDeltaPosition() * sensitivity;
 
 		Vec3 eulerAngle = transformComponent->GetEulerAngle();
-		eulerAngle = Math::ClampEulerAngle(eulerAngle + Vec3(offset.x(), offset.y(), 0.0f));
+		eulerAngle = Math::ClampEulerAngle(eulerAngle + Vec3(0.0f, offset.x(), offset.y()));
 		transformComponent->SetRotation(eulerAngle);
 
 		// FOV

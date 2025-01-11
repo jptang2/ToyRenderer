@@ -168,6 +168,8 @@ public:
 
     virtual void SetDepthBias(float constantBias, float slopeBias, float clampBias) = 0;
 
+    virtual void SetLineWidth(float width) = 0;
+
     virtual void SetGraphicsPipeline(RHIGraphicsPipelineRef graphicsPipeline) = 0;
 
     virtual void SetComputePipeline(RHIComputePipelineRef computePipeline) = 0;	
