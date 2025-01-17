@@ -124,11 +124,11 @@ template<typename Type>
 class Buffer
 {
 public:
-    Buffer(ResourceType type = RESOURCE_TYPE_RW_BUFFER | RESOURCE_TYPE_UNIFORM_BUFFER)
+    Buffer(ResourceType type = RESOURCE_TYPE_RW_BUFFER | RESOURCE_TYPE_UNIFORM_BUFFER, MemoryUsage usage = MEMORY_USAGE_CPU_TO_GPU)
     {
         buffer = GlobalRHIBackend()->CreateBuffer({
             .size = sizeof(Type),
-            .memoryUsage = MEMORY_USAGE_CPU_TO_GPU,
+            .memoryUsage = usage,
             .type = type,      
             .creationFlag = BUFFER_CREATION_PERSISTENT_MAP});
     }
@@ -155,6 +155,8 @@ public:
 
     RHIBufferRef buffer;
 };
+template<typename Type>
+using BufferRef = std::shared_ptr<Buffer<Type>>;
 
 template<typename Type, size_t arraySize>
 class ArrayBuffer
@@ -175,7 +177,7 @@ public:
         memcpy((Type*)buffer->Map() + index, &data, sizeof(Type));
     }
 
-    void SetData(const std::vector<Type>& data, uint32_t index)
+    void SetData(const std::vector<Type>& data, uint32_t index = 0)
     {
         memcpy((Type*)buffer->Map() + index, data.data(), data.size() * sizeof(Type));
     }
@@ -190,4 +192,5 @@ public:
 private:
     IndexAlloctor idAlloctor;
 };
-
+template<typename Type, size_t arraySize>
+using ArrayBufferRef = std::shared_ptr<ArrayBuffer<Type, arraySize>>;

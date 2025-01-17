@@ -53,6 +53,7 @@ public:
     static bool Destroyed()                                         { return context == nullptr; }
     static uint32_t CurrentFrameIndex()                             { return context->currentFrameIndex; }
     static uint32_t PreviousFrameIndex()                            { return (context->currentFrameIndex + FRAMES_IN_FLIGHT - 1) % FRAMES_IN_FLIGHT; }
+    static uint32_t GetCurretTick()                                 { return context->currentTick; }
     static float GetDeltaTime()                                     { return context->deltaTime; }
     static std::shared_ptr<TimeScopes> GetTimeScope(uint32_t index) { return context->timers[index]; }
 
@@ -81,7 +82,8 @@ private:
     std::shared_ptr<EditorSystem> editorSystem;
     std::shared_ptr<InputSystem> inputSystem;
 
-    float deltaTime;
+    float deltaTime = 0.0f;         // 两帧间隔时间
+    uint32_t currentTick = 0;       // 运行总帧数，也用于时间戳
     uint32_t currentFrameIndex = 0;
     TimeScope timer;
     std::array<std::shared_ptr<TimeScopes>, FRAMES_IN_FLIGHT> timers;

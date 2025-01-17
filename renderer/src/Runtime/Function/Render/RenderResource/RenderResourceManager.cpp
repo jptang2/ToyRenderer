@@ -1,4 +1,5 @@
 #include "RenderResourceManager.h"
+#include "Core/SurfaceCache/SurfaceCache.h"
 #include "Core/Util/IndexAlloctor.h"
 #include "Function/Global/Definations.h"
 #include "Function/Global/EngineContext.h"
@@ -142,6 +143,11 @@ void RenderResourceManager::SetMeshClusterGroupInfo(const std::vector<MeshCluste
     multiFrameResource.meshClusterGroupBuffer.SetData(meshClusterGroupInfo, baseMeshClusterGroupID);
 }
 
+void RenderResourceManager::SetMeshCardInfo(const std::vector<MeshCardInfo>& meshCardInfo, uint32_t baseMeshCardID)
+{
+    perFrameResources[EngineContext::CurrentFrameIndex()].meshCardBuffer.SetData(meshCardInfo, baseMeshCardID);
+}
+
 void RenderResourceManager::SetVertexInfo(const VertexInfo& vertexInfo, uint32_t vertexID)
 {
     multiFrameResource.vertexBuffer.SetData(vertexInfo, vertexID);
@@ -153,6 +159,11 @@ void RenderResourceManager::SetGizmoDataCommand(void* data, int size)
         data,
         size * sizeof(RHIIndexedIndirectCommand),
         0);    
+}
+
+void RenderResourceManager::GetMeshCardSampleReadback(MeshCardSampleReadBack& readback)
+{
+    perFrameResources[EngineContext::CurrentFrameIndex()].cardSampleReadBackBuffer.GetData(&readback);
 }
 
 RHIShaderRef RenderResourceManager::GetOrCreateRHIShader(const std::string& path, ShaderFrequency frequency, const std::string& entry)
@@ -215,6 +226,8 @@ void RenderResourceManager::InitGlobalResources()
         .AddEntry({0, PER_FRAME_BINDING_MESH_CLUSTER, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_MESH_CLUSTER_GROUP, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_MESH_CLUSTER_DRAW_INFO, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
+        .AddEntry({0, PER_FRAME_BINDING_MESH_CARD, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
+        .AddEntry({0, PER_FRAME_BINDING_SURFACE_CACHE, 5, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
         .AddEntry({0, PER_FRAME_BINDING_DEPTH, 2, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
         .AddEntry({0, PER_FRAME_BINDING_DEPTH_PYRAMID, 2, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
         .AddEntry({0, PER_FRAME_BINDING_VELOCITY, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})    
@@ -360,6 +373,36 @@ void RenderResourceManager::InitGlobalResources()
             FORMAT_R32_UINT,
             Extent3D(windowExtent.width, windowExtent.height, 1),
             1, 1);
+
+        multiFrameResource.surfaceCacheTexture[0] = std::make_shared<Texture>( 
+            TEXTURE_TYPE_2D, 
+            FORMAT_R8G8B8A8_UNORM,
+            Extent3D(SURFACE_CACHE_SIZE, SURFACE_CACHE_SIZE, 1),
+            1, 1);
+
+        multiFrameResource.surfaceCacheTexture[1] = std::make_shared<Texture>( 
+            TEXTURE_TYPE_2D, 
+            FORMAT_R8G8B8A8_SNORM,
+            Extent3D(SURFACE_CACHE_SIZE, SURFACE_CACHE_SIZE, 1),
+            1, 1);
+
+        multiFrameResource.surfaceCacheTexture[2] = std::make_shared<Texture>( 
+            TEXTURE_TYPE_2D, 
+            FORMAT_R16G16B16A16_SFLOAT,
+            Extent3D(SURFACE_CACHE_SIZE, SURFACE_CACHE_SIZE, 1),
+            1, 1);
+
+        multiFrameResource.surfaceCacheTexture[3] = std::make_shared<Texture>( 
+            TEXTURE_TYPE_2D, 
+            FORMAT_R16G16B16A16_SFLOAT,
+            Extent3D(SURFACE_CACHE_SIZE, SURFACE_CACHE_SIZE, 1),
+            1, 1);
+
+        multiFrameResource.surfaceCacheTexture[4] = std::make_shared<Texture>( 
+            TEXTURE_TYPE_2D, 
+            EngineContext::Render()->GetDepthFormat(),
+            Extent3D(SURFACE_CACHE_SIZE, SURFACE_CACHE_SIZE, 1),
+            1, 1);
     }
 
     // 为sampler单独创建一个描述符，方便pass使用
@@ -398,6 +441,12 @@ void RenderResourceManager::InitGlobalResources()
             .index = 0,
             .resourceType = RESOURCE_TYPE_RW_BUFFER,
             .buffer = resource.objectBuffer.buffer});
+
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_MESH_CARD,
+            .index = 0,
+            .resourceType = RESOURCE_TYPE_RW_BUFFER,
+            .buffer = resource.meshCardBuffer.buffer});
 
         resource.descriptorSet->UpdateDescriptor({
             .binding = PER_FRAME_BINDING_MATERIAL,
@@ -460,6 +509,36 @@ void RenderResourceManager::InitGlobalResources()
             .buffer = resource.clusterDrawInfoBuffer.buffer});
 
         resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_SURFACE_CACHE,
+            .index = 0,
+            .resourceType = RESOURCE_TYPE_TEXTURE,
+            .textureView = multiFrameResource.surfaceCacheTexture[0]->textureView});  
+
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_SURFACE_CACHE,
+            .index = 1,
+            .resourceType = RESOURCE_TYPE_TEXTURE,
+            .textureView = multiFrameResource.surfaceCacheTexture[1]->textureView});  
+
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_SURFACE_CACHE,
+            .index = 2,
+            .resourceType = RESOURCE_TYPE_TEXTURE,
+            .textureView = multiFrameResource.surfaceCacheTexture[2]->textureView}); 
+
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_SURFACE_CACHE,
+            .index = 3,
+            .resourceType = RESOURCE_TYPE_TEXTURE,
+            .textureView = multiFrameResource.surfaceCacheTexture[3]->textureView}); 
+
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_SURFACE_CACHE,
+            .index = 4,
+            .resourceType = RESOURCE_TYPE_TEXTURE,
+            .textureView = multiFrameResource.surfaceCacheTexture[4]->textureView}); 
+
+        resource.descriptorSet->UpdateDescriptor({
             .binding = PER_FRAME_BINDING_DEPTH,
             .index = 0,
             .resourceType = RESOURCE_TYPE_TEXTURE,
@@ -499,8 +578,8 @@ void RenderResourceManager::InitGlobalResources()
             .binding = PER_FRAME_BINDING_OBJECT_ID,
             .index = 1,
             .resourceType = RESOURCE_TYPE_TEXTURE,
-            .textureView = multiFrameResource.objectIDTexture[1]->textureView});    
-
+            .textureView = multiFrameResource.objectIDTexture[1]->textureView});  
+              
         resource.descriptorSet->UpdateDescriptor({
             .binding = PER_FRAME_BINDING_VERTEX,
             .index = 0,

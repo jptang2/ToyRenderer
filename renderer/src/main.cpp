@@ -8,6 +8,7 @@
 #include "Function/Global/EngineContext.h"
 #include "Function/Render/RenderPass/RenderPass.h"
 #include "Function/Render/RenderResource/Texture.h"
+#include "Runtime/Core/SurfaceCache/SurfaceCache.h"
 #include "Runtime/Function/Framework/Component/VolumeLightComponent.h"
 
 #include <algorithm>
@@ -33,7 +34,7 @@ void LoadScene()
 void InitStressTestScene()
 {
     std::shared_ptr<Scene> scene = EngineContext::World()->CreateNewScene("stressTestScene");
-    EngineContext::Render()->GetGlobalSetting()->minFrameTime = 30.0f;  // 设置一个最小帧时间
+    // EngineContext::Render()->GetGlobalSetting()->minFrameTime = 30.0f;  // 设置一个最小帧时间
     // 主要的开销全在点光源和平行光源的阴影上了
 
     // Directional light
@@ -253,7 +254,7 @@ void InitScene()
             .tangentSpace = true,
             .generateBVH = false,
             .generateCluster = false,
-            .generateVirtualMesh = true,
+            .generateVirtualMesh = false,
             .cacheCluster = false
         };
         std::shared_ptr<Model> model = std::make_shared<Model>("Asset/BuildIn/Model/Basic/sphere_div.obj", processSetting);
@@ -482,7 +483,7 @@ void InitScene()
             .tangentSpace = true,
             .generateBVH = false,
             .generateCluster = false,
-            .generateVirtualMesh = true,
+            .generateVirtualMesh = false,
             .cacheCluster = false
         };
         std::shared_ptr<Model> model = std::make_shared<Model>("Asset/BuildIn/Model/Basic/stanford_bunny.obj", processSetting);
@@ -559,6 +560,22 @@ int main()
     EngineContext::MainLoop();
     EngineContext::Destroy();
     return 0;
+
+
+    // SurfaceAtlas atlas;
+    // auto fuck1 = atlas.Allocate(UVec2(257, 128));
+    // auto fuck2 = atlas.Allocate(UVec2(127, 127));
+    // auto fuck3 = atlas.Allocate(UVec2(259, 127));
+    // auto fuck4 = atlas.Allocate(UVec2(1024, 128));
+
+    // atlas.Release(fuck2);
+    // atlas.Release(fuck3);
+    // atlas.Release(fuck1);
+    // atlas.Release(fuck4);
+
+    // auto fuck5 = atlas.Allocate(UVec2(4095, 128));
+
+    
 }
 
 

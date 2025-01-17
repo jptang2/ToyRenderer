@@ -10,7 +10,9 @@ layout(set = 1, binding = 1) buffer VXGI_CLIPMAP_BUFFER {
 
 struct Payload 
 {
+	uint objectID;
 	vec3 normal;
 	vec4 diffuse;
+	vec3 worldPos;
 };
 

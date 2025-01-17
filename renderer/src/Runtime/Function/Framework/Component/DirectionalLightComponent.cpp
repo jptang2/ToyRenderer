@@ -145,6 +145,7 @@ void DirectionalLightComponent::UpdateCascades()
 		Vec3 lightDir = front.normalized();
 		Mat4 lightViewMatrix = Math::LookAt(frustumCenter - lightDir * radius, frustumCenter, Vec3(0.0f, 1.0f, 0.0f));
 		Mat4 lightOrthoMatrix = Math::Ortho(minExtents.x(), maxExtents.x(), minExtents.y(), maxExtents.y(), 0.0f, maxExtents.z() - minExtents.z());
+		lightOrthoMatrix(1, 1) *= -1;		// Vulkan的NDC是y向下
 
 		// 最后存储各种信息，只有当即将被更新阴影贴图时才会写入数据
 		if (updateCnts[i] == 0)

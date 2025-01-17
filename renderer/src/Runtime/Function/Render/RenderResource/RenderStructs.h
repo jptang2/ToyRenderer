@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 
 // 声明各类在GPU和CPU间传递信息的数据结构
 // 注意buffer的字节对齐问题
@@ -74,13 +75,16 @@ typedef struct CameraInfo
 
 typedef struct ObjectInfo
 {
-    Mat4 prevModel;                 //前一帧的model矩阵
     Mat4 model;
+    Mat4 prevModel;                 //前一帧的model矩阵
+    Mat4 invModel;
 
     uint32_t animationID;           //动画索引
     uint32_t materialID;            //材质索引
     uint32_t vertexID;
-    uint32_t indexID;             
+    uint32_t indexID;  
+    uint32_t meshCardID;            //card索引起始值
+    uint32_t _padding[3];           
     
     BoundingSphere sphere;          //包围球，本地空间
     BoundingBox box;                //包围盒，本地空间
@@ -326,6 +330,28 @@ typedef struct MeshClusterGroupInfo
     BoundingSphere sphere;
     
 } MeshClusterGroupInfo;
+
+typedef struct MeshCardInfo     // 单个Card的全部信息
+{
+	Vec3 viewPosition;          // 物体空间相机位置
+	float _padding0;
+	Vec3 viewExtent;            // 相机空间的包围盒尺寸
+	float _padding1;
+    Vec3 scale;                 // 物体空间缩放
+    float _padding2;
+
+	Mat4 view;
+    Mat4 proj;
+    Mat4 invView;
+    Mat4 invProj;
+
+	UVec2 atlasOffset = UVec2::Zero();      // 在surface cache中实际用到的尺寸范围，也是光栅化的范围
+	UVec2 atlasExtent = UVec2::Zero();      // 内部不再有padding，尺寸也不对齐tile
+
+} MeshCardInfo;
+
+// 每帧回读前一帧的采样数来决定本帧的更新优先级
+typedef std::array<uint32_t, MAX_PER_FRAME_OBJECT_SIZE * 6> MeshCardSampleReadBack;
 
 // typedef struct AnimatedTransformInfo 
 // {

@@ -33,7 +33,8 @@ void main()
     float roughness     = FetchRoughness(material, texCoord);
     float metallic      = FetchMetallic(material, texCoord);
 
-
-    RAY_PAYLOAD.normal = normal;
+    RAY_PAYLOAD.objectID = objectID;
+    RAY_PAYLOAD.normal = worldNormal;
     RAY_PAYLOAD.diffuse = diffuse;
+    RAY_PAYLOAD.worldPos = worldPos.xyz;
 }

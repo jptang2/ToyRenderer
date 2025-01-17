@@ -14,4 +14,6 @@ layout(location = 0) rayPayloadInEXT vec3 HIT_VALUE;
 void main()
 {
     HIT_VALUE = vec3(0.0f);
+    
+    if(RAY_TRACE_BASE_SETTING.mode == 9) HIT_VALUE = FetchSkyLight(gl_WorldRayDirectionEXT);
 }

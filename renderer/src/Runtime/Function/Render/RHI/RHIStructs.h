@@ -637,6 +637,14 @@ typedef struct Offset2D
     uint32_t    x;
     uint32_t    y;
 
+	friend Offset2D operator+(const Offset2D& a, const Offset2D& b)
+	{
+		return {
+			.x = a.x + b.x,
+			.y = a.y + b.y
+		};
+	}
+
 	friend bool operator==(const Offset2D& a, const Offset2D& b)
 	{
 		return 	a.x == b.x &&
@@ -650,6 +658,15 @@ typedef struct Offset3D
     uint32_t    x;
     uint32_t    y;
     uint32_t    z;
+
+	friend Offset3D operator+(const Offset3D& a, const Offset3D& b)
+	{
+		return {
+			.x = a.x + b.x,
+			.y = a.y + b.y,
+			.z = a.z + b.z
+		};
+	}
 
 	friend bool operator==(const Offset3D& a, const Offset3D& b)
 	{

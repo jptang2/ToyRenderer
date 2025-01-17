@@ -44,4 +44,20 @@ void main()
 	if(RAY_TRACE_BASE_SETTING.mode == 2) HIT_VALUE = vec3(roughness, metallic, 0.0f);
 	if(RAY_TRACE_BASE_SETTING.mode == 3) HIT_VALUE = worldPos.xyz;
 	if(RAY_TRACE_BASE_SETTING.mode == 4) HIT_VALUE = vec3(dist / CAMERA.far);
+
+
+    // surface cache
+    SurfaceCacheData data;
+    vec4 lighting;
+    bool valid = FetchSurfaceCacheData(data, objectID, worldPos.xyz, worldNormal);
+    valid = valid && FetchSurfaceCacheLighting(lighting, objectID, worldPos.xyz, worldNormal);
+    if(RAY_TRACE_BASE_SETTING.mode == 5) HIT_VALUE = data.diffuse;
+    if(RAY_TRACE_BASE_SETTING.mode == 6) HIT_VALUE = (data.normal.xyz + 1.0f) / 2.0f;
+    if(RAY_TRACE_BASE_SETTING.mode == 7) HIT_VALUE = vec3(data.roughness, data.metallic, 0.0f);
+    if(RAY_TRACE_BASE_SETTING.mode == 8) HIT_VALUE = data.emission.xyz;
+    if(RAY_TRACE_BASE_SETTING.mode == 9) HIT_VALUE = lighting.xyz;
+    if( RAY_TRACE_BASE_SETTING.mode >= 5 && 
+        RAY_TRACE_BASE_SETTING.mode <= 9 &&
+        !valid)                           HIT_VALUE = vec3(1.0, 0.0, 1.0);
+
 }

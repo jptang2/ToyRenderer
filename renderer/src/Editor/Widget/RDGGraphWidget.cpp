@@ -520,7 +520,7 @@ void LinkHoverUI(const GraphLink& link)
 void RDGGraphWidget::UI()
 {
     static bool open = false;
-    if(ImGui::Button("Open Render Dependency Graph"))
+    if(ImGui::Button("Show Render Dependency Graph"))
     {
         open = true;
     }
@@ -901,7 +901,7 @@ void RDGGraphWidget::UIInternel(bool* open)
                 }
             }
         }
-        if(init || EngineContext::Render()->GetGlobalSetting()->totalTicks < 5) ed::NavigateToContent();
+        if(init || EngineContext::GetCurretTick() < 5) ed::NavigateToContent();
         
         
 

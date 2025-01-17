@@ -43,12 +43,14 @@ public:
 
 	virtual void CollectDrawBatch(std::vector<DrawBatch>& batches) override;
 	virtual void CollectAccelerationStructureInstance(std::vector<RHIAccelerationStructureInstanceInfo>& instances) override;
+	virtual void CollectSurfaceCacheTask(std::vector<SurfaceCacheTask>& tasks) override;
 
 private:
 	ModelRef model;
     std::vector<MaterialRef> materials;
 	std::vector<ObjectInfo> objectInfos;
 	std::vector<uint32_t> objectIDs;
+	std::vector<uint32_t> meshCardIDs;
 
 	Mat4 prevModel = Mat4::Identity();
 

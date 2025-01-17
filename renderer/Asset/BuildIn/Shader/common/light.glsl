@@ -176,15 +176,16 @@ float PointLightFalloff(float dist, float radius)
 
 #if(ENABLE_RAY_TRACING != 0)	// 光追版本的光源阴影获取
 
-float RtDirectionalShadow(vec4 worldPos)
+float RtDirectionalShadow(vec4 worldPos, float bias)
 {
     float dirShadow = 1.0f;
     if(LIGHTS.lightSetting.directionalLightCnt != 0)	
     {
         DirectionalLight dirLight = LIGHTS.directionalLights[0];
-        vec3 L = -normalize(dirLight.dir);    
-        
-		if(dirLight.castShadow > 0)  dirShadow = VisibilityTest(worldPos.xyz, worldPos.xyz + L * MAX_RAY_TRACING_DISTANCE) ? 0.0f : 1.0f; 
+        vec3 L = -normalize(dirLight.dir);
+
+        vec3 origin = worldPos.xyz + bias * L;
+		if(dirLight.castShadow > 0)  dirShadow = RayQueryVisibility(origin, origin + L * MAX_RAY_TRACING_DISTANCE) ? 0.0f : 1.0f; 
     }
     return dirShadow;
 }
@@ -195,7 +196,7 @@ float RtPointShadow(uint lightID, vec4 worldPos)
 
 	PointLight pointLight = LIGHTS.pointLights[lightID];
 
-    float pointShadow = VisibilityTest(worldPos.xyz, pointLight.pos) ? 0.0f : 1.0f; 
+    float pointShadow = RayQueryVisibility(worldPos.xyz, pointLight.pos) ? 0.0f : 1.0f; 
     return pointShadow;	     // 光追就不考虑点光源是否开启投射阴影了
 }
 

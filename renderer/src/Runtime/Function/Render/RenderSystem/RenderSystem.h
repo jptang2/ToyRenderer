@@ -6,6 +6,7 @@
 #include "Function/Render/RenderPass/RenderPass.h"
 #include "RenderLightManager.h"
 #include "RenderMeshManager.h"
+#include "RenderSurfaceCacheManager.h"
 
 #include <array>
 #include <memory>
@@ -39,10 +40,11 @@ public:
     RHIFormat GetDepthFormat()      { return DEPTH_FORMAT; }
     RHISwapchainRef GetSwapchain()  { return swapchain; }
 
-    inline std::shared_ptr<RenderMeshManager> GetMeshManager()      { return meshManager; }
-    inline std::shared_ptr<RenderLightManager> GetLightManager()    { return lightManager; }
-    RenderGlobalSetting* GetGlobalSetting()                         { return &globalSetting; }
-    DependencyGraphRef GetRDGDependenctyGraph()                     { return rdgDependencyGraph; }
+    inline std::shared_ptr<RenderMeshManager> GetMeshManager()                  { return meshManager; }
+    inline std::shared_ptr<RenderLightManager> GetLightManager()                { return lightManager; }
+    inline std::shared_ptr<RenderSurfaceCacheManager> GetSurfaceCacheManager()  { return surfaceCacheManager; }
+    RenderGlobalSetting* GetGlobalSetting()                                     { return &globalSetting; }
+    DependencyGraphRef GetRDGDependenctyGraph()                                 { return rdgDependencyGraph; }
 
 private:
     GLFWwindow* window;
@@ -74,4 +76,5 @@ private:
 
     std::shared_ptr<RenderMeshManager> meshManager;
     std::shared_ptr<RenderLightManager> lightManager;
+    std::shared_ptr<RenderSurfaceCacheManager> surfaceCacheManager;
 };

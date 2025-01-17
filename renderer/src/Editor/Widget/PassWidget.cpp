@@ -503,7 +503,7 @@ void PassWidget::PostProcessingPassUI(std::shared_ptr<PostProcessingPass> pass)
 
 void PassWidget::RayTracingBasePassUI(std::shared_ptr<RayTracingBasePass> pass)
 {
-	if (ImGui::RadioButton("Color", pass->setting.mode == 0))
+	if (ImGui::RadioButton("Diffuse", pass->setting.mode == 0))
 		pass->setting.mode = 0;
 	ImGui::SameLine();
 	if (ImGui::RadioButton("Normal", pass->setting.mode == 1))
@@ -517,4 +517,20 @@ void PassWidget::RayTracingBasePassUI(std::shared_ptr<RayTracingBasePass> pass)
 	ImGui::SameLine();
 	if (ImGui::RadioButton("World dist", pass->setting.mode == 4))
 		pass->setting.mode = 4;
+
+    ImGui::SeparatorText("Surface cache");
+    if (ImGui::RadioButton("Diffuse##1", pass->setting.mode == 5))
+		pass->setting.mode = 5; 
+    ImGui::SameLine();   
+    if (ImGui::RadioButton("Normal##1", pass->setting.mode == 6))
+		pass->setting.mode = 6; 
+    ImGui::SameLine();  
+    if (ImGui::RadioButton("Roughness/Metallic##1", pass->setting.mode == 7))
+		pass->setting.mode = 7; 
+    
+    if (ImGui::RadioButton("Emission##1", pass->setting.mode == 8))
+		pass->setting.mode = 8;    
+    ImGui::SameLine();  
+    if (ImGui::RadioButton("Lighting##1", pass->setting.mode == 9))
+		pass->setting.mode = 9;   
 }

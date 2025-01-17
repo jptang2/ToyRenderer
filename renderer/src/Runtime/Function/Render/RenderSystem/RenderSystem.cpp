@@ -11,6 +11,7 @@
 #include "Function/Render/RenderPass/ClipmapPass.h"
 #include "Function/Render/RenderPass/DDGIPass.h"
 #include "Function/Render/RenderPass/GBufferPass.h"
+#include "Function/Render/RenderPass/SurfaceCachePass.h"
 #include "Function/Render/RenderPass/ReprojectionPass.h"
 #include "Function/Render/RenderPass/DeferredLightingPass.h"
 #include "Function/Render/RenderPass/SSSRPass.h"
@@ -31,6 +32,7 @@
 #include "Function/Render/RenderPass/EditorUIPass.h"
 #include "Function/Render/RenderPass/PresentPass.h"
 #include "Function/Render/RenderPass/RenderPass.h"
+#include "RenderSurfaceCacheManager.h"
 #include <memory>
 
 void RenderSystem::InitGLFW()
@@ -59,8 +61,10 @@ void RenderSystem::Init()
 
     lightManager = std::make_shared<RenderLightManager>();
     meshManager = std::make_shared<RenderMeshManager>();
+    surfaceCacheManager = std::make_shared<RenderSurfaceCacheManager>();
     lightManager->Init();
     meshManager->Init();
+    surfaceCacheManager->Init();
 
     InitBaseResource(); 
     InitPasses();  
@@ -100,6 +104,7 @@ void RenderSystem::InitPasses()
     passes[CLIPMAP_PASS]                        = nullptr;
     passes[DDGI_PASS]                           = nullptr;
     passes[G_BUFFER_PASS]                       = meshPasses[MESH_G_BUFFER_PASS];
+    passes[SURFACE_CACHE_PASS]                  = nullptr;
     passes[REPROJECTION_PASS]                   = std::make_shared<ReprojectionPass>();
     passes[DEFERRED_LIGHTING_PASS]              = std::make_shared<DeferredLightingPass>();
     passes[RESTIR_PASS]                         = nullptr;
@@ -125,7 +130,8 @@ void RenderSystem::InitPasses()
 
 #if ENABLE_RAY_TRACING
     passes[CLIPMAP_PASS]                    = std::make_shared<ClipmapPass>(); 
-    passes[DDGI_PASS]                       = std::make_shared<DDGIPass>();     
+    passes[DDGI_PASS]                       = std::make_shared<DDGIPass>();  
+    passes[SURFACE_CACHE_PASS]              = std::make_shared<SurfaceCachePass>();
     passes[RESTIR_PASS]                     = std::make_shared<ReSTIRPass>();
     passes[SVGF_PASS]                       = std::make_shared<SVGFPass>();
     passes[CLIPMAP_VISUALIZE_PASS]          = std::make_shared<ClipmapVisualizePass>();
@@ -150,8 +156,9 @@ bool RenderSystem::Tick()
     {
         if(EngineContext::World()->GetActiveScene() == nullptr) return false;
 
-        meshManager->Tick();    // 先准备各个meshpass的绘制信息
-        lightManager->Tick();   // 准备光源信息   
+        meshManager->Tick();            // 先准备各个meshpass的绘制信息
+        lightManager->Tick();           // 准备光源信息   
+        surfaceCacheManager->Tick();    // 更新surfaceCache
         UpdateGlobalSetting();                   
 
         auto& resource = perFrameCommonResources[EngineContext::CurrentFrameIndex()];
@@ -181,7 +188,7 @@ bool RenderSystem::Tick()
 
 void RenderSystem::UpdateGlobalSetting()
 {
-    globalSetting.totalTicks++;
+    globalSetting.totalTicks = EngineContext::GetCurretTick();
     globalSetting.totalTickTime += EngineContext::GetDeltaTime();
     globalSetting.skyboxMaterialID = EngineContext::World()->GetActiveScene()->GetSkyBox() ?
                                      EngineContext::World()->GetActiveScene()->GetSkyBox()->GetMaterialID() : 0;

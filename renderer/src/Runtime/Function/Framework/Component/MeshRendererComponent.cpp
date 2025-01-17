@@ -16,6 +16,13 @@ MeshRendererComponent::~MeshRendererComponent()
     {
         for(auto& objectID : objectIDs) EngineContext::RenderResource()->ReleaseObjectID(objectID); 
         objectIDs.clear();
+
+        for(auto& meshCardID : meshCardIDs) 
+        {
+            EngineContext::Render()->GetSurfaceCacheManager()->ReleaseCache(meshCardID);
+            EngineContext::RenderResource()->ReleaseMeshCardID(meshCardID); 
+        }
+        meshCardIDs.clear();
     }
 }
 
@@ -45,6 +52,7 @@ void MeshRendererComponent::OnInit()
     while(objectIDs.size() < model->GetSubmeshCount())
     {
         objectIDs.push_back(EngineContext::RenderResource()->AllocateObjectID());
+        meshCardIDs.push_back(EngineContext::RenderResource()->AllocateMeshCardID());
     }
 }
 
@@ -58,12 +66,14 @@ void MeshRendererComponent::OnUpdate(float deltaTime)
     for(uint32_t i = 0; i < model->GetSubmeshCount(); i++)  // 逐子物体更新物体信息
     {
         objectInfos[i] = {
-            .prevModel = prevModel,
             .model = transformComponent->GetModelMat(),
+            .prevModel = prevModel,
+            .invModel = transformComponent->GetModelMatInv(),
             .animationID = 0,
             .materialID = materials[i] ? materials[i]->GetMaterialID() : 0,
             .vertexID = model->Submesh(i).vertexBuffer->vertexID,
             .indexID = model->Submesh(i).indexBuffer->indexID,
+            .meshCardID = meshCardIDs[i],
             .sphere = model->Submesh(i).mesh->sphere,
             .box = model->Submesh(i).mesh->box,
             .debugData = Vec4::Zero()
@@ -85,6 +95,7 @@ void MeshRendererComponent::SetModel(ModelRef model)
     while(objectIDs.size() < model->GetSubmeshCount())
     {
         objectIDs.push_back(EngineContext::RenderResource()->AllocateObjectID());
+        meshCardIDs.push_back(EngineContext::RenderResource()->AllocateMeshCardID());
     }
     materials.resize(model->GetSubmeshCount());  
 }
@@ -149,6 +160,30 @@ void MeshRendererComponent::CollectAccelerationStructureInstance(std::vector<RHI
             Math::Mat3x4(transformComponent->GetModelMat(), &info.transform[0][0]);
 
             instances.push_back(info);
+        }
+    }
+}
+
+void MeshRendererComponent::CollectSurfaceCacheTask(std::vector<SurfaceCacheTask>& tasks)
+{
+    std::shared_ptr<TransformComponent> transformComponent = TryGetComponent<TransformComponent>();
+    if(!transformComponent) return;
+
+    for(uint32_t i = 0; i < model->GetSubmeshCount(); i++)
+    {   
+        auto& submesh = model->Submesh(i);
+
+        if(materials[i] != nullptr)
+        {
+            SurfaceCacheTask task = {};
+            task.meshCardID = meshCardIDs[i];
+            task.objectID = objectIDs[i];
+            task.scale = transformComponent->GetScale();
+            task.box = submesh.mesh->box;
+            task.vertexBuffer = submesh.vertexBuffer;
+            task.indexBuffer = submesh.indexBuffer;
+
+            tasks.push_back(task);
         }
     }
 }

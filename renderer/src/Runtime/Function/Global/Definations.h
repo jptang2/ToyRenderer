@@ -59,6 +59,19 @@
 
 #define MAX_GIZMO_PRIMITIVE_COUNT 102400            //gizmo可以绘制的最大图元数目
 
+#define SURFACE_CACHE_SIZE 4096
+#define SURFACE_CACHE_PADDING 1	                        // 所有分配块的左边和上边是一像素的padding
+#define MAX_SURFACE_CACHE_LOD 5	                        // 取小于
+#define MAX_SURFACE_CACHE_LOD_SIZE 128			        // 最大的一级LOD的单块分辨率
+#define MIN_SURFACE_CACHE_LOD_SIZE 8			        // 最小的一级LOD的单块分辨率，也是光照计算的基本单位
+#define SURFACE_CACHE_TILE_COUNT (SURFACE_CACHE_SIZE / MIN_SURFACE_CACHE_LOD_SIZE)
+#define MAX_SURFACE_CACHE_RASTERIZE_SIZE 256	        // 每帧最大光栅化buget，UE是512
+#define MAX_SURFACE_CACHE_DIRECT_LIGHTING_SIZE 1024	    // 每帧最大直接光照buget
+#define MAX_SURFACE_CACHE_INDIRECT_LIGHTING_SIZE 512    // 每帧最大间接光照buget
+#define SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE 8	    // 直接光照tile尺寸
+#define SURFACE_CACHE_DIRECT_INLIGHTING_TILE_SIZE 4	    // 间接光照tile尺寸
+#define SURFACE_CACHE_LOD_SIZE(x) (MAX_SURFACE_CACHE_LOD_SIZE >> (x))
+
 
 // #define ENABLE_RAY_TRACING false					//是否启用光追
 

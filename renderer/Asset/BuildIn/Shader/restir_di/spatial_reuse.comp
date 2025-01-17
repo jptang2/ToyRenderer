@@ -122,7 +122,7 @@ void main()
 
 					if(RESTIR_SETTING.visibilityReuse != 0)		// 可见性测试是最主要的性能开销
 					{
-						bool shadowed = VisibilityTest(neighborWorldPos.xyz, LIGHTS.pointLights[res.samples[i].lightID].pos);
+						bool shadowed = RayQueryVisibility(neighborWorldPos.xyz, LIGHTS.pointLights[res.samples[i].lightID].pos);
 						if(shadowed) continue;
 					}
 							
@@ -131,7 +131,7 @@ void main()
 
 				if(RESTIR_SETTING.visibilityReuse != 0)
 				{
-					bool shadowed = VisibilityTest(worldPos.xyz, LIGHTS.pointLights[res.samples[i].lightID].pos);
+					bool shadowed = RayQueryVisibility(worldPos.xyz, LIGHTS.pointLights[res.samples[i].lightID].pos);
 					if(shadowed) 
 					{
 						CleanReservoir(res, i);			

@@ -45,8 +45,8 @@ void PointShadowPass::Init()
         pipelineInfo.fragmentShader     = fragmentShader.shader;
         pipelineInfo.rootSignature      = rootSignature0;
         pipelineInfo.primitiveType      = PRIMITIVE_TYPE_TRIANGLE_LIST;
-        pipelineInfo.rasterizerState    = { FILL_MODE_SOLID, CULL_MODE_NONE, DEPTH_CLIP, 0.0f, 0.0f };  // 不要做背面剔除，双面阴影 
-        pipelineInfo.blendState.renderTargets[0].enable = false;
+        pipelineInfo.rasterizerState    = { FILL_MODE_SOLID, CULL_MODE_FRONT, DEPTH_CLIP, 0.0f, 0.0f };  // 应该是某个矩阵搞反了，剔除变成了正面
+        pipelineInfo.blendState.renderTargets[0].enable = false;                                                                                     // TODO
         pipelineInfo.colorAttachmentFormats[0]      = FORMAT_R32G32B32A32_SFLOAT;                   
         pipelineInfo.depthStencilState              = { COMPARE_FUNCTION_LESS_EQUAL, true, true };
         pipelineInfo.depthStencilAttachmentFormat   = FORMAT_D32_SFLOAT;
@@ -79,7 +79,7 @@ void PointShadowPass::Build(RDGBuilder& builder)
 {
     if( IsEnabled() &&
         !EngineContext::Render()->IsPassEnabled(RESTIR_PASS) &&
-        !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS) && 
+        // !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS) &&    //Surface cache有使用
         !EngineContext::Render()->IsPassEnabled(PATH_TRACING_PASS))
     {
         pointShadowLights = EngineContext::Render()->GetLightManager()->GetPointShadowLights();

@@ -82,7 +82,7 @@ void main()
 	{
 		for (int i = 0; i < RESERVOIR_SIZE; i++) 
 		{
-			bool shadowed = VisibilityTest(worldPos.xyz, LIGHTS.pointLights[res.samples[i].lightID].pos);
+			bool shadowed = RayQueryVisibility(worldPos.xyz, LIGHTS.pointLights[res.samples[i].lightID].pos);
 			if (shadowed) 
 			{
 				CleanReservoir(res, i);		

@@ -1,5 +1,6 @@
 #include "DirectionalShadowPass.h"
 #include "Function/Global/EngineContext.h"
+#include "Function/Render/RHI/RHIStructs.h"
 
 void DirectionalShadowPassProcessor::OnCollectBatch(const DrawBatch& batch)
 {
@@ -37,7 +38,7 @@ void DirectionalShadowPass::Init()
     pipelineInfo.fragmentShader     = fragmentShader.shader;
     pipelineInfo.rootSignature      = rootSignature;
     pipelineInfo.primitiveType      = PRIMITIVE_TYPE_TRIANGLE_LIST;
-    pipelineInfo.rasterizerState    = { FILL_MODE_SOLID, CULL_MODE_NONE, DEPTH_CLIP, 0.0f, 0.0f };  // 不要做背面剔除，双面阴影                     
+    pipelineInfo.rasterizerState    = { FILL_MODE_SOLID, CULL_MODE_BACK, DEPTH_CLIP, 0.0f, 0.0f };  // 不要做背面剔除，双面阴影                     
     pipelineInfo.depthStencilState              = { COMPARE_FUNCTION_LESS_EQUAL, true, true };
     pipelineInfo.depthStencilAttachmentFormat   = EngineContext::Render()->GetDepthFormat();
     pipeline                                    = GraphicsPipelineCache::Get()->Allocate(pipelineInfo).pipeline;    // 普通mesh的默认绘制管线
@@ -54,7 +55,7 @@ void DirectionalShadowPass::Build(RDGBuilder& builder)
         directionalLightComponent->CastShadow() &&
         IsEnabled() &&
         !EngineContext::Render()->IsPassEnabled(RESTIR_PASS) &&
-        !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS) && 
+        // !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS) &&    //Surface cache有使用
         !EngineContext::Render()->IsPassEnabled(PATH_TRACING_PASS))
     {
         for(uint32_t i = 0; i < DIRECTIONAL_SHADOW_CASCADE_LEVEL; i++)

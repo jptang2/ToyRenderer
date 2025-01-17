@@ -115,7 +115,7 @@ void main()
         if(RandFloat(RAY_PAYLOAD.rand) <= lightSamplePdf)
         {
             lightColor +=   DirectionalLighting(diffuse.xyz, roughness, metallic, worldPos, N, V) * 
-                            RtDirectionalShadow(worldPos) / 
+                            RtDirectionalShadow(worldPos, 0.0f) / 
                             lightSamplePdf;
         }
         else

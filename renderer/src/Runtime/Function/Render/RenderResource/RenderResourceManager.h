@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Math/Math.h"
 #include "Core/Util/IndexAlloctor.h"
 #include "Function/Global/Definations.h"
 #include "Function/Render/RHI/RHIResource.h"
@@ -12,6 +13,7 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -84,6 +86,8 @@ enum PerFrameBindingID
     PER_FRAME_BINDING_MESH_CLUSTER,
     PER_FRAME_BINDING_MESH_CLUSTER_GROUP,
     PER_FRAME_BINDING_MESH_CLUSTER_DRAW_INFO,
+    PER_FRAME_BINDING_MESH_CARD,
+    PER_FRAME_BINDING_SURFACE_CACHE,
     PER_FRAME_BINDING_DEPTH,
     PER_FRAME_BINDING_DEPTH_PYRAMID,
     PER_FRAME_BINDING_VELOCITY,
@@ -146,6 +150,9 @@ public:
     IndexRange AllocateMeshClusterID(uint32_t size)         { return multiFrameResource.meshClusterBuffer.Allocate(size); }      
     void ReleaseMeshClusterID(IndexRange range)             { multiFrameResource.meshClusterBuffer.Release(range); }  
 
+    uint32_t AllocateMeshCardID()                           { return perFrameResources[0].meshCardBuffer.Allocate(6).begin; }      
+    void ReleaseMeshCardID(uint32_t id)                     { perFrameResources[0].meshCardBuffer.Release({id, 6}); }  
+
     IndexRange AllocateMeshClusterGroupID(uint32_t size)    { return multiFrameResource.meshClusterGroupBuffer.Allocate(size); }      
     void ReleaseMeshClusterGroupID(IndexRange range)        { multiFrameResource.meshClusterGroupBuffer.Release(range); }  
 
@@ -166,6 +173,7 @@ public:
     RHITextureRef GetVelocityTexture()                      { return multiFrameResource.velocityTexture->texture; }
     RHITextureRef GetObjectIDTexture()                      { return multiFrameResource.objectIDTexture[0]->texture; }
     RHITextureRef GetPrevObjectIDTexture()                  { return multiFrameResource.objectIDTexture[1]->texture; }
+    TextureRef GetSurfaceCacheTexture(uint32_t id)          { return multiFrameResource.surfaceCacheTexture[id]; }
 
     void SetRenderGlobalSetting(const RenderGlobalSetting& globalSetting);
     void SetTLAS(const RHITopLevelAccelerationStructureRef& tlas);
@@ -179,13 +187,16 @@ public:
     void SetMaterialInfo(const MaterialInfo& materialInfo, uint32_t materialID);
     void SetMeshClusterInfo(const std::vector<MeshClusterInfo>& meshClusterInfo, uint32_t baseMeshClusterID);
     void SetMeshClusterGroupInfo(const std::vector<MeshClusterGroupInfo>& meshClusterGroupInfo, uint32_t baseMeshClusterGroupID);
+    void SetMeshCardInfo(const std::vector<MeshCardInfo>& meshCardInfo, uint32_t baseMeshCardID);
     void SetVertexInfo(const VertexInfo& vertexInfo, uint32_t vertexID);
     void SetGizmoDataCommand(void* data, int size);
+    void GetMeshCardSampleReadback(MeshCardSampleReadBack& readback);
 
     RHIShaderRef GetOrCreateRHIShader(const std::string& path, ShaderFrequency frequency, const std::string& entry = "main");  
     RHIBufferRef GetGlobalClusterDrawInfoBuffer();
     RHIBufferRef GetLightClusterIndexBuffer();
     RHIBufferRef GetGizmoDataBuffer();
+    RHIBufferRef GetSurfaceTileBuffer();
 
     RHIRootSignatureRef GetPerFrameRootSignature()  { return perFrameRootSignature; }
     RHIDescriptorSetRef GetPerFrameDescriptorSet();
@@ -206,8 +217,10 @@ private:
     
         Buffer<CameraInfo> cameraBuffer;                                    // 有固定槽位分配的buffer，且更新频率高
         ArrayBuffer<ObjectInfo, MAX_PER_FRAME_OBJECT_SIZE> objectBuffer;
+        ArrayBuffer<MeshCardInfo, MAX_PER_FRAME_OBJECT_SIZE * 6> meshCardBuffer;
         Buffer<LightInfo> lightBuffer;
-        Buffer<GizmoDrawData> gizmoBuffer = Buffer<GizmoDrawData>(RESOURCE_TYPE_RW_BUFFER | RESOURCE_TYPE_INDIRECT_BUFFER);;
+        Buffer<GizmoDrawData> gizmoBuffer = Buffer<GizmoDrawData>(RESOURCE_TYPE_RW_BUFFER | RESOURCE_TYPE_INDIRECT_BUFFER);
+        Buffer<MeshCardSampleReadBack> cardSampleReadBackBuffer = Buffer<MeshCardSampleReadBack>(RESOURCE_TYPE_RW_BUFFER, MEMORY_USAGE_GPU_TO_CPU);
     };
     std::array<PerFrameResource, FRAMES_IN_FLIGHT> perFrameResources;
 
@@ -232,6 +245,7 @@ private:
         std::array<TextureRef, 2> depthPyramidTexture;  // MIN, MAX 
         TextureRef velocityTexture;
         std::array<TextureRef, 2> objectIDTexture;      // current, history
+        std::array<TextureRef, 5> surfaceCacheTexture;
         std::vector<SamplerRef> samplers; 
     };
     MultiFrameResource multiFrameResource;

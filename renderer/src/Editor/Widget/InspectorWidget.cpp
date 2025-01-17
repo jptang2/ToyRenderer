@@ -3,6 +3,7 @@
 #include "Core/Util/TimeScope.h"
 #include "Function/Global/EngineContext.h"
 #include "PassWidget.h"
+#include "SurfaceCacheWidget.h"
 #include "TimerWidget.h"
 #include "RDGGraphWidget.h"
 
@@ -59,6 +60,8 @@ void InspectorWidget::InspectorUI()
 
 void InspectorWidget::PassUI()
 {	
+	SurfaceCacheWidget::UI();
+	ImGui::SameLine();
 	RDGGraphWidget::UI();
 	for(auto& pass : EngineContext::Render()->GetPasses())
 	{

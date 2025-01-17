@@ -60,7 +60,7 @@ void DDGIPass::Build(RDGBuilder& builder)
 {
     if( IsEnabled() && 
         !EngineContext::Render()->IsPassEnabled(RESTIR_PASS) &&
-        !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS) && 
+        // !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS) &&    //Surface cache有使用
         !EngineContext::Render()->IsPassEnabled(PATH_TRACING_PASS))
     {
         volumeLights = EngineContext::Render()->GetLightManager()->GetVolumeLights();

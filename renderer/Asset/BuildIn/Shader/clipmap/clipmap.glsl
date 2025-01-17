@@ -31,19 +31,19 @@ struct ClipmapRegion
 };
 
 // Y轴 延伸mipLevel倍
-// Z轴 延伸6倍（6个表面, 按下标顺序为前，后，左，右，上，下）（+X, -X, -Z, +Z, +Y, -Y）
+// Z轴 延伸6倍（6个表面, 按下标顺序为前，后，上，下，右，左）（+X, -X, +Y, -Y, +Z, -Z）
 
 // 根据trace方向选择对应的三个layer (与主方向相反的面)
 ivec3 FetchClipmapLayers(vec3 traceDir)
 {
     return ivec3((traceDir.x > 0) ? 1 : 0,
-                 (traceDir.y > 0) ? 5 : 4,
-                 (traceDir.z > 0) ? 2 : 3);
+                 (traceDir.y > 0) ? 3 : 2,
+                 (traceDir.z > 0) ? 5 : 4);
 
     // vec3 absDir = abs(traceDir);
     // if(absDir.x >= absDir.y && absDir.x >= absDir.z)        return (traceDir.x > 0) ? 1 : 0;   
-    // else if(absDir.y >= absDir.x && absDir.y >= absDir.z)   return (traceDir.y > 0) ? 5 : 4;   
-    // else                                                    return (traceDir.z > 0) ? 2 : 3;    
+    // else if(absDir.y >= absDir.x && absDir.y >= absDir.z)   return (traceDir.y > 0) ? 3 : 2;   
+    // else                                                    return (traceDir.z > 0) ? 5 : 4;    
 }
 
 // 在clipmap中的UV坐标，[0, 1] (repeat, toroidal addressing)

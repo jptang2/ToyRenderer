@@ -63,7 +63,7 @@ void main()
         vec3 V = normalize(CAMERA.pos.xyz - worldPos.xyz);	
 
         finalColor.xyz +=   DirectionalLighting(diffuse, roughness, metallic, worldPos, N, V) * 
-                            RtDirectionalShadow(worldPos);
+                            RtDirectionalShadow(worldPos, 0.0f);
     }
 
 

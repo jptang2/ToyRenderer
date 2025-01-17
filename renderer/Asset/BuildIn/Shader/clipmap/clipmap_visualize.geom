@@ -99,8 +99,9 @@ void main()
 
 	if(colors[0].a >= 0.001)	Emit(v6, v5, v2, v1, colors[0]);	// 前 +X
 	if(colors[1].a >= 0.001)	Emit(v4, v7, v0, v3, colors[1]);	// 后 -X
-	if(colors[2].a >= 0.001)	Emit(v5, v4, v1, v0, colors[2]);	// 左 -Z
-	if(colors[3].a >= 0.001)	Emit(v7, v6, v3, v2, colors[3]);	// 右 +Z
-	if(colors[4].a >= 0.001)	Emit(v5, v6, v4, v7, colors[4]);	// 上 +Y
-	if(colors[5].a >= 0.001)	Emit(v1, v2, v0, v3, colors[5]);	// 下 -Y
+	if(colors[2].a >= 0.001)	Emit(v5, v6, v4, v7, colors[2]);	// 上 +Y
+	if(colors[3].a >= 0.001)	Emit(v1, v2, v0, v3, colors[3]);	// 下 -Y
+	if(colors[4].a >= 0.001)	Emit(v7, v6, v3, v2, colors[4]);	// 右 +Z
+	if(colors[5].a >= 0.001)	Emit(v5, v4, v1, v0, colors[5]);	// 左 -Z
+
 }

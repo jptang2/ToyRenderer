@@ -69,6 +69,19 @@
 
 #define MAX_GIZMO_PRIMITIVE_COUNT 102400            //gizmo可以绘制的最大图元数目
 
+#define SURFACE_CACHE_SIZE 4096
+#define SURFACE_CACHE_PADDING 1	                        // 所有分配块的左边和上边是一像素的padding
+#define MAX_SURFACE_CACHE_LOD 5	                        // 取小于
+#define MAX_SURFACE_CACHE_LOD_SIZE 128			        // 最大的一级LOD的单块分辨率
+#define MIN_SURFACE_CACHE_LOD_SIZE 8			        // 最小的一级LOD的单块分辨率，也是光照计算的基本单位
+#define SURFACE_CACHE_TILE_COUNT (SURFACE_CACHE_SIZE / MIN_SURFACE_CACHE_LOD_SIZE)
+#define MAX_SURFACE_CACHE_RASTERIZE_SIZE 256	        // 每帧最大光栅化buget，UE是512
+#define MAX_SURFACE_CACHE_DIRECT_LIGHTING_SIZE 1024	    // 每帧最大直接光照buget
+#define MAX_SURFACE_CACHE_INDIRECT_LIGHTING_SIZE 512    // 每帧最大间接光照buget
+#define SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE 8	    // 直接光照tile尺寸
+#define SURFACE_CACHE_DIRECT_INLIGHTING_TILE_SIZE 4	    // 间接光照tile尺寸
+#define SURFACE_CACHE_LOD_SIZE(x) (MAX_SURFACE_CACHE_LOD_SIZE >> (x))
+
 ///////////////////////////////////////////////////////////////////////////////
 
 #define PER_FRAME_BINDING_GLOBAL_SETTING                0
@@ -87,28 +100,30 @@
 #define PER_FRAME_BINDING_MESH_CLUSTER                  13
 #define PER_FRAME_BINDING_MESH_CLUSTER_GROUP            14  
 #define PER_FRAME_BINDING_MESH_CLUSTER_DRAW_INFO        15
-#define PER_FRAME_BINDING_DEPTH                         16
-#define PER_FRAME_BINDING_DEPTH_PYRAMID                 17
-#define PER_FRAME_BINDING_VELOCITY                      18
-#define PER_FRAME_BINDING_OBJECT_ID                     19
-#define PER_FRAME_BINDING_VERTEX                        20
-#define PER_FRAME_BINDING_GIZMO                         21
-#define PER_FRAME_BINDING_BINDLESS_POSITION             22
-#define PER_FRAME_BINDING_BINDLESS_NORMAL               23
-#define PER_FRAME_BINDING_BINDLESS_TANGENT              24
-#define PER_FRAME_BINDING_BINDLESS_TEXCOORD             25
-#define PER_FRAME_BINDING_BINDLESS_COLOR                26
-#define PER_FRAME_BINDING_BINDLESS_BONE_INDEX           27
-#define PER_FRAME_BINDING_BINDLESS_BONE_WEIGHT          28
-#define PER_FRAME_BINDING_BINDLESS_ANIMATION            29
-#define PER_FRAME_BINDING_BINDLESS_INDEX                30
-#define PER_FRAME_BINDING_BINDLESS_SAMPLER              31
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_1D           32
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_1D_ARRAY     33
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_2D           34
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_2D_ARRAY     35
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_CUBE         36
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_3D           37
+#define PER_FRAME_BINDING_MESH_CARD                     16
+#define PER_FRAME_BINDING_SURFACE_CACHE                 17
+#define PER_FRAME_BINDING_DEPTH                         18
+#define PER_FRAME_BINDING_DEPTH_PYRAMID                 19
+#define PER_FRAME_BINDING_VELOCITY                      20
+#define PER_FRAME_BINDING_OBJECT_ID                     21
+#define PER_FRAME_BINDING_VERTEX                        22
+#define PER_FRAME_BINDING_GIZMO                         23
+#define PER_FRAME_BINDING_BINDLESS_POSITION             24
+#define PER_FRAME_BINDING_BINDLESS_NORMAL               25
+#define PER_FRAME_BINDING_BINDLESS_TANGENT              26
+#define PER_FRAME_BINDING_BINDLESS_TEXCOORD             27
+#define PER_FRAME_BINDING_BINDLESS_COLOR                28
+#define PER_FRAME_BINDING_BINDLESS_BONE_INDEX           29
+#define PER_FRAME_BINDING_BINDLESS_BONE_WEIGHT          30
+#define PER_FRAME_BINDING_BINDLESS_ANIMATION            31
+#define PER_FRAME_BINDING_BINDLESS_INDEX                32
+#define PER_FRAME_BINDING_BINDLESS_SAMPLER              33
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_1D           34
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_1D_ARRAY     35
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_2D           36
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_2D_ARRAY     37
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_CUBE         38
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_3D           39
 
 #if(ENABLE_RAY_TRACING != 0)
 #extension GL_EXT_ray_tracing : enable
@@ -156,13 +171,16 @@ struct GlobalIconInfo           //图标的bindless索引
 
 struct Object 
 {
+    mat4 model;
     mat4 prevModel;
-    mat4 model; 
+    mat4 invModel;
 
     uint animationID;           //动画buffer索引
     uint materialID;            //材质buffer索引
     uint vertexID;
-    uint indexID;           
+    uint indexID;  
+    uint meshCardID;            //card索引起始值
+    uint _padding[3];           
 
     BoundingSphere sphere;  
     BoundingBox box;
@@ -366,6 +384,24 @@ struct MeshClusterDrawInfo
     uint clusterID;     // 对cluster的索引
 };
 
+struct MeshCardInfo     // 单个Card的全部信息
+{
+	vec3 viewPosition;
+    float _padding0;
+	vec3 viewExtent;
+	float _padding1;
+    vec3 scale;
+    float _padding2;
+
+	mat4 view;
+    mat4 proj;
+    mat4 invView;
+    mat4 invProj;
+
+	uvec2 atlasOffset;
+	uvec2 atlasExtent;
+};
+
 layout(set = 0, binding = PER_FRAME_BINDING_GLOBAL_SETTING) buffer global_setting {
     
     uint skyboxMaterialID;
@@ -407,7 +443,7 @@ layout(set = 0, binding = PER_FRAME_BINDING_CAMERA) uniform camera {
 
 layout(set = 0, binding = PER_FRAME_BINDING_OBJECT) readonly buffer objects {
 
-    Object slot[MAX_PER_FRAME_RESOURCE_SIZE];
+    Object slot[MAX_PER_FRAME_OBJECT_SIZE];
 
 } OBJECTS;
 
@@ -461,6 +497,14 @@ layout(set = 0, binding = PER_FRAME_BINDING_MESH_CLUSTER_DRAW_INFO) buffer mesh_
     MeshClusterDrawInfo slot[MAX_PER_FRAME_CLUSTER_SIZE * MAX_SUPPORTED_MESH_PASS_COUNT];
 
 } MESH_CLUSTER_DRAW_INFOS;
+
+layout(set = 0, binding = PER_FRAME_BINDING_MESH_CARD) buffer mesh_cards { 
+
+    MeshCardInfo slot[MAX_PER_FRAME_OBJECT_SIZE * 6];
+
+} MESH_CARDS;
+
+layout(set = 0, binding = PER_FRAME_BINDING_SURFACE_CACHE) uniform texture2D SURFACE_CACHE[5];  // diffuse normal emmision lighting depth  
 
 layout(set = 0, binding = PER_FRAME_BINDING_DEPTH) uniform texture2D DEPTH[2];  // 本帧，前一帧
 
@@ -1008,5 +1052,6 @@ uint FetchObjectIDTex(in ivec2 pixel) {
 #include "brdf.glsl"
 #include "light.glsl"
 #include "reprojection.glsl"
+#include "surface_cache.glsl"
 
 #endif
