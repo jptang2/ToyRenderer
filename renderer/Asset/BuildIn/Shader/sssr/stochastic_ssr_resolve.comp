@@ -80,29 +80,44 @@ void main()
         ivec2 neighburTex   = tracePixel.xy + ivec2(round(ditterRotation * deltaUV[i]));
         ivec2 neighburFullTex = HALF_SIZE_SSSR ? neighburTex * 2 : neighburTex;
 
-        vec4 traceResult    = imageLoad(SSSR_RAW, neighburTex);
+        vec4 traceResult    = imageLoad(SSSR_HIT_RESULT, neighburTex);
+        vec4 traceColor     = imageLoad(SSSR_HIT_COLOR, neighburTex);
         float hitPdf        = imageLoad(SSSR_PDF, neighburTex).x;
         float hitMask       = traceResult.w;
         vec2 hitUV          = traceResult.xy;   
         // float hitDepth      = traceResult.z;    //traceResult.z != fetchDepth
 
-        vec4 hitPos         = DepthToWorld(hitUV);
-        //vec4 hitPos         = ScreenToView(hitUV, hitDepth);  // 这个有精度问题
-        vec3 L              = normalize(hitPos.xyz - worldPos.xyz);
-
-        float localBRDF     = ResolveSpecularBRDF(vec3(1.0f), roughness, metallic, N, V, L).x;
-        float weight        = localBRDF / max(1e-5, hitPdf);    // 权重推导 https://zhuanlan.zhihu.com/p/689424019
-
-        // 采样使用伪cone tracing，预先滤波颜色缓冲，然后根据粗糙度，追踪距离等估计采样mip
-        float radius        = coneTangent * length(hitUV - uv);
-        float mip           = clamp(log2(radius * WINDOW_WIDTH), 0, 6);
-        vec4 hitColor       = textureLod(sampler2D(IN_COLOR_PYRAMID, SAMPLER[0]), hitUV, mip); 
-            
-        if(hitMask == 2.0f)  // 被遮挡的情况，当作黑色单独处理
+        vec4 hitColor;
+        float weight;
+        if(SETTING.mode == 0)
         {
-            hitColor = vec4(0.0f);
-            hitMask = 1.0f;
-            weight = 1.0f;
+            vec4 hitPos         = DepthToWorld(hitUV);
+            vec3 L              = normalize(hitPos.xyz - worldPos.xyz);
+
+            float localBRDF     = ResolveSpecularBRDF(vec3(1.0f), roughness, metallic, N, V, L).x;
+            weight              = localBRDF / max(1e-5, hitPdf);    // 权重推导 https://zhuanlan.zhihu.com/p/689424019
+
+            // 采样使用伪cone tracing，预先滤波颜色缓冲，然后根据粗糙度，追踪距离等估计采样mip
+            float radius        = coneTangent * length(hitUV - uv);
+            float mip           = clamp(log2(radius * WINDOW_WIDTH), 0, 6);
+            hitColor            = textureLod(sampler2D(IN_COLOR_PYRAMID, SAMPLER[0]), hitUV, mip); 
+
+            // if(hitMask == 2.0f)  // 被遮挡的情况，当作黑色单独处理
+            // {
+            //     hitColor = vec4(0.0f);
+            //     hitMask = 1.0f;
+            //     weight = 1.0f;
+            // }
+        }
+        else if(SETTING.mode == 1 || SETTING.mode == 2)
+        {
+            vec4 hitPos         = traceResult;
+            vec3 L              = normalize(hitPos.xyz - worldPos.xyz);
+
+            float localBRDF     = ResolveSpecularBRDF(vec3(1.0f), roughness, metallic, N, V, L).x;
+            weight              = localBRDF / max(1e-5, hitPdf);    
+
+            hitColor            = traceColor;
         }
 
         accumulatedColor    += vec4(ToneMap(hitColor.rgb), hitMask) * weight; 

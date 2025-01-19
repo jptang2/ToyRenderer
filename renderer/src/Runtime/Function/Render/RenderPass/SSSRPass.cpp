@@ -14,14 +14,15 @@ void SSSRPass::Init()
 
     RHIRootSignatureInfo rootSignatureInfo = {};
     rootSignatureInfo.AddEntry(EngineContext::RenderResource()->GetPerFrameRootSignature()->GetInfo())
-                     .AddEntry({1, 0, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // SSSR_RAW
-                     .AddEntry({1, 1, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // SSSR_PDF
-                     .AddEntry({1, 2, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // SSSR_RESOLVE
-                     .AddEntry({1, 3, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // SSSR_HISTORY
-                     .AddEntry({1, 4, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // OUT_COLOR
-                     .AddEntry({1, 5, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // IN_COLOR_PYRAMID
-                     .AddEntry({1, 6, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // BRDF_LUT
-                     .AddEntry({1, 7, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // REPROJECTION_RESULT
+                     .AddEntry({1, 0, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // SSSR_HIT_RESULT
+                     .AddEntry({1, 1, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // SSSR_HIT_COLOR
+                     .AddEntry({1, 2, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // SSSR_PDF
+                     .AddEntry({1, 3, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // SSSR_RESOLVE
+                     .AddEntry({1, 4, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // SSSR_HISTORY
+                     .AddEntry({1, 5, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // OUT_COLOR
+                     .AddEntry({1, 6, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // IN_COLOR_PYRAMID
+                     .AddEntry({1, 7, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // BRDF_LUT
+                     .AddEntry({1, 8, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // REPROJECTION_RESULT
                      .AddEntry({2, 0, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // G_BUFFER_DIFFUSE_ROUGHNESS
                      .AddEntry({2, 1, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // G_BUFFER_NORMAL_METALLIC
                      .AddEntry({2, 2, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // G_BUFFER_EMISSION
@@ -58,7 +59,16 @@ void SSSRPass::Build(RDGBuilder& builder)
         Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
         Extent2D halfWindowExtent = HALF_SIZE_SSSR ? EngineContext::Render()->GetHalfWindowsExtent() : windowExtent;
 
-        RDGTextureHandle sssrRaw = builder.CreateTexture("SSSR Raw")
+        RDGTextureHandle sssrHit = builder.CreateTexture("SSSR Hit Result")
+            .Exetent({halfWindowExtent.width, halfWindowExtent.height, 1})
+            .Format(EngineContext::Render()->GetHdrColorFormat())
+            .ArrayLayers(1)
+            .MipLevels(1)
+            .MemoryUsage(MEMORY_USAGE_GPU_ONLY)
+            .AllowReadWrite()
+            .Finish();
+
+        RDGTextureHandle sssrColor = builder.CreateTexture("SSSR Hit Color")
             .Exetent({halfWindowExtent.width, halfWindowExtent.height, 1})
             .Format(EngineContext::Render()->GetHdrColorFormat())
             .ArrayLayers(1)
@@ -117,14 +127,15 @@ void SSSRPass::Build(RDGBuilder& builder)
 
         RDGComputePassHandle pass0 = builder.CreateComputePass(GetName() + " Trace")
             .RootSignature(rootSignature)
-            .ReadWrite(1, 0, 0, sssrRaw)
-            .ReadWrite(1, 1, 0, sssrPDF)
-            .ReadWrite(1, 2, 0, sssrResolve)
-            .ReadWrite(1, 3, 0, sssrHistory)
-            .ReadWrite(1, 4, 0, outColor)
-            .Read(1, 5, 0, inColorPyramid)
-            .Read(1, 6, 0, brdfLut)
-            .Read(1, 7, 0, reprojectionOut)      
+            .ReadWrite(1, 0, 0, sssrHit)
+            .ReadWrite(1, 1, 0, sssrColor)
+            .ReadWrite(1, 2, 0, sssrPDF)
+            .ReadWrite(1, 3, 0, sssrResolve)
+            .ReadWrite(1, 4, 0, sssrHistory)
+            .ReadWrite(1, 5, 0, outColor)
+            .Read(1, 6, 0, inColorPyramid)
+            .Read(1, 7, 0, brdfLut)
+            .Read(1, 8, 0, reprojectionOut)      
             .ReadWrite(2, 0, 0, diffuse)
             .ReadWrite(2, 1, 0, normal)
             .ReadWrite(2, 2, 0, emission)
@@ -147,14 +158,15 @@ void SSSRPass::Build(RDGBuilder& builder)
 
         RDGComputePassHandle pass1 = builder.CreateComputePass(GetName() + " Resolve")
             .RootSignature(rootSignature)
-            .ReadWrite(1, 0, 0, sssrRaw)
-            .ReadWrite(1, 1, 0, sssrPDF)
-            .ReadWrite(1, 2, 0, sssrResolve)
-            .ReadWrite(1, 3, 0, sssrHistory)
-            .ReadWrite(1, 4, 0, outColor)
-            .Read(1, 5, 0, inColorPyramid)
-            .Read(1, 6, 0, brdfLut)
-            .Read(1, 7, 0, reprojectionOut)      
+            .ReadWrite(1, 0, 0, sssrHit)
+            .ReadWrite(1, 1, 0, sssrColor)
+            .ReadWrite(1, 2, 0, sssrPDF)
+            .ReadWrite(1, 3, 0, sssrResolve)
+            .ReadWrite(1, 4, 0, sssrHistory)
+            .ReadWrite(1, 5, 0, outColor)
+            .Read(1, 6, 0, inColorPyramid)
+            .Read(1, 7, 0, brdfLut)
+            .Read(1, 8, 0, reprojectionOut)      
             .ReadWrite(2, 0, 0, diffuse)
             .ReadWrite(2, 1, 0, normal)
             .ReadWrite(2, 2, 0, emission)
@@ -176,14 +188,15 @@ void SSSRPass::Build(RDGBuilder& builder)
 
         RDGComputePassHandle pass2 = builder.CreateComputePass(GetName() + " Filter")
             .RootSignature(rootSignature)
-            .ReadWrite(1, 0, 0, sssrRaw)
-            .ReadWrite(1, 1, 0, sssrPDF)
-            .ReadWrite(1, 2, 0, sssrResolve)
-            .ReadWrite(1, 3, 0, sssrHistory)
-            .ReadWrite(1, 4, 0, outColor)
-            .Read(1, 5, 0, inColorPyramid)
-            .Read(1, 6, 0, brdfLut)
-            .Read(1, 7, 0, reprojectionOut)      
+            .ReadWrite(1, 0, 0, sssrHit)
+            .ReadWrite(1, 1, 0, sssrColor)
+            .ReadWrite(1, 2, 0, sssrPDF)
+            .ReadWrite(1, 3, 0, sssrResolve)
+            .ReadWrite(1, 4, 0, sssrHistory)
+            .ReadWrite(1, 5, 0, outColor)
+            .Read(1, 6, 0, inColorPyramid)
+            .Read(1, 7, 0, brdfLut)
+            .Read(1, 8, 0, reprojectionOut)      
             .ReadWrite(2, 0, 0, diffuse)
             .ReadWrite(2, 1, 0, normal)
             .ReadWrite(2, 2, 0, emission)

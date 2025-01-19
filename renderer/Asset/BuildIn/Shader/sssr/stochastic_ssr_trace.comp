@@ -127,7 +127,7 @@ vec4 TraceHiz( int startLevel,
             float finalHitDepth     = LinearEyeDepth(SampleDepth(DEPTH[0], SAMPLER[2], 0, current.xy),   CAMERA.near, CAMERA.far);
 
             // 命中判定：厚度满足要求（反射march到的深度与该点处遮挡深度差），并非无限远处，uv有效，不是到循环才停止，trace距离足够远
-            if( //(finalMarchDepth > finalHitDepth - thickness) &&    // 在指定厚度的前面（trace到的结果可见）
+            if( (finalMarchDepth > finalHitDepth - thickness) &&    // 在指定厚度的前面（trace到的结果可见）
                 !(FetchDepth(current.xy) > 0.999f) &&               // 并非trace到天空盒
                 ValidUV(current.xy, vec2(0.01)) &&                  // UV有效
                 loop < maxLoop &&                                   // 未超出最大循环
@@ -135,7 +135,7 @@ vec4 TraceHiz( int startLevel,
             {
                 valid = 1.0f;
 
-                if(!(finalMarchDepth > finalHitDepth - thickness)) valid = 2.0f;
+                // if(!(finalMarchDepth > finalHitDepth - thickness)) valid = 2.0f;
             }
             break;
         }
@@ -144,6 +144,26 @@ vec4 TraceHiz( int startLevel,
     return vec4(current.xy, 1.0 / current.z, valid);
 }
 
+
+vec4 RayTraceSurfaceCache(
+    out vec4 lighting,
+    vec3 worldPos,
+    vec3 worldDir)
+{
+    uint hitObjectID;
+    vec4 hitPos;
+    vec3 hitNormal;
+
+    bool valid = RayQueryHitObject(
+    worldPos, worldPos + normalize(worldDir) * MAX_RAY_TRACING_DISTANCE, 
+    hitObjectID, 
+    hitPos, 
+    hitNormal);
+
+    if(valid)   FetchSurfaceCacheLighting(lighting, hitObjectID, hitPos.xyz, hitNormal);
+    if(valid)   return hitPos;
+    else        return vec4(0.0f);
+}
 
 
 #define THREAD_SIZE_X 16
@@ -190,7 +210,7 @@ void main() {
         roughness   > SETTING.maxRoughness ||
         depth == 1.0f)                                              //没有有效信息
     {
-		imageStore(SSSR_RAW, ivec2(pixel.xy), vec4(0.0f) );
+		imageStore(SSSR_HIT_RESULT, ivec2(pixel.xy), vec4(0.0f) );
         imageStore(SSSR_PDF, ivec2(pixel.xy), vec4(0.0f) );
         return;
     }
@@ -209,13 +229,45 @@ void main() {
     float pdf           = RayPDFToReflectionRayPDF(VoH, HPDF);
     vec3 L              = normalize(2.0 * dot(V, H) * H - V);
 
-    vec4 tarceResult    = TraceHiz(SETTING.startMip, SETTING.maxMip, SETTING.endMip, SETTING.maxLoop, SETTING.thickness, worldPos.xyz, L);
-    if(tarceResult.a == 1.0f) 
-        tarceResult.a   = Square(tarceResult.a * GetScreenFadeBord(tarceResult.xy, SETTING.screenFade));     //屏幕边缘淡出
-
     // 输出结果， 本轮输出的是光线命中点的位置信息和PDF，下轮负责采样颜色和计算 /////////////////////////////
-    imageStore(SSSR_RAW, ivec2(pixel.xy), tarceResult);
-    imageStore(SSSR_PDF, ivec2(pixel.xy), vec4(pdf, vec3(0.0f)));
+
+    if(SETTING.mode == 0)
+    {
+        vec4 tarceResult    = TraceHiz(SETTING.startMip, SETTING.maxMip, SETTING.endMip, SETTING.maxLoop, SETTING.thickness, worldPos.xyz, L);
+        if(tarceResult.a == 1.0f) 
+            tarceResult.a   = Square(tarceResult.a * GetScreenFadeBord(tarceResult.xy, SETTING.screenFade));     //屏幕边缘淡出
+
+        imageStore(SSSR_HIT_RESULT, ivec2(pixel.xy), tarceResult);
+        imageStore(SSSR_PDF, ivec2(pixel.xy), vec4(pdf, vec3(0.0f)));
+    }
+    else if(SETTING.mode == 1)
+    {
+        vec4 hitColor;
+        vec4 hitPos = RayTraceSurfaceCache(hitColor, worldPos.xyz, L);
+
+        imageStore(SSSR_HIT_COLOR, ivec2(pixel.xy), hitColor);
+        imageStore(SSSR_HIT_RESULT, ivec2(pixel.xy), hitPos);
+    }
+    else if(SETTING.mode == 2)
+    {
+        vec4 tarceResult    = TraceHiz(SETTING.startMip, SETTING.maxMip, SETTING.endMip, SETTING.maxLoop, SETTING.thickness, worldPos.xyz, L);
+
+        vec4 hitColor;
+        vec4 hitPos;
+        if(tarceResult.a == 0.0f) 
+        {
+            // worldPos = DepthToWorld(tarceResult.xy);
+            hitPos = RayTraceSurfaceCache(hitColor, worldPos.xyz, L);
+        }
+        else 
+        {
+            hitPos = DepthToWorld(tarceResult.xy);
+            hitColor = textureLod(sampler2D(IN_COLOR_PYRAMID, SAMPLER[0]), tarceResult.xy, 0); 
+        }
+
+        imageStore(SSSR_HIT_COLOR, ivec2(pixel.xy), hitColor);
+        imageStore(SSSR_HIT_RESULT, ivec2(pixel.xy), hitPos);
+    }   
 }
 
 

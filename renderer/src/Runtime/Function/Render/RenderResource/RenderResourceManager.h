@@ -87,6 +87,7 @@ enum PerFrameBindingID
     PER_FRAME_BINDING_MESH_CLUSTER_GROUP,
     PER_FRAME_BINDING_MESH_CLUSTER_DRAW_INFO,
     PER_FRAME_BINDING_MESH_CARD,
+    PER_FRAME_BINDING_MESH_CARD_READBACK,
     PER_FRAME_BINDING_SURFACE_CACHE,
     PER_FRAME_BINDING_DEPTH,
     PER_FRAME_BINDING_DEPTH_PYRAMID,
@@ -187,10 +188,10 @@ public:
     void SetMaterialInfo(const MaterialInfo& materialInfo, uint32_t materialID);
     void SetMeshClusterInfo(const std::vector<MeshClusterInfo>& meshClusterInfo, uint32_t baseMeshClusterID);
     void SetMeshClusterGroupInfo(const std::vector<MeshClusterGroupInfo>& meshClusterGroupInfo, uint32_t baseMeshClusterGroupID);
-    void SetMeshCardInfo(const std::vector<MeshCardInfo>& meshCardInfo, uint32_t baseMeshCardID);
+    void SetMeshCardInfo(const MeshCardInfo& meshCardInfo, uint32_t meshCardID);
     void SetVertexInfo(const VertexInfo& vertexInfo, uint32_t vertexID);
     void SetGizmoDataCommand(void* data, int size);
-    void GetMeshCardSampleReadback(MeshCardSampleReadBack& readback);
+    void GetMeshCardReadback(MeshCardReadBack& readback);
 
     RHIShaderRef GetOrCreateRHIShader(const std::string& path, ShaderFrequency frequency, const std::string& entry = "main");  
     RHIBufferRef GetGlobalClusterDrawInfoBuffer();
@@ -220,7 +221,6 @@ private:
         ArrayBuffer<MeshCardInfo, MAX_PER_FRAME_OBJECT_SIZE * 6> meshCardBuffer;
         Buffer<LightInfo> lightBuffer;
         Buffer<GizmoDrawData> gizmoBuffer = Buffer<GizmoDrawData>(RESOURCE_TYPE_RW_BUFFER | RESOURCE_TYPE_INDIRECT_BUFFER);
-        Buffer<MeshCardSampleReadBack> cardSampleReadBackBuffer = Buffer<MeshCardSampleReadBack>(RESOURCE_TYPE_RW_BUFFER, MEMORY_USAGE_GPU_TO_CPU);
     };
     std::array<PerFrameResource, FRAMES_IN_FLIGHT> perFrameResources;
 
@@ -231,6 +231,7 @@ private:
         RHIDescriptorSetRef samplerDescriptorSet;
 
         Buffer<RenderGlobalSetting> globalSettingBuffer;                    // 有固定槽位分配的buffer，且更新频率低
+        Buffer<MeshCardReadBack> cardReadBackBuffer = Buffer<MeshCardReadBack>(RESOURCE_TYPE_RW_BUFFER, MEMORY_USAGE_GPU_TO_CPU); // 需要每帧更新，但是都用同一个
         ArrayBuffer<MeshClusterInfo, MAX_PER_FRAME_CLUSTER_SIZE> meshClusterBuffer;
         ArrayBuffer<MeshClusterGroupInfo, MAX_PER_FRAME_CLUSTER_SIZE> meshClusterGroupBuffer;
         ArrayBuffer<MaterialInfo, MAX_PER_FRAME_RESOURCE_SIZE> materialBuffer;

@@ -127,8 +127,11 @@ void InitScene()
         // transformComponent->SetPosition({-30.767f, 5.027f, 12.705f});
         // transformComponent->SetRotation({0.0f, 17.0f, -24.0f});
 
-        transformComponent->SetPosition({-13.898f, 3.495f, -10.011f});
-        transformComponent->SetRotation({0.0f, -58.5f, -8.5f});
+        // transformComponent->SetPosition({-13.898f, 3.495f, -10.011f});
+        // transformComponent->SetRotation({0.0f, -58.5f, -8.5f});
+
+        transformComponent->SetPosition({-29.5f, 1.0f, 10.2f});
+        transformComponent->SetRotation({0.0f, 30.0f, -6.5f});
     }
 
     // Directional light

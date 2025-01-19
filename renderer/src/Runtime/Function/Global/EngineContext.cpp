@@ -31,7 +31,7 @@ std::shared_ptr<EngineContext> EngineContext::Init()
 
     context->threadPool = QueuedThreadPool::Create(10);
 
-    context->rhiBackend = RHIBackend::Init({.type = BACKEND_VULKAN, .enableDebug = false, .enableRayTracing = ENABLE_RAY_TRACING});
+    context->rhiBackend = RHIBackend::Init({.type = BACKEND_VULKAN, .enableDebug = true, .enableRayTracing = ENABLE_RAY_TRACING});
 
     context->renderResourceManger = std::make_shared<RenderResourceManager>();
     context->renderResourceManger->Init();

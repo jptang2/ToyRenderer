@@ -143,9 +143,9 @@ void RenderResourceManager::SetMeshClusterGroupInfo(const std::vector<MeshCluste
     multiFrameResource.meshClusterGroupBuffer.SetData(meshClusterGroupInfo, baseMeshClusterGroupID);
 }
 
-void RenderResourceManager::SetMeshCardInfo(const std::vector<MeshCardInfo>& meshCardInfo, uint32_t baseMeshCardID)
+void RenderResourceManager::SetMeshCardInfo(const MeshCardInfo& meshCardInfo, uint32_t meshCardID)
 {
-    perFrameResources[EngineContext::CurrentFrameIndex()].meshCardBuffer.SetData(meshCardInfo, baseMeshCardID);
+    perFrameResources[EngineContext::CurrentFrameIndex()].meshCardBuffer.SetData(meshCardInfo, meshCardID);
 }
 
 void RenderResourceManager::SetVertexInfo(const VertexInfo& vertexInfo, uint32_t vertexID)
@@ -161,9 +161,9 @@ void RenderResourceManager::SetGizmoDataCommand(void* data, int size)
         0);    
 }
 
-void RenderResourceManager::GetMeshCardSampleReadback(MeshCardSampleReadBack& readback)
+void RenderResourceManager::GetMeshCardReadback(MeshCardReadBack& readback)
 {
-    perFrameResources[EngineContext::CurrentFrameIndex()].cardSampleReadBackBuffer.GetData(&readback);
+    multiFrameResource.cardReadBackBuffer.GetData(&readback);
 }
 
 RHIShaderRef RenderResourceManager::GetOrCreateRHIShader(const std::string& path, ShaderFrequency frequency, const std::string& entry)
@@ -227,6 +227,7 @@ void RenderResourceManager::InitGlobalResources()
         .AddEntry({0, PER_FRAME_BINDING_MESH_CLUSTER_GROUP, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_MESH_CLUSTER_DRAW_INFO, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_MESH_CARD, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
+        .AddEntry({0, PER_FRAME_BINDING_MESH_CARD_READBACK, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_BUFFER})
         .AddEntry({0, PER_FRAME_BINDING_SURFACE_CACHE, 5, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
         .AddEntry({0, PER_FRAME_BINDING_DEPTH, 2, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
         .AddEntry({0, PER_FRAME_BINDING_DEPTH_PYRAMID, 2, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})
@@ -447,6 +448,12 @@ void RenderResourceManager::InitGlobalResources()
             .index = 0,
             .resourceType = RESOURCE_TYPE_RW_BUFFER,
             .buffer = resource.meshCardBuffer.buffer});
+
+        resource.descriptorSet->UpdateDescriptor({
+            .binding = PER_FRAME_BINDING_MESH_CARD_READBACK,
+            .index = 0,
+            .resourceType = RESOURCE_TYPE_RW_BUFFER,
+            .buffer = multiFrameResource.cardReadBackBuffer.buffer});
 
         resource.descriptorSet->UpdateDescriptor({
             .binding = PER_FRAME_BINDING_MATERIAL,

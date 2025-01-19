@@ -19,6 +19,7 @@ public:
 private:
 	struct SSSRSetting 
 	{
+		int mode = 1;
 		int maxMip = 7;			// 一个限制条件是hiz分辨率必须是二次幂，否则每层mip边缘对不上
 		int startMip = 0;		// 这里没有单独处理，因此只能用前1152 / 9 = 128 = 2^7 层?  实际用10好像也行
 		int endMip = 0;

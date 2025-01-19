@@ -111,6 +111,7 @@ float FetchMeshCardLighting(inout vec4 lighting, uint meshCardID, vec3 localPos,
 {
     MeshCardInfo card = MESH_CARDS.slot[meshCardID];
     if(card.atlasExtent == uvec2(0)) return 0.0f;    // 未分配
+    MESH_CARD_READBACKS.slot[meshCardID] = GLOBAL_SETTING.totalTicks;   // 写入当前card的最近使用时间
     
     vec3 worldPos = localPos * card.scale;           // 在card和对应的虚拟相机所在空间进行后续计算
     vec3 ndcPos = (card.proj * card.view * vec4(worldPos, 1.0f)).xyz;

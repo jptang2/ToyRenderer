@@ -101,29 +101,30 @@
 #define PER_FRAME_BINDING_MESH_CLUSTER_GROUP            14  
 #define PER_FRAME_BINDING_MESH_CLUSTER_DRAW_INFO        15
 #define PER_FRAME_BINDING_MESH_CARD                     16
-#define PER_FRAME_BINDING_SURFACE_CACHE                 17
-#define PER_FRAME_BINDING_DEPTH                         18
-#define PER_FRAME_BINDING_DEPTH_PYRAMID                 19
-#define PER_FRAME_BINDING_VELOCITY                      20
-#define PER_FRAME_BINDING_OBJECT_ID                     21
-#define PER_FRAME_BINDING_VERTEX                        22
-#define PER_FRAME_BINDING_GIZMO                         23
-#define PER_FRAME_BINDING_BINDLESS_POSITION             24
-#define PER_FRAME_BINDING_BINDLESS_NORMAL               25
-#define PER_FRAME_BINDING_BINDLESS_TANGENT              26
-#define PER_FRAME_BINDING_BINDLESS_TEXCOORD             27
-#define PER_FRAME_BINDING_BINDLESS_COLOR                28
-#define PER_FRAME_BINDING_BINDLESS_BONE_INDEX           29
-#define PER_FRAME_BINDING_BINDLESS_BONE_WEIGHT          30
-#define PER_FRAME_BINDING_BINDLESS_ANIMATION            31
-#define PER_FRAME_BINDING_BINDLESS_INDEX                32
-#define PER_FRAME_BINDING_BINDLESS_SAMPLER              33
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_1D           34
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_1D_ARRAY     35
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_2D           36
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_2D_ARRAY     37
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_CUBE         38
-#define PER_FRAME_BINDING_BINDLESS_TEXTURE_3D           39
+#define PER_FRAME_BINDING_MESH_CARD_READBACK            17
+#define PER_FRAME_BINDING_SURFACE_CACHE                 18
+#define PER_FRAME_BINDING_DEPTH                         19
+#define PER_FRAME_BINDING_DEPTH_PYRAMID                 20
+#define PER_FRAME_BINDING_VELOCITY                      21
+#define PER_FRAME_BINDING_OBJECT_ID                     22
+#define PER_FRAME_BINDING_VERTEX                        23
+#define PER_FRAME_BINDING_GIZMO                         24
+#define PER_FRAME_BINDING_BINDLESS_POSITION             25
+#define PER_FRAME_BINDING_BINDLESS_NORMAL               26
+#define PER_FRAME_BINDING_BINDLESS_TANGENT              27
+#define PER_FRAME_BINDING_BINDLESS_TEXCOORD             28
+#define PER_FRAME_BINDING_BINDLESS_COLOR                29
+#define PER_FRAME_BINDING_BINDLESS_BONE_INDEX           30
+#define PER_FRAME_BINDING_BINDLESS_BONE_WEIGHT          31
+#define PER_FRAME_BINDING_BINDLESS_ANIMATION            32
+#define PER_FRAME_BINDING_BINDLESS_INDEX                33
+#define PER_FRAME_BINDING_BINDLESS_SAMPLER              34
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_1D           35
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_1D_ARRAY     36
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_2D           37
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_2D_ARRAY     38
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_CUBE         39
+#define PER_FRAME_BINDING_BINDLESS_TEXTURE_3D           40
 
 #if(ENABLE_RAY_TRACING != 0)
 #extension GL_EXT_ray_tracing : enable
@@ -503,6 +504,12 @@ layout(set = 0, binding = PER_FRAME_BINDING_MESH_CARD) buffer mesh_cards {
     MeshCardInfo slot[MAX_PER_FRAME_OBJECT_SIZE * 6];
 
 } MESH_CARDS;
+
+layout(set = 0, binding = PER_FRAME_BINDING_MESH_CARD_READBACK) buffer mesh_card_readbacks { 
+
+    uint slot[MAX_PER_FRAME_OBJECT_SIZE * 6];
+
+} MESH_CARD_READBACKS;
 
 layout(set = 0, binding = PER_FRAME_BINDING_SURFACE_CACHE) uniform texture2D SURFACE_CACHE[5];  // diffuse normal emmision lighting depth  
 

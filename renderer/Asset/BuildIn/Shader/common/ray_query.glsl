@@ -40,6 +40,10 @@ bool RayQueryHitObject(
     out vec4 worldPos, 
     out vec3 worldNormal) 
 {
+    objectID = 0;
+    worldPos = vec4(0.0f);
+    worldNormal = vec3(0.0f);
+
 	float tmin = MIN_RAY_TRACING_DISTANCE;
     //float tmax = MAX_RAY_TRACING_DISTANCE;  
 	float tmax = length(to - from);
@@ -49,7 +53,7 @@ bool RayQueryHitObject(
     rayQueryInitializeEXT(
         query, 
         TLAS, 
-        gl_RayFlagsTerminateOnFirstHitEXT, 
+        gl_RayFlagsOpaqueEXT, 
         0xFF, 
         from, 
         tmin, 

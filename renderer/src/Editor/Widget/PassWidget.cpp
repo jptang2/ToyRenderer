@@ -271,6 +271,15 @@ void PassWidget::SSSRPassUI(std::shared_ptr<SSSRPass> pass)
     bool visualizeHitUV = pass->setting.visualizeHitUV > 0 ? true : false;
     bool visualizeHitMask = pass->setting.visualizeHitMask > 0 ? true : false;
 
+    if (ImGui::RadioButton("Trace HiZ", pass->setting.mode == 0))
+		pass->setting.mode = 0; 
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Ray trace surface cache", pass->setting.mode == 1))
+		pass->setting.mode = 1; 
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Hybrid trace", pass->setting.mode == 2))
+		pass->setting.mode = 2; 
+
 	ImGui::Checkbox("Enable skybox ibl", &enableSkybox);
     ImGui::Checkbox("Reflection only", &reflectionOnly);
     ImGui::Checkbox("Visualize hit UV", &visualizeHitUV);

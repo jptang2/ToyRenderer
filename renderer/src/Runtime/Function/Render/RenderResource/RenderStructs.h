@@ -350,8 +350,8 @@ typedef struct MeshCardInfo     // 单个Card的全部信息
 
 } MeshCardInfo;
 
-// 每帧回读前一帧的采样数来决定本帧的更新优先级
-typedef std::array<uint32_t, MAX_PER_FRAME_OBJECT_SIZE * 6> MeshCardSampleReadBack;
+// 存储每个card最后在GPU端被使用的帧数，每帧回读来决定本帧的更新优先级
+typedef std::array<uint32_t, MAX_PER_FRAME_OBJECT_SIZE * 6> MeshCardReadBack;
 
 // typedef struct AnimatedTransformInfo 
 // {

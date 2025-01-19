@@ -62,23 +62,27 @@ private:
 
     struct MeshCardCache
     {
-        uint32_t objectID = 0;
-        bool rasterized[6] = { false };
-        uint32_t lastUpdateTick[6] = { 0 };
+        bool valid = false;                 // card信息是否有效
+        bool rasterized = false;            // card是否已光栅化
 
-        std::vector<SurfaceAtlasRangeRef> atlasRange = std::vector<SurfaceAtlasRangeRef>(6);
-        std::vector<MeshCardInfo> meshCards = std::vector<MeshCardInfo>(6);
+        uint32_t objectID = 0;              // 对应的object
+        uint32_t lastUpdateTick = 0;        // 上次更新光照的帧数
 
-        std::vector<SurfaceCacheLightingDispatch> directLightings[6];
+        SurfaceAtlasRangeRef atlasRange;    // 在cache上分配的空间信息
+        MeshCardInfo meshCard;              // 提交给GPU的card信息
+
+        std::vector<SurfaceCacheLightingDispatch> directLightings;  // 提交给GPU的直接光照任务
     };
-    std::unordered_map<uint32_t, MeshCardCache> cache;      // 从meshCardID映射到对应的MeshCardCache
+    std::vector<MeshCardCache> cache;                           // 从meshCardID映射到对应的MeshCardCache (现在这样写CPU内存挺浪费的)
+    std::unordered_map<uint32_t, uint32_t> objectIDtoCardID;    // 从objectID映射到meshCardID
 
-    MeshCardSampleReadBack sampleReadback;                                      // 回读的采样数信息
+    MeshCardReadBack readback;                                                  // 回读的采样数信息
     std::vector<SurfaceCacheRasterizeDraw> rasterizeDraws;                      // 每帧需要进行光栅化的部分
     std::vector<SurfaceCacheLightingDispatch> directLightingDispatches;         // 每帧需要进行直接光照的部分
 
     SurfaceAtlas atlas;
 
-    
+    uint32_t maxUsedMeshCardID = 0;
+    std::vector<uint32_t> sortedID;
 };
 
