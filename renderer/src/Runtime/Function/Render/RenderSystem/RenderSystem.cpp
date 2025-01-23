@@ -16,7 +16,8 @@
 #include "Function/Render/RenderPass/DeferredLightingPass.h"
 #include "Function/Render/RenderPass/SSSRPass.h"
 #include "Function/Render/RenderPass/VolumetricFogPass.h"
-#include "Function/Render/RenderPass/ReSTIRPass.h"
+#include "Function/Render/RenderPass/ReSTIRDIPass.h"
+#include "Function/Render/RenderPass/ReSTIRGIPass.h"
 #include "Function/Render/RenderPass/SVGFPass.h"
 #include "Function/Render/RenderPass/ForwardPass.h"
 #include "Function/Render/RenderPass/ClipmapVisualizePass.h"
@@ -107,7 +108,8 @@ void RenderSystem::InitPasses()
     passes[SURFACE_CACHE_PASS]                  = nullptr;
     passes[REPROJECTION_PASS]                   = std::make_shared<ReprojectionPass>();
     passes[DEFERRED_LIGHTING_PASS]              = std::make_shared<DeferredLightingPass>();
-    passes[RESTIR_PASS]                         = nullptr;
+    passes[RESTIR_DI_PASS]                      = nullptr;
+    passes[RESTIR_GI_PASS]                      = nullptr;
     passes[SVGF_PASS]                           = nullptr;
     passes[SSSR_PASS]                           = std::make_shared<SSSRPass>();
     passes[VOLUMETIRC_FOG_PASS]                 = std::make_shared<VolumetricFogPass>();
@@ -126,13 +128,15 @@ void RenderSystem::InitPasses()
     passes[EDITOR_UI_PASS]                      = std::make_shared<EditorUIPass>();
     passes[PRESENT_PASS]                        = std::make_shared<PresentPass>();
 
-    //passes[BLOOM_PASS]->SetEnable(false);       //TODO 暂时禁用，有单位问题
+    passes[BLOOM_PASS]->SetEnable(false);       //TODO 
+    passes[VOLUMETIRC_FOG_PASS]->SetEnable(false);
 
 #if ENABLE_RAY_TRACING
     passes[CLIPMAP_PASS]                    = std::make_shared<ClipmapPass>(); 
     passes[DDGI_PASS]                       = std::make_shared<DDGIPass>();  
     passes[SURFACE_CACHE_PASS]              = std::make_shared<SurfaceCachePass>();
-    passes[RESTIR_PASS]                     = std::make_shared<ReSTIRPass>();
+    passes[RESTIR_DI_PASS]                  = std::make_shared<ReSTIRDIPass>();
+    passes[RESTIR_GI_PASS]                  = std::make_shared<ReSTIRGIPass>();
     passes[SVGF_PASS]                       = std::make_shared<SVGFPass>();
     passes[CLIPMAP_VISUALIZE_PASS]          = std::make_shared<ClipmapVisualizePass>();
     passes[DDGI_VISUALIZE_PASS]             = std::make_shared<DDGIVisualizePass>();
@@ -141,7 +145,7 @@ void RenderSystem::InitPasses()
 
     passes[CLIPMAP_PASS]->SetEnable(false);
     passes[CLIPMAP_VISUALIZE_PASS]->SetEnable(false);
-    passes[RESTIR_PASS]->SetEnable(false);
+    passes[RESTIR_DI_PASS]->SetEnable(false);
     passes[PATH_TRACING_PASS]->SetEnable(false);  
     passes[RAY_TRACING_BASE_PASS]->SetEnable(false);      
 #endif

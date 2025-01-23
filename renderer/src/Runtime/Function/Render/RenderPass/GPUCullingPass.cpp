@@ -50,7 +50,7 @@ void GPUCullingPass::Build(RDGBuilder& builder)
         
     auto& passes = EngineContext::Render()->GetMeshPasses();
 
-    lodSetting.disableVirtualMeshCulling = lodSetting.disableVirtualMeshCulling || (EngineContext::Render()->IsPassEnabled(RESTIR_PASS) ? true : false); //
+    lodSetting.disableVirtualMeshCulling = lodSetting.disableVirtualMeshCulling || (EngineContext::Render()->IsPassEnabled(RESTIR_DI_PASS) ? true : false); //
     cullingSetting.processSize = 0;
     for(uint32_t i = 0; i < MESH_PASS_TYPE_MAX_CNT; i++)
     {

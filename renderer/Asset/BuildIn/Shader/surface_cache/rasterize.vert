@@ -35,7 +35,6 @@ void main()
     OUT_ID              = objectID;
 
     gl_Position = card.proj * card.view * position;
-    //gl_Position = vec4(pos.xy, 0.5f, 1.0f);
 }
 
 

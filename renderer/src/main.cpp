@@ -222,22 +222,22 @@ void InitScene()
 
 
     // Point light
-    for(int i = 0; i < 1000; i++)
-    {
-        Vec3 pos = Vec3((i / 100) % 10, (i / 10) % 10, i % 10) * 5.0f;
-        pos += Vec3(-25.0f, 5.0f, -10.0f);
-        Vec3 color = Vec3((i / 100) % 10, (i / 10) % 10, i % 10) / 10.0f;
+    // for(int i = 0; i < 1000; i++)
+    // {
+    //     Vec3 pos = Vec3((i / 100) % 10, (i / 10) % 10, i % 10) * 5.0f;
+    //     pos += Vec3(-25.0f, 5.0f, -10.0f);
+    //     Vec3 color = Vec3((i / 100) % 10, (i / 10) % 10, i % 10) / 10.0f;
 
-        std::shared_ptr<Entity> pointLight                          = scene->CreateEntity("Point Light " + std::to_string(i + 1));
-        std::shared_ptr<PointLightComponent> pointLightComponent    = pointLight->AddComponent<PointLightComponent>();
-        std::shared_ptr<TransformComponent> transformComponent      = pointLight->TryGetComponent<TransformComponent>();
+    //     std::shared_ptr<Entity> pointLight                          = scene->CreateEntity("Point Light " + std::to_string(i + 1));
+    //     std::shared_ptr<PointLightComponent> pointLightComponent    = pointLight->AddComponent<PointLightComponent>();
+    //     std::shared_ptr<TransformComponent> transformComponent      = pointLight->TryGetComponent<TransformComponent>();
 
-        transformComponent->SetPosition(pos);
-        pointLightComponent->SetScale(25.0f);
-        pointLightComponent->SetColor(color);
-        pointLightComponent->SetIntencity(50.0f);
-        pointLightComponent->SetCastShadow(false);
-    }
+    //     transformComponent->SetPosition(pos);
+    //     pointLightComponent->SetScale(25.0f);
+    //     pointLightComponent->SetColor(color);
+    //     pointLightComponent->SetIntencity(50.0f);
+    //     pointLightComponent->SetCastShadow(false);
+    // }
 
     // Sphere
     if(true)
@@ -256,7 +256,7 @@ void InitScene()
             .loadMaterials = false,
             .tangentSpace = true,
             .generateBVH = false,
-            .generateCluster = false,
+            .generateCluster = true,
             .generateVirtualMesh = false,
             .cacheCluster = false
         };
@@ -486,7 +486,7 @@ void InitScene()
             .tangentSpace = true,
             .generateBVH = false,
             .generateCluster = false,
-            .generateVirtualMesh = false,
+            .generateVirtualMesh = true,
             .cacheCluster = false
         };
         std::shared_ptr<Model> model = std::make_shared<Model>("Asset/BuildIn/Model/Basic/stanford_bunny.obj", processSetting);
@@ -548,7 +548,7 @@ void InitScene()
     // EngineContext::Render()->SetPassEnabled(TAA_PASS, false);
     // EngineContext::Render()->SetPassEnabled(SSSR_PASS, false);
     // EngineContext::Render()->SetPassEnabled(VOLUMETIRC_FOG_PASS, false);
-    // EngineContext::Render()->SetPassEnabled(RESTIR_PASS, false);
+    // EngineContext::Render()->SetPassEnabled(RESTIR_DI_PASS, false);
     EngineContext::World()->SetActiveScene("defaultScene");
 }
 

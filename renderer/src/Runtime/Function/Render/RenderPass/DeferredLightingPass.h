@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RenderPass.h"
+#include <cstdint>
 
 class DeferredLightingPass : public RenderPass
 {
@@ -19,6 +20,7 @@ public:
 private:
 	struct DeferredLightingSetting{
 		uint32_t mode = 0;
+		uint32_t directOnly = 0;	// 在使用ReSTIR GI时，DDGI仅用于surface cache的光照，不用于G-Buffer光照
 	};
 	DeferredLightingSetting setting = {};
 

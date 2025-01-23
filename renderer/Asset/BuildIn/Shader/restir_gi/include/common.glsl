@@ -2,7 +2,7 @@
 
 #include "reservoir.glsl"
 
-struct RestirDISetting
+struct RestirGISetting
 {
 	int initialSampleCount;
 
@@ -17,31 +17,31 @@ struct RestirDISetting
     uint temporalReuse;
     uint spatialReuse;
 	uint unbias;
-	uint bruteLighting;
-	uint showWeight;
-	uint showLightID;
+	uint enableSkybox;
+	uint giOnly;                   
+	uint showRadiance;             
 };
 
 //////////////////////////////////////////////////////////////////////////
 
 layout (set = 1, binding = 0) buffer setting
 {
-	RestirDISetting RESTIR_DI_SETTING;
+	RestirGISetting RESTIR_GI_SETTING;
 };
 
 layout (set = 1, binding = 1) buffer Reservoirs 
 {
-	DIReservoir RESERVOIRS[];                         // 本帧新生成的Reservoir(以及时域合并的结果)
+	GIReservoir RESERVOIRS[];                         // 本帧新生成的Reservoir(以及时域合并的结果)
 };
 
 layout (set = 1, binding = 2) buffer PrevFrameReservoirs 
 {
-	DIReservoir PREV_RESERVOIRS[];                    // 前一帧的Reservoir结果
+	GIReservoir PREV_RESERVOIRS[];                    // 前一帧的Reservoir结果
 };
 
 layout (set = 1, binding = 3) buffer ResultReservoirs 
 {
-	DIReservoir RESULT_RESERVOIRS[];                  // 本帧Reservoir空域合并的结果
+	GIReservoir RESULT_RESERVOIRS[];                  // 本帧Reservoir空域合并的结果
 };
 
 layout(set = 2, binding = 0, rgba8)         uniform image2D G_BUFFER_DIFFUSE_ROUGHNESS;	        // 本帧G-Buffer
@@ -51,24 +51,9 @@ layout(set = 2, binding = 3)   				uniform texture2D REPROJECTION_RESULT;				// 
 
 layout(set = 2, binding = 4, rgba16f)       uniform image2D FINAL_COLOR;	                    // lighting的输出
 
-//////////////////////////////////////////////////////////////////////////
 
-vec3 EvaluatePHatFull(
-	uint lightID, vec3 worldPos, vec3 normal, 
-	vec3 diffuse, float roughness, float metallic) 
+
+float EvaluatePHat(in HitSample hitSample)
 {
-	vec3 N = normalize(normal);
-	vec3 V = normalize(CAMERA.pos.xyz - worldPos);	
-
-	return PointLighting(diffuse, roughness, metallic, 
-						 vec4(worldPos, 1.0f), N, V, lightID);
-}
-
-float EvaluatePHat(
-	uint lightID, vec3 worldPos, vec3 normal,  
-	vec3 diffuse, float roughness, float metallic) 
-{
-	return 	RGBtoLuminance(EvaluatePHatFull(
-				lightID, worldPos, normal, 
-				diffuse, roughness, metallic));	
+	return RGBtoLuminance(hitSample.outRadiance);
 }

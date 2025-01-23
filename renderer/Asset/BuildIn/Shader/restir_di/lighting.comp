@@ -28,21 +28,20 @@ void main()
     /////////////////////////////////////////////////////////
 
     uint reservoirIndex = pixel.y * WINDOW_WIDTH + pixel.x;
-	Reservoir res = RESULT_RESERVOIRS[reservoirIndex];
+	DIReservoir res = RESULT_RESERVOIRS[reservoirIndex];
 
     vec4 finalColor = vec4(0.0f);
-    for (int i = 0; i < RESERVOIR_SIZE; ++i) 
     {
-        uint lightID = res.samples[i].lightID;
+        uint lightID = res.sampl.lightID;
 
         vec3 pHat = EvaluatePHatFull(
             lightID, worldPos.xyz, normal,
             diffuse, roughness, metallic); 
 
-        finalColor.xyz += pHat * res.samples[i].w;
+        finalColor.xyz += pHat * res.w;
     }
 
-    if (RESTIR_SETTING.bruteLighting != 0)  // 暴力遍历光源的测试，算是基线吧
+    if (RESTIR_DI_SETTING.bruteLighting != 0)  // 暴力遍历光源的测试，算是基线吧
     {
         finalColor = vec4(0.0f);
         for(int i = 0; i < LIGHTS.lightSetting.pointLightCnt; i++)
@@ -68,28 +67,22 @@ void main()
 
 
 
-    if (RESTIR_SETTING.showWeight != 0)
+    if (RESTIR_DI_SETTING.showWeight != 0)
     {
         finalColor = vec4(0.0f);
-        for (int i = 0; i < RESERVOIR_SIZE; i++) 
-        {
-            if(res.samples[i].sumWeights > 0.0f) 
-                finalColor.xyz += res.samples[i].w / res.samples[i].sumWeights;
-        }
+        if(res.sumWeights > 0.0f) 
+            finalColor.xyz += res.w / res.sumWeights;
     }
 
-    if (RESTIR_SETTING.showLightID != 0)
+    if (RESTIR_DI_SETTING.showLightID != 0)
     {
         finalColor = vec4(0.0f);
-        for (int i = 0; i < RESERVOIR_SIZE && i < 4; i++) 
-        {
-            finalColor[i] += float(res.samples[i].lightID) / LIGHTS.lightSetting.pointLightCnt;
-        }
+        finalColor.x += float(res.sampl.lightID) / LIGHTS.lightSetting.pointLightCnt;
     }
 
     // for (int i = 0; i < RESERVOIR_SIZE; ++i) 
     // {
-    //     uint lightID = res.samples[i].lightID;
+    //     uint lightID = res.sampl.lightID;
     //     if(lightID == 1) finalColor = vec4(1.0f, 0.0f, 0.0f, 0.0f);
     // }
 

@@ -6,6 +6,7 @@
 #include "../common/common.glsl"
 #include "include/common.glsl"
 
+
 #define THREAD_SIZE_X 16
 #define THREAD_SIZE_Y 16
 #define THREAD_SIZE_Z 1
@@ -31,7 +32,7 @@ void main()
 	// 点光源采样，创建新Reservoir //////////////////////////////////
 
 	uint reservoirIndex = ReservoirIndex(pixel);
-	Reservoir res = NewReservoir();
+	DIReservoir res = NewDIReservoir();
 	Rand rand = SeedRand(GLOBAL_SETTING.totalTicks, (pixel.y + WINDOW_HEIGHT) * GLOBAL_SETTING.totalTicks + (pixel.x + WINDOW_WIDTH));
 
 	if(depth == 1.0f)	// 无效的G-Buffer信息
@@ -40,7 +41,7 @@ void main()
 		return;
 	}
 
-	for (int i = 0; i < RESTIR_SETTING.initialLightSampleCount; i++) 
+	for (int i = 0; i < RESTIR_DI_SETTING.initialSampleCount; i++) 
 	{	
 		uint lightID = LIGHTS.lightSetting.pointLightIDs[uint(round(RandFloat(rand) * (LIGHTS.lightSetting.pointLightCnt - 1)))];	// 抽样选取点光源及其选择概率，直接用均匀分布了
 		float lightSampleProb = (1.0f / LIGHTS.lightSetting.pointLightCnt);	
@@ -49,12 +50,12 @@ void main()
 			lightID, worldPos.xyz, normal, 
 			diffuse, roughness, metallic); 
 
-		AddSampleToReservoir(res, lightID, pHat, lightSampleProb, rand);
+		AddSampleToDIReservoir(res, lightID, pHat, lightSampleProb, rand);
 	}
 	
 	// 时域复用Reservoir //////////////////////////////////
 
-	if (RESTIR_SETTING.temporalReuse != 0) 
+	if (RESTIR_DI_SETTING.temporalReuse != 0) 
 	{
 		vec4 reprojection   = texelFetch(REPROJECTION_RESULT, pixel, 0);
 		ivec2 prevPixel     = ivec2(reprojection.zw);
@@ -62,31 +63,22 @@ void main()
 
 		if(valid)
 		{
-			Reservoir prevRes = PREV_RESERVOIRS[ReservoirIndex(prevPixel)];	
-			prevRes.numStreamSamples = min(prevRes.numStreamSamples, RESTIR_SETTING.temporalSampleCountMultiplier * res.numStreamSamples);	// 需要设置一个累计采样数的上限
+			DIReservoir prevRes = PREV_RESERVOIRS[ReservoirIndex(prevPixel)];	
+			prevRes.numStreamSamples = min(prevRes.numStreamSamples, RESTIR_DI_SETTING.temporalSampleCountMultiplier * res.numStreamSamples);	// 需要设置一个累计采样数的上限
 			
-			float pHat[RESERVOIR_SIZE];
-			for (int i = 0; i < RESERVOIR_SIZE; i++) 
-			{
-				float newPHat = EvaluatePHat(
-					prevRes.samples[i].lightID, worldPos.xyz, normal,
+			float newPHat = EvaluatePHat(
+					prevRes.sampl.lightID, worldPos.xyz, normal,
 					diffuse, roughness, metallic); 
-
-				pHat[i] = newPHat;
-			}
-			CombineReservoirs(res, prevRes, pHat, rand);		
+			CombineDIReservoirs(res, prevRes, newPHat, rand);		
 		}
 	}
 
-	if (RESTIR_SETTING.visibilityReuse != 0) 
+	if (RESTIR_DI_SETTING.visibilityReuse != 0) 
 	{
-		for (int i = 0; i < RESERVOIR_SIZE; i++) 
+		bool shadowed = RayQueryVisibility(worldPos.xyz, LIGHTS.pointLights[res.sampl.lightID].pos);
+		if (shadowed) 
 		{
-			bool shadowed = RayQueryVisibility(worldPos.xyz, LIGHTS.pointLights[res.samples[i].lightID].pos);
-			if (shadowed) 
-			{
-				CleanReservoir(res, i);		
-			}
+			CleanDIReservoir(res);		
 		}
 	}
 

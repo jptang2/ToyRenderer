@@ -76,7 +76,7 @@ vec4 TraceHiz( int startLevel,
     vec4 start              = vec4(baseUV, baseDr, 0); 
 
     // 步进方向
-    vec4 targetWorldPos     = vec4(worldPos + 0.1 * worldDir, 1.0f);        // worldDir偏移距离过长会导致ndc坐标超出视锥范围，有计算错误
+    vec4 targetWorldPos     = vec4(worldPos + worldDir, 1.0f);        // worldDir偏移距离过长会导致ndc坐标超出视锥范围，有计算错误
     vec4 targetNDCPos       = WorldToNDC(targetWorldPos);                
     float targetDr          = 1.0 / targetNDCPos.z;                         // ndc空间的深度倒数，线性相关于view space的深度     //ndc空间的w坐标倒数也是线性
     vec2 targetUV           = NDCToScreen(targetNDCPos.xy);                 // uv坐标，线性 

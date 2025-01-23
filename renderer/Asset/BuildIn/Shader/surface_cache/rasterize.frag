@@ -21,10 +21,6 @@ void main()
     float roughness     = FetchRoughness(material, IN_TEXCOORD);
     float metallic      = FetchMetallic(material, IN_TEXCOORD);
 
-    // OUT_DIFFUSE_ROUGHNESS = vec4(diffuse.xyz, 1.0f);
-    // OUT_NORMAL_METALLIC = vec4(normalize(IN_NORMAL), 1.0f);
-    // OUT_EMISSION = vec4(emission, 1.0f);
-
     OUT_DIFFUSE_ROUGHNESS = vec4(diffuse.xyz, roughness);
     OUT_NORMAL_METALLIC = vec4(normalize(IN_NORMAL), metallic);
     OUT_EMISSION = vec4(emission, 0.0f);

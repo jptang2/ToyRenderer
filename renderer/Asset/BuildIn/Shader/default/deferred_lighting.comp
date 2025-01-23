@@ -10,6 +10,7 @@ layout(set = 1, binding = 3, rgba16f)       uniform image2D FINAL_COLOR;
 
 layout(push_constant) uniform DeferredLightSetting {
     uint mode;
+    uint directOnly;
 } SETTING;
 
 // 0    Color
@@ -68,8 +69,11 @@ void main()
 
     // 间接光照计算 //////////////////////////////////
 
-    vec3 indirectLightColor = 
-        IndirectLighting(diffuse.xyz, roughness, metallic, worldPos, N, V);
+    vec3 indirectLightColor = vec3(0.0f);
+    if(SETTING.directOnly == 0)
+    {
+        indirectLightColor = IndirectLighting(diffuse.xyz, roughness, metallic, worldPos, N, V);
+    }
 
     // 输出 //////////////////////////////////
     vec3 outColor           = directLightColor + indirectLightColor + emission;	

@@ -1,0 +1,63 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+
+#include "../common/common.glsl"	
+#include "include/common.glsl"	
+
+#define THREAD_SIZE_X 16
+#define THREAD_SIZE_Y 16
+#define THREAD_SIZE_Z 1
+layout (local_size_x = THREAD_SIZE_X, 
+		local_size_y = THREAD_SIZE_Y, 
+		local_size_z = THREAD_SIZE_Z) in;
+void main()
+{
+    ivec2 pixel     = ivec2(gl_GlobalInvocationID.xy);
+    vec2 uv         = ScreenPixToUV(pixel); 
+
+    vec4 gbffer0    = imageLoad(G_BUFFER_DIFFUSE_ROUGHNESS, pixel);
+    vec4 gbffer1    = imageLoad(G_BUFFER_NORMAL_METALLIC, pixel);
+    vec4 gbffer2    = imageLoad(G_BUFFER_EMISSION, pixel);
+    vec3 diffuse    = gbffer0.xyz;
+    vec3 normal     = gbffer1.xyz;
+    vec3 emission   = gbffer2.xyz;
+    float roughness = gbffer0.w;
+    float metallic  = gbffer1.w;
+    vec4 worldPos   = DepthToWorld(uv);
+
+    /////////////////////////////////////////////////////////
+
+    uint reservoirIndex = (pixel.y / 2) * WINDOW_WIDTH / 2 + (pixel.x / 2);
+	GIReservoir res = RESULT_RESERVOIRS[reservoirIndex];
+
+    vec4 finalColor = vec4(0.0f);
+    {
+        if(RESTIR_GI_SETTING.showRadiance != 0)
+        {
+            finalColor.xyz += res.sampl.outRadiance * res.w;
+        }
+        else 
+        {
+            vec3 F0 = mix(vec3(0.04f), diffuse.rgb, metallic); 
+            vec3 N = normalize(normal);
+            vec3 V = normalize(CAMERA.pos.xyz - worldPos.xyz);	
+            float NoV = saturate(dot(N, V));
+
+            vec3 k_specular = FresnelSchlickRoughness(NoV, F0, roughness); 
+            vec3 k_diffuse  = 1.0 - k_specular;     //BRDF积分项里每个radiance对应的kD是不同的（k_specular = F 视角相关），把kD移出积分是一个近似估计
+
+            vec3 f_diffuse  = Diffuse_Lambert(diffuse.rgb);  
+
+            vec3 diffuseColor = (1.0 - metallic) * k_diffuse * f_diffuse * res.sampl.outRadiance * res.w;    
+            // vec3 diffuseColor = albedo / PI * indirectIrradiance;                                // 所有表面都当完美漫反射表面计算
+
+            vec4 baseColor = vec4(0.0f);
+            if(RESTIR_GI_SETTING.giOnly == 0)   
+                baseColor = imageLoad(FINAL_COLOR, pixel);
+
+            finalColor.xyz += diffuseColor + baseColor.xyz;
+        }
+    }
+    
+    imageStore(FINAL_COLOR, pixel, finalColor);
+}

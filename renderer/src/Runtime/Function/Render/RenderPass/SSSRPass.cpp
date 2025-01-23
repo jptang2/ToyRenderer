@@ -52,7 +52,7 @@ void SSSRPass::Init()
 void SSSRPass::Build(RDGBuilder& builder) 
 {
     if( IsEnabled() && 
-        //!EngineContext::Render()->IsPassEnabled(RESTIR_PASS) &&
+        //!EngineContext::Render()->IsPassEnabled(RESTIR_DI_PASS) &&
         !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS) && 
         !EngineContext::Render()->IsPassEnabled(PATH_TRACING_PASS))
     {

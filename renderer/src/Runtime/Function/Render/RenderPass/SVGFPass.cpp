@@ -76,7 +76,8 @@ void SVGFPass::Init()
 void SVGFPass::Build(RDGBuilder& builder) 
 {
     if( IsEnabled() &&
-        EngineContext::Render()->IsPassEnabled(RESTIR_PASS) &&
+        (EngineContext::Render()->IsPassEnabled(RESTIR_DI_PASS) ||
+         EngineContext::Render()->IsPassEnabled(RESTIR_GI_PASS)) &&
         !EngineContext::Render()->IsPassEnabled(PATH_TRACING_PASS))
     {
         Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();

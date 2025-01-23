@@ -92,7 +92,7 @@ void main()
     vec3 ndcPos = vec3(ScreenToNDC(ScreenPixToUV(cardPixel, ivec2(card.atlasExtent))), depth);
     vec4 localPos = CardNDCToLocal(ndcPos, card);
     vec4 worldPos = object.model * localPos;
-    vec3 worldNormal = mat3(object.model) * normal; //?????????? TODO
+    vec3 worldNormal = mat3(object.model) * normal; //TODO
 
 
 
@@ -112,7 +112,7 @@ void main()
     }
 
 
-    vec3 indirectLightColor = IndirectLighting(diffuse, roughness, metallic, worldPos, N, V);
+    vec3 indirectLightColor = IndirectLighting(diffuse, roughness, metallic, worldPos, N, V);           // 间接光照目前使用的是DDGI，之后改成gather
 
 
     finalColor.xyz += directLightColor + indirectLightColor + emission.xyz;

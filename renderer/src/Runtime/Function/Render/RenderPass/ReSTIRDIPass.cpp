@@ -1,10 +1,10 @@
-#include "ReSTIRPass.h"
+#include "ReSTIRDIPass.h"
 #include "Function/Global/EngineContext.h"
 #include "Function/Render/RDG/RDGHandle.h"
 #include "Function/Render/RHI/RHIStructs.h"
 #include <cstdint>
 
-void ReSTIRPass::Init()
+void ReSTIRDIPass::Init()
 {
     auto backend = EngineContext::RHI();
 
@@ -14,7 +14,7 @@ void ReSTIRPass::Init()
 
     RHIRootSignatureInfo rootSignatureInfo = {};
     rootSignatureInfo.AddEntry(EngineContext::RenderResource()->GetPerFrameRootSignature()->GetInfo())
-                     .AddEntry({1, 0, 1, SHADER_FREQUENCY_RAY_TRACING | SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_BUFFER})     // RESTIR_SETTING
+                     .AddEntry({1, 0, 1, SHADER_FREQUENCY_RAY_TRACING | SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_BUFFER})     // RESTIR_DI_SETTING
                      .AddEntry({1, 1, 1, SHADER_FREQUENCY_RAY_TRACING | SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_BUFFER})     // RESERVOIRS
                      .AddEntry({1, 2, 1, SHADER_FREQUENCY_RAY_TRACING | SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_BUFFER})     // PREV_RESERVOIRS
                      .AddEntry({1, 3, 1, SHADER_FREQUENCY_RAY_TRACING | SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_BUFFER})     // RESULT_RESERVOIRS
@@ -51,7 +51,7 @@ void ReSTIRPass::Init()
     computePipeline[2] = backend->CreateComputePipeline(compPipelineInfo);
 }   
 
-void ReSTIRPass::Build(RDGBuilder& builder) 
+void ReSTIRDIPass::Build(RDGBuilder& builder) 
 {
     if( IsEnabled() && 
         !EngineContext::Render()->IsPassEnabled(PATH_TRACING_PASS))

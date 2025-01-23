@@ -35,7 +35,8 @@ void PassWidget::UI(std::shared_ptr<RenderPass> pass)
         case DEFERRED_LIGHTING_PASS:    DeferredLightingPassUI(std::static_pointer_cast<DeferredLightingPass>(pass));       break;
         case SSSR_PASS:                 SSSRPassUI(std::static_pointer_cast<SSSRPass>(pass));                               break;
         case VOLUMETIRC_FOG_PASS:       VolumetricFogPassUI(std::static_pointer_cast<VolumetricFogPass>(pass));             break;
-        case RESTIR_PASS:               ReSTIRPassUI(std::static_pointer_cast<ReSTIRPass>(pass));                           break;
+        case RESTIR_DI_PASS:            ReSTIRDIPassUI(std::static_pointer_cast<ReSTIRDIPass>(pass));                       break;
+        case RESTIR_GI_PASS:            ReSTIRGIPassUI(std::static_pointer_cast<ReSTIRGIPass>(pass));                       break;
         case SVGF_PASS:                 SVGFPassUI(std::static_pointer_cast<SVGFPass>(pass));                               break;
         case FORWARD_PASS:                                                                                                              break;
         case TRANSPARENT_PASS:                                                                                                          break;
@@ -221,6 +222,10 @@ void PassWidget::ClipmapPassUI(std::shared_ptr<ClipmapPass> pass)
 
 void PassWidget::DeferredLightingPassUI(std::shared_ptr<DeferredLightingPass> pass)
 {
+    bool directOnly = pass->setting.directOnly > 0 ? true : false;
+    ImGui::Checkbox("Direct lighting only", &directOnly);
+    pass->setting.directOnly = directOnly ? 1 : 0;
+
 	if (ImGui::RadioButton("Color", pass->setting.mode == 0))
 		pass->setting.mode = 0;
 	ImGui::SameLine();
@@ -320,7 +325,7 @@ void PassWidget::VolumetricFogPassUI(std::shared_ptr<VolumetricFogPass> pass)
     pass->setting.fogOnly = fogOnly ? 1 : 0;
 }
 
-void PassWidget::ReSTIRPassUI(std::shared_ptr<ReSTIRPass> pass)
+void PassWidget::ReSTIRDIPassUI(std::shared_ptr<ReSTIRDIPass> pass)
 {
     bool spatialReuse = pass->setting.spatialReuse > 0 ? true : false;
     bool temporalReuse = pass->setting.temporalReuse > 0 ? true : false;
@@ -338,7 +343,7 @@ void PassWidget::ReSTIRPassUI(std::shared_ptr<ReSTIRPass> pass)
     ImGui::Checkbox("Show weight", &showWeight);
     ImGui::Checkbox("Show light ID", &showLightID);
 
-    ImGui::DragInt("Initial light sample count", &pass->setting.initialLightSampleCount, 0.1f, 0);
+    ImGui::DragInt("Initial light sample count", &pass->setting.initialSampleCount, 0.1f, 0);
 
     ImGui::DragInt("Temporal sample count multiplier", &pass->setting.temporalSampleCountMultiplier, 0.1f, 0);
     ImGui::DragFloat("Temporal position threshold", &pass->setting.temporalPosThreshold, 0.1f, 0);
@@ -356,6 +361,45 @@ void PassWidget::ReSTIRPassUI(std::shared_ptr<ReSTIRPass> pass)
     pass->setting.showWeight = showWeight ? 1 : 0;
     pass->setting.showLightID = showLightID ? 1 : 0;
 }
+
+void PassWidget::ReSTIRGIPassUI(std::shared_ptr<ReSTIRGIPass> pass)
+{
+    bool spatialReuse = pass->setting.spatialReuse > 0 ? true : false;
+    bool temporalReuse = pass->setting.temporalReuse > 0 ? true : false;
+    bool visibilityReuse = pass->setting.visibilityReuse > 0 ? true : false;
+    bool unbias = pass->setting.unbias > 0 ? true : false;
+    bool enableSkybox = pass->setting.enableSkybox > 0 ? true : false;
+    bool giOnly = pass->setting.giOnly > 0 ? true : false;
+    bool showRadiance = pass->setting.showRadiance > 0 ? true : false;
+
+    ImGui::Checkbox("Spatial reuse", &spatialReuse);
+    ImGui::Checkbox("Temporal reuse", &temporalReuse);
+    ImGui::Checkbox("Visibility reuse", &visibilityReuse);
+    ImGui::Checkbox("Unbias", &unbias);
+    ImGui::Checkbox("Enable skybox", &enableSkybox);
+    ImGui::Checkbox("GI only", &giOnly);
+    ImGui::Checkbox("Show Radiance", &showRadiance);
+
+    ImGui::DragInt("Initial light sample count", &pass->setting.initialSampleCount, 0.1f, 0);
+
+    ImGui::DragInt("Temporal sample count multiplier", &pass->setting.temporalSampleCountMultiplier, 0.1f, 0);
+    ImGui::DragFloat("Temporal position threshold", &pass->setting.temporalPosThreshold, 0.1f, 0);
+
+    ImGui::Text("Spatial neighbor count: 4 (fixed)");
+    ImGui::DragFloat("Spatial position threshold", &pass->setting.spatialPosThreshold, 0.1f, 0);
+    ImGui::DragFloat("Spatial normal threshold", &pass->setting.spatialNormalThreshold, 0.1f, 0);
+    ImGui::DragFloat("Spatial radius", &pass->setting.spatialRadius, 0.1f, 0);
+
+    pass->setting.spatialReuse = spatialReuse ? 1 : 0;
+    pass->setting.temporalReuse = temporalReuse ? 1 : 0;
+    pass->setting.visibilityReuse = visibilityReuse ? 1 : 0;
+    pass->setting.unbias = unbias ? 1 : 0;
+    pass->setting.enableSkybox = enableSkybox ? 1 : 0;
+    pass->setting.giOnly = giOnly ? 1 : 0;
+    pass->setting.showRadiance = showRadiance ? 1 : 0;
+}
+
+
 
 void PassWidget::SVGFPassUI(std::shared_ptr<SVGFPass> pass)
 {

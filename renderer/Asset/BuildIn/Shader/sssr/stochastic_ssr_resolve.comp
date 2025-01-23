@@ -52,7 +52,7 @@ void main()
 
     vec3 F0             = mix(vec3(0.04f), diffuse.rgb, metallic); 
 
-    float NoV           = Saturate(dot(N, -V));
+    float NoV           = Saturate(dot(N, V));
     float coneTangent   = Lerp(0, roughness * (1 - SETTING.importanceSampleBias), NoV * sqrt(roughness)); //锥体追踪，没搞明白，暂时抄的
 
 	// 本帧结果////////////////////////////////////////////////////////////////////////////////////
@@ -128,7 +128,7 @@ void main()
     
   
     // 之后的部分和镜面反射IBL完全一致，用半球radiance采样加权（在SSR里使用射线寻找，cone tracing也是类似的），乘以预积分部分
-    vec3 kS = FresnelSchlickRoughness(NoV, F0, roughness); 
+    vec3 kS = FresnelSchlickRoughness(NoV, F0, roughness);  
     vec3 kD = 1.0 - kS;
 
     vec2 brdf = texture(sampler2D(BRDF_LUT, SAMPLER[0]), vec2(NoV, roughness)).rg;

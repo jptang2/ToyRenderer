@@ -20,20 +20,22 @@
 - RDG
 - Virtual Geometry
 - GPU-Driven Pipeline
+- Surface Cache             *(WIP)*
 - CSM+PCF
-- VSM
+- EVSM
 - Cluster-Based Lighting
 - IBL
 - DDGI
 - Volumetric Fog
-- SSSR
+- SSSR                      *(WIP)*
 - Bloom
 - FXAA
 - TAA
 - Auto Exposure
 - Tone Mapping
 - ReSTIR DI
-- SVGF
+- ReSTIR GI
+- SVGF                      *(WIP)*
 - Path Tracing
 
 
@@ -65,10 +67,13 @@ https://github.com/KhronosGroup/Vulkan-Samples
 
 
 ## 截图
-![](snapshot/bunny.png)  
+![](snapshot/Bunny_1.png)  
+![](snapshot/Bunny_2.png) 
+![](snapshot/GI.png)  
 ![](snapshot/ReSTIR_DI.png) 
 ![](snapshot/Path_Tracing.png) 
-![](snapshot/GPU-Driven.png)
+![](snapshot/GPU_Driven.png)
+![](snapshot/Surface_Cache.png) 
 ![](snapshot/RDG.png) 
 ![](snapshot/DDGI.png)
 ![](snapshot/PBR(Legacy).png)

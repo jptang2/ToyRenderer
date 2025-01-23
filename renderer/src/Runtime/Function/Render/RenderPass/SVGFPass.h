@@ -37,10 +37,10 @@ private:
         float alpha = 0.05f;  
         int mode = 0;
 
-        int disocclusionFix = 1; 
+        int disocclusionFix = 1;    
         int antiFirefly = 1;   
-        int historyClamp = 1;
-    };
+        int historyClamp = 0;           // TODO 还有很大的问题，开启会导致GI降噪质量变得很差
+    };                                  // 不开又会让镜面反射拖尾，光照也会有很大延迟
     SVGFSetting setting = {};
 
     Shader computeShader[7];

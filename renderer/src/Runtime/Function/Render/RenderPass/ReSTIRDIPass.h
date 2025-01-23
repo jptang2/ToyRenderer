@@ -35,22 +35,21 @@
 #include "RenderPass.h"
 #include <cstdint>
 
-#define RESERVOIR_SIZE 1
 #define NUM_NEIGHBORS 4
 
-class ReSTIRPass : public RenderPass
+class ReSTIRDIPass : public RenderPass
 {
 public:
-    ReSTIRPass() {};
-	~ReSTIRPass() {};
+    ReSTIRDIPass() {};
+	~ReSTIRDIPass() {};
 
 	virtual void Init() override final;
 
 	virtual void Build(RDGBuilder& builder) override final;
 
-	virtual std::string GetName() override final { return "ReSTIR"; }
+	virtual std::string GetName() override final { return "ReSTIR DI"; }
 
-	virtual PassType GetType() override final { return RESTIR_PASS; }
+	virtual PassType GetType() override final { return RESTIR_DI_PASS; }
 
 private:
     Shader computeShader[3];
@@ -64,9 +63,9 @@ private:
 	EnablePassEditourUI()
 
 private:
-    struct RestirSetting
+    struct RestirDISetting
     {
-        int initialLightSampleCount = 2;            // 每帧更新的数目
+        int initialSampleCount = 2;            // 每帧更新的数目
 
         int temporalSampleCountMultiplier = 20;     // 时域总采样数上限
         float temporalPosThreshold = 0.0001f;       // 时域重投影误差阈值
@@ -83,23 +82,23 @@ private:
         uint32_t showWeight = 0;                    // 可视化权重
         uint32_t showLightID = 0;                   // 可视化选择的光源ID
     };
-    RestirSetting setting = {};
+    RestirDISetting setting = {};
 
     struct LightSample 
     {
         uint32_t lightID; 			// 光源索引
-        
-        float pHat;					// 当前光源的重要性采样权重，也就是targetPdf
-        float sumWeights;			// 已处理的(pHat / proposalPdf)权重和
-        float w;					// 被积函数在当前采样点对应的权重，同时也就是重采样重要性采样的realPdf(SIR PDF)的倒数
     };
 
-    struct Reservoir 
+    struct DIReservoir 
     {
-        LightSample samples[RESERVOIR_SIZE];
+        LightSample sampl;
+
+        float pHat;					    // 当前光源的重要性采样权重，也就是targetPdf
+        float sumWeights;			    // 已处理的(pHat / proposalPdf)权重和
+        float w;					    // 被积函数在当前采样点对应的权重，同时也就是重采样重要性采样的realPdf(SIR PDF)的倒数
         uint32_t numStreamSamples;		// 已处理的采样总数
     };
 
-    Buffer<RestirSetting> restirSettingBuffer;
-    ArrayBuffer<Reservoir, WINDOW_WIDTH * WINDOW_HEIGHT> reservoirsBuffer[FRAMES_IN_FLIGHT] = {};
+    Buffer<RestirDISetting> restirSettingBuffer;
+    ArrayBuffer<DIReservoir, WINDOW_WIDTH * WINDOW_HEIGHT> reservoirsBuffer[FRAMES_IN_FLIGHT] = {};
 };

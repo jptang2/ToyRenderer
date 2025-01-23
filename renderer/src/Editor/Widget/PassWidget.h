@@ -5,7 +5,8 @@
 #include "Function/Render/RenderPass/PathTracingPass.h"
 #include "Function/Render/RenderPass/PostProcessingPass.h"
 #include "Function/Render/RenderPass/DeferredLightingPass.h"
-#include "Function/Render/RenderPass/ReSTIRPass.h"
+#include "Function/Render/RenderPass/ReSTIRDIPass.h"
+#include "Function/Render/RenderPass/ReSTIRGIPass.h"
 #include "Function/Render/RenderPass/FXAAPass.h"
 #include "Function/Render/RenderPass/SSSRPass.h"
 #include "Function/Render/RenderPass/SVGFPass.h"
@@ -32,7 +33,8 @@ private:
     static void DeferredLightingPassUI(std::shared_ptr<DeferredLightingPass> pass);
     static void SSSRPassUI(std::shared_ptr<SSSRPass> pass);  
     static void VolumetricFogPassUI(std::shared_ptr<VolumetricFogPass> pass);  
-    static void ReSTIRPassUI(std::shared_ptr<ReSTIRPass> pass);  
+    static void ReSTIRDIPassUI(std::shared_ptr<ReSTIRDIPass> pass);  
+    static void ReSTIRGIPassUI(std::shared_ptr<ReSTIRGIPass> pass);  
     static void SVGFPassUI(std::shared_ptr<SVGFPass> pass); 
     static void ClipmapVisualizePassUI(std::shared_ptr<ClipmapVisualizePass> pass);  
     static void PathTracingPassUI(std::shared_ptr<PathTracingPass> pass);
