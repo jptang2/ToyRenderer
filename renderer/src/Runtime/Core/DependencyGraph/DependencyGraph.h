@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 // 一个低效的DAG实现
@@ -174,7 +175,7 @@ private:
     std::vector<EdgeRef> edges; // 所有的顶点和边列表，remove后可能为空
     std::vector<NodeRef> nodes;
 
-    std::map<NodeID, std::set<EdgeID>> outEdges;
-    std::map<NodeID, std::set<EdgeID>> inEdges;
+    std::unordered_map<NodeID, std::set<EdgeID>> outEdges;
+    std::unordered_map<NodeID, std::set<EdgeID>> inEdges;
 };
 typedef std::shared_ptr<DependencyGraph> DependencyGraphRef;

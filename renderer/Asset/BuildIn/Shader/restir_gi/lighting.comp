@@ -43,12 +43,15 @@ void main()
             vec3 V = normalize(CAMERA.pos.xyz - worldPos.xyz);	
             float NoV = saturate(dot(N, V));
 
+            vec3 L = normalize(res.sampl.hitPos - worldPos.xyz);
+            float NoL = saturate(dot(N, L));
+
             vec3 k_specular = FresnelSchlickRoughness(NoV, F0, roughness); 
             vec3 k_diffuse  = 1.0 - k_specular;     //BRDF积分项里每个radiance对应的kD是不同的（k_specular = F 视角相关），把kD移出积分是一个近似估计
 
             vec3 f_diffuse  = Diffuse_Lambert(diffuse.rgb);  
 
-            vec3 diffuseColor = (1.0 - metallic) * k_diffuse * f_diffuse * res.sampl.outRadiance * res.w;    
+            vec3 diffuseColor = (1.0 - metallic) * k_diffuse * f_diffuse * res.sampl.outRadiance * res.w * NoL;    
             // vec3 diffuseColor = albedo / PI * indirectIrradiance;                                // 所有表面都当完美漫反射表面计算
 
             vec4 baseColor = vec4(0.0f);

@@ -34,7 +34,7 @@ void RayTracingBasePass::Build(RDGBuilder& builder)
 {
     if(IsEnabled())
     {
-        RDGTextureHandle outColor = builder.GetTexture("Final Color");
+        RDGTextureHandle outColor = builder.GetTexture("Mesh Pass Out Color");
 
         RDGRayTracingPassHandle pass = builder.CreateRayTracingPass(GetName())
         .RootSignature(rootSignature)

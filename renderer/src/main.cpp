@@ -5,24 +5,11 @@
 #include "Function/Framework/Component/TransformComponent.h"
 #include "Function/Framework/Component/DirectionalLightComponent.h"
 #include "Function/Framework/Component/SkyboxComponent.h"
-#include "Function/Global/EngineContext.h"
-#include "Function/Render/RenderPass/RenderPass.h"
-#include "Function/Render/RenderResource/Texture.h"
-#include "Runtime/Core/SurfaceCache/SurfaceCache.h"
 #include "Runtime/Function/Framework/Component/VolumeLightComponent.h"
-
-#include <algorithm>
-#include <climits>
-#include <cstddef>
-#include <cstdint>
-#include <deque>
+#include "Function/Global/EngineContext.h"
+#include "Function/Render/RenderResource/Texture.h"
 #include <functional>
-#include <memory>
-#include <queue>
-#include <stack>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
+#include <utility>
 #include <vector>
 
 void LoadScene()
@@ -559,26 +546,9 @@ int main()
     //InitStressTestScene();
     InitScene();
     //LoadScene();
-
     EngineContext::MainLoop();
     EngineContext::Destroy();
-    return 0;
-
-
-    // SurfaceAtlas atlas;
-    // auto fuck1 = atlas.Allocate(UVec2(257, 128));
-    // auto fuck2 = atlas.Allocate(UVec2(127, 127));
-    // auto fuck3 = atlas.Allocate(UVec2(259, 127));
-    // auto fuck4 = atlas.Allocate(UVec2(1024, 128));
-
-    // atlas.Release(fuck2);
-    // atlas.Release(fuck3);
-    // atlas.Release(fuck1);
-    // atlas.Release(fuck4);
-
-    // auto fuck5 = atlas.Allocate(UVec2(4095, 128));
-
-    
+    return 0; 
 }
 
 

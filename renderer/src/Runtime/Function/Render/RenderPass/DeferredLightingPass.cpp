@@ -1,6 +1,7 @@
 #include "DeferredLightingPass.h"
 #include "Function/Global/EngineContext.h"
 #include "Function/Render/RHI/RHIStructs.h"
+#include <memory>
 
 void DeferredLightingPass::Init()
 {

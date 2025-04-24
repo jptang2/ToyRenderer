@@ -118,12 +118,12 @@ void RenderSystem::InitPasses()
     passes[DDGI_VISUALIZE_PASS]                 = nullptr;
     passes[TRANSPARENT_PASS]                    = nullptr;
     passes[PATH_TRACING_PASS]                   = nullptr;
+    passes[RAY_TRACING_BASE_PASS]               = nullptr;
     passes[BLOOM_PASS]                          = std::make_shared<BloomPass>();
     passes[FXAA_PASS]                           = std::make_shared<FXAAPass>();
     passes[TAA_PASS]                            = std::make_shared<TAAPass>();
     passes[EXPOSURE_PASS]                       = std::make_shared<ExposurePass>();
     passes[POST_PROCESSING_PASS]                = std::make_shared<PostProcessingPass>();
-    passes[RAY_TRACING_BASE_PASS]               = nullptr;
     passes[GIZMO_PASS]                          = std::make_shared<GizmoPass>();
     passes[EDITOR_UI_PASS]                      = std::make_shared<EditorUIPass>();
     passes[PRESENT_PASS]                        = std::make_shared<PresentPass>();

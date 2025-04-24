@@ -35,28 +35,34 @@ void main() {
     vec3 currentColor       = imageLoad(SSSR_RESOLVE, pixel).xyz; 
     vec3 historyColor 		= RGBtoYCoCg(imageLoad(SSSR_HISTORY, prevPixel).xyz);
 
-    AdjacentTex3 adjTex;
-    adjTex.color[0][0]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(-1, -1)).xyz;	
-    adjTex.color[0][1]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(0, -1)).xyz;	
-    adjTex.color[0][2]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(1, -1)).xyz;	
-    adjTex.color[1][0]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(-1, 0)).xyz;	
-    adjTex.color[1][1]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(0, 0)).xyz;	
-    adjTex.color[1][2]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(1, 0)).xyz;	
-    adjTex.color[2][0]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(-1, 1)).xyz;	
-    adjTex.color[2][1]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(0, 1)).xyz;	
-    adjTex.color[2][2]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(1, 1)).xyz;	
-    RGBtoYCoCg(adjTex);
+    vec3 finalColor         = currentColor;
+    if(valid)
+    {
+        AdjacentTex3 adjTex;
+        adjTex.color[0][0]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(-1, -1)).xyz;	
+        adjTex.color[0][1]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(0, -1)).xyz;	
+        adjTex.color[0][2]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(1, -1)).xyz;	
+        adjTex.color[1][0]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(-1, 0)).xyz;	
+        adjTex.color[1][1]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(0, 0)).xyz;	
+        adjTex.color[1][2]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(1, 0)).xyz;	
+        adjTex.color[2][0]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(-1, 1)).xyz;	
+        adjTex.color[2][1]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(0, 1)).xyz;	
+        adjTex.color[2][2]      = imageLoad(SSSR_RESOLVE, pixel + ivec2(1, 1)).xyz;	
+        RGBtoYCoCg(adjTex);
 
-    vec3 cmin           = MinAdj3(adjTex);
-    vec3 cmax           = MaxAdj3(adjTex);
+        vec3 cmin           = MinAdj3(adjTex);
+        vec3 cmax           = MaxAdj3(adjTex);
 
-    //historyColor = YCoCgtoRGB(clamp(historyColor, cmin, cmax));
-    historyColor = YCoCgtoRGB(ClampedColor(historyColor, adjTex));
+        //historyColor = YCoCgtoRGB(clamp(historyColor, cmin, cmax));
+        historyColor = YCoCgtoRGB(ClampedColor(historyColor, adjTex));
 
-    // 混合输出////////////////////////////////////////////////////////////////////////////////////
-    float blendWeight   = saturate(SETTING.filterBlend);
-    vec3 finalColor     = Lerp(currentColor.xyz, historyColor.xyz, blendWeight);
-    screenColor         += finalColor;
+        // 混合输出////////////////////////////////////////////////////////////////////////////////////
+        float blendWeight   = saturate(SETTING.filterBlend);
+        finalColor          = Lerp(currentColor.xyz, historyColor.xyz, blendWeight);
+    }
+
+
+    screenColor += finalColor;
 
     vec4 traceResult = imageLoad(SSSR_HIT_RESULT, ivec2(tracePixel.xy));
     if(SETTING.visualizeHitUV != 0)     screenColor = vec3(traceResult.xy, 0.0f);
@@ -64,4 +70,6 @@ void main() {
 
     imageStore(OUT_COLOR,       ivec2(pixel.xy), vec4(screenColor, 1.0));
     imageStore(SSSR_HISTORY,    ivec2(pixel.xy), vec4(finalColor, 1.0));
+
+    imageStore(OUT_COLOR,       ivec2(pixel.xy), vec4(currentColor + screenColor.xyz, 1.0));
 }

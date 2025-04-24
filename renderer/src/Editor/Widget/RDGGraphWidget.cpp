@@ -11,6 +11,7 @@
 #include <regex>
 #include <set>
 #include <sys/stat.h>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -534,9 +535,9 @@ void RDGGraphWidget::UIInternel(bool* open)
     static std::vector<GraphNode> passNodes;
     static std::vector<GraphNode> resourceNodes;
     static std::vector<GraphLink> links; 
-    static std::map<std::string, GraphNode*> passNodesMap;
-    static std::map<std::string, GraphNode*> resourceNodesMap;
-    static std::map<uint32_t, GraphNode*> rdgNodeIdToNodes;   // 此处的ID是dependency graph的id，多个重名的会用同一个
+    static std::unordered_map<std::string, GraphNode*> passNodesMap;
+    static std::unordered_map<std::string, GraphNode*> resourceNodesMap;
+    static std::unordered_map<uint32_t, GraphNode*> rdgNodeIdToNodes;   // 此处的ID是dependency graph的id，多个重名的会用同一个
     static bool autoUpdate = false;
     static int autoUpdateCount = 0;
     
