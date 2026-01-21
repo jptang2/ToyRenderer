@@ -15,6 +15,21 @@ void RenderLightManager::Tick()
     PrepareLights();
 }
 
+std::shared_ptr<DirectionalLightComponent> RenderLightManager::GetDirectionalLight()                 
+{ 
+    return perframeLights[EngineContext::ThreadPool()->ThreadFrameIndex()].directionalLight; 
+}
+
+const std::vector<std::shared_ptr<PointLightComponent>>& RenderLightManager::GetPointShadowLights()  
+{ 
+    return perframeLights[EngineContext::ThreadPool()->ThreadFrameIndex()].pointShadowLights; 
+}
+
+const std::vector<std::shared_ptr<VolumeLightComponent>>& RenderLightManager::GetVolumeLights()     
+{ 
+    return perframeLights[EngineContext::ThreadPool()->ThreadFrameIndex()].volumeLights; 
+}
+
 void RenderLightManager::PrepareLights()
 {
     ENGINE_TIME_SCOPE(RenderLightManager::PrepareLights);
@@ -26,17 +41,19 @@ void RenderLightManager::PrepareLights()
     setting.volumeLightCnt = 0;
     setting.globalIndexOffset = 0;
 
-    directionalLight = nullptr;
-    pointShadowLights.clear();
-    volumeLights.clear();
+    auto& lights = perframeLights[EngineContext::ThreadPool()->ThreadFrameIndex()];
+
+    lights.directionalLight = nullptr;
+    lights.pointShadowLights.clear();
+    lights.volumeLights.clear();
 
     // 收集光源信息,更新参数
     // TODO 场景的CPU端剔除
 
-    directionalLight = EngineContext::World()->GetActiveScene()->GetDirectionalLight();
-    if(directionalLight && directionalLight->Enable()) 
+    lights.directionalLight = EngineContext::World()->GetActiveScene()->GetDirectionalLight();
+    if(lights.directionalLight && lights.directionalLight->Enable()) 
     {
-        directionalLight->UpdateLightInfo();
+        lights.directionalLight->UpdateLightInfo();
         setting.directionalLightCnt = 1;
     }
 
@@ -53,7 +70,7 @@ void RenderLightManager::PrepareLights()
             {                                                                           // TODO 可以做更新策略，阴影分帧更新等
                 pointLight->pointShadowID = setting.pointshadowedLightCnt++;
                 setting.pointShadowLightIDs[pointLight->pointShadowID] = pointLight->pointLightID;
-                pointShadowLights.push_back(pointLight);
+                lights.pointShadowLights.push_back(pointLight);
             }
             if(pointLight->Enable())
             {
@@ -71,7 +88,7 @@ void RenderLightManager::PrepareLights()
         {
             setting.volumeLightIDs[setting.volumeLightCnt] = volumeLight->volumeLightID;
             setting.volumeLightCnt++;
-            volumeLights.push_back(volumeLight);
+            lights.volumeLights.push_back(volumeLight);
 
             volumeLight->UpdateLightInfo();
         }

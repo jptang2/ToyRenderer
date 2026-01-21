@@ -1,9 +1,11 @@
 #pragma once
 
+#include "Core/Math/Math.h"
 #include "Function/Global/Definations.h"
 #include "Function/Render/RenderResource/Buffer.h"
 #include "Function/Render/RenderResource/RenderStructs.h"
 
+#include "Function/Render/RenderResource/Shader.h"
 #include "MeshPass.h"
 #include "RenderPass.h"
 #include <array>
@@ -27,36 +29,29 @@ public:
 	void CollectStatisticDatas();
 
 private:
-	struct CullingSetting
-	{
-		uint32_t processSize = 0;
-		uint32_t _padding[3];
-
-		uint32_t passType [MAX_SUPPORTED_MESH_PASS_COUNT];
-		uint32_t passOffset [MAX_SUPPORTED_MESH_PASS_COUNT];
-	};
-	std::array<Buffer<CullingSetting>, FRAMES_IN_FLIGHT> cullingSettingBuffer;
-	CullingSetting cullingSetting;
-
 	struct CullingLodSetting
 	{
+		uint32_t passType = 0;	// 当前处理的meshpass种类
+		uint32_t passCount = 0;	// pass数量
+
 		float lodErrorRate = 0.01f;
 		float lodErrorOffset = 0.0f;
 		uint32_t disableVirtualMeshCulling = 0;	// 强制虚拟几何体使用LOD0,在ReSTIR中需要光栅G-Buffer和加速结构的几何一致
 		uint32_t disableOcclusionCulling = 0;
 		uint32_t disableFrustrumCulling = 0;
 		uint32_t showBoundingBox = 0;
+		uint32_t enableStatistics = 0;
 	};
 	CullingLodSetting lodSetting = {};
 
     Shader cullingShader;
+	Shader clusterGroupCullingShader;
 	Shader clusterCullingShader;
     
     RHIRootSignatureRef rootSignature;
     RHIComputePipelineRef cullingPipeline;
+	RHIComputePipelineRef clusterGroupCullingPipeline;
 	RHIComputePipelineRef clusterCullingPipeline;
-
-	std::array<std::vector<std::shared_ptr<MeshPassIndirectBuffers>>, MESH_PASS_TYPE_MAX_CNT> indirectBuffers;   
 
 private:
 	struct ReadBackData

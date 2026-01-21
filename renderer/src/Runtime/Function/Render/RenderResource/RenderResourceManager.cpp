@@ -70,17 +70,22 @@ void RenderResourceManager::SetTLAS(const RHITopLevelAccelerationStructureRef& t
 
 void RenderResourceManager::SetCameraInfo(const CameraInfo& cameraInfo)
 {
-    perFrameResources[EngineContext::CurrentFrameIndex()].cameraBuffer.SetData(cameraInfo);
+    perFrameResources[EngineContext::ThreadPool()->ThreadFrameIndex()].cameraBuffer.SetData(cameraInfo);
 }
 
 void RenderResourceManager::SetObjectInfo(const ObjectInfo& objectInfo, uint32_t objectID)
 {
-    perFrameResources[EngineContext::CurrentFrameIndex()].objectBuffer.SetData(objectInfo, objectID);
+    perFrameResources[EngineContext::ThreadPool()->ThreadFrameIndex()].objectBuffer.SetData(objectInfo, objectID);
+}
+
+void RenderResourceManager::SetObjectInfos(const std::vector<ObjectInfo>& objectInfos, uint32_t baseObjectID)
+{
+    perFrameResources[EngineContext::ThreadPool()->ThreadFrameIndex()].objectBuffer.SetData(objectInfos, baseObjectID);
 }
 
 void RenderResourceManager::SetDirectionalLightInfo(const DirectionalLightInfo& directionalLightInfo, uint32_t cascade)
 {
-    perFrameResources[EngineContext::CurrentFrameIndex()].lightBuffer.SetData(
+    perFrameResources[EngineContext::ThreadPool()->ThreadFrameIndex()].lightBuffer.SetData(
         &directionalLightInfo, 
         sizeof(DirectionalLightInfo), 
         DIR_LIGHT_OFFSET + cascade * sizeof(DirectionalLightInfo));
@@ -88,7 +93,7 @@ void RenderResourceManager::SetDirectionalLightInfo(const DirectionalLightInfo& 
 
 void RenderResourceManager::SetPointLightInfo(const PointLightInfo& pointLightInfo, uint32_t pointLightID)
 {
-    perFrameResources[EngineContext::CurrentFrameIndex()].lightBuffer.SetData(
+    perFrameResources[EngineContext::ThreadPool()->ThreadFrameIndex()].lightBuffer.SetData(
         &pointLightInfo, 
         sizeof(PointLightInfo), 
         POINT_LIGHT_OFFSET + pointLightID * sizeof(PointLightInfo));
@@ -96,7 +101,7 @@ void RenderResourceManager::SetPointLightInfo(const PointLightInfo& pointLightIn
 
 void RenderResourceManager::SetVolumeLightInfo(const VolumeLightInfo& volumeLightInfo, uint32_t volumeLightID)
 {
-    perFrameResources[EngineContext::CurrentFrameIndex()].lightBuffer.SetData(
+    perFrameResources[EngineContext::ThreadPool()->ThreadFrameIndex()].lightBuffer.SetData(
         &volumeLightInfo, 
         sizeof(VolumeLightInfo), 
         VOLUME_LIGHT_OFFSET + volumeLightID * sizeof(VolumeLightInfo));    
@@ -122,7 +127,7 @@ void RenderResourceManager::SetVolumeLightTextures(const VolumeLightTextures& vo
 
 void RenderResourceManager::SetLightSetting(const LightSetting& lightSetting)
 {
-    perFrameResources[EngineContext::CurrentFrameIndex()].lightBuffer.SetData(
+    perFrameResources[EngineContext::ThreadPool()->ThreadFrameIndex()].lightBuffer.SetData(
         &lightSetting, 
         sizeof(LightSetting), 
         LIGHT_SETTING_OFFSET);
@@ -143,9 +148,9 @@ void RenderResourceManager::SetMeshClusterGroupInfo(const std::vector<MeshCluste
     multiFrameResource.meshClusterGroupBuffer.SetData(meshClusterGroupInfo, baseMeshClusterGroupID);
 }
 
-void RenderResourceManager::SetMeshCardInfo(const MeshCardInfo& meshCardInfo, uint32_t meshCardID)
+void RenderResourceManager::SetMeshCardInfos(const std::vector<MeshCardInfo>& cards, uint32_t size)
 {
-    perFrameResources[EngineContext::CurrentFrameIndex()].meshCardBuffer.SetData(meshCardInfo, meshCardID);
+    perFrameResources[EngineContext::ThreadPool()->ThreadFrameIndex()].meshCardBuffer.SetData(cards.data(), 0, size);
 }
 
 void RenderResourceManager::SetVertexInfo(const VertexInfo& vertexInfo, uint32_t vertexID)
@@ -155,7 +160,7 @@ void RenderResourceManager::SetVertexInfo(const VertexInfo& vertexInfo, uint32_t
 
 void RenderResourceManager::SetGizmoDataCommand(void* data, int size)
 {
-    perFrameResources[EngineContext::CurrentFrameIndex()].gizmoBuffer.SetData(
+    perFrameResources[EngineContext::ThreadPool()->ThreadFrameIndex()].gizmoBuffer.SetData(
         data,
         size * sizeof(RHIIndexedIndirectCommand),
         0);    
@@ -163,7 +168,7 @@ void RenderResourceManager::SetGizmoDataCommand(void* data, int size)
 
 void RenderResourceManager::GetMeshCardReadback(MeshCardReadBack& readback)
 {
-    multiFrameResource.cardReadBackBuffer.GetData(&readback);
+    multiFrameResource.cardReadbackBuffer.GetData(&readback);
 }
 
 RHIShaderRef RenderResourceManager::GetOrCreateRHIShader(const std::string& path, ShaderFrequency frequency, const std::string& entry)
@@ -187,22 +192,22 @@ RHIShaderRef RenderResourceManager::GetOrCreateRHIShader(const std::string& path
 
 RHIBufferRef RenderResourceManager::GetGlobalClusterDrawInfoBuffer()           
 { 
-    return perFrameResources[EngineContext::CurrentFrameIndex()].clusterDrawInfoBuffer.buffer; 
+    return perFrameResources[EngineContext::ThreadPool()->ThreadFrameIndex()].clusterDrawInfoBuffer.buffer; 
 } 
 
 RHIBufferRef RenderResourceManager::GetLightClusterIndexBuffer()               
 { 
-    return perFrameResources[EngineContext::CurrentFrameIndex()].lightClusterIndexBuffer.buffer;
+    return perFrameResources[EngineContext::ThreadPool()->ThreadFrameIndex()].lightClusterIndexBuffer.buffer;
 } 
 
 RHIBufferRef RenderResourceManager::GetGizmoDataBuffer()
 {
-    return perFrameResources[EngineContext::CurrentFrameIndex()].gizmoBuffer.buffer;
+    return perFrameResources[EngineContext::ThreadPool()->ThreadFrameIndex()].gizmoBuffer.buffer;
 }
 
 RHIDescriptorSetRef RenderResourceManager::GetPerFrameDescriptorSet() 
 { 
-    return perFrameResources[EngineContext::CurrentFrameIndex()].descriptorSet; 
+    return perFrameResources[EngineContext::ThreadPool()->ThreadFrameIndex()].descriptorSet; 
 }
 
 void RenderResourceManager::InitGlobalResources()
@@ -307,7 +312,7 @@ void RenderResourceManager::InitGlobalResources()
         {
             texture = std::make_shared<Texture>( 
                 TEXTURE_TYPE_CUBE, 
-                FORMAT_R32G32B32A32_SFLOAT,
+                FORMAT_R32G32_SFLOAT,
                 Extent3D(POINT_SHADOW_SIZE, POINT_SHADOW_SIZE, 1),
                 6, 1);
         }
@@ -453,7 +458,7 @@ void RenderResourceManager::InitGlobalResources()
             .binding = PER_FRAME_BINDING_MESH_CARD_READBACK,
             .index = 0,
             .resourceType = RESOURCE_TYPE_RW_BUFFER,
-            .buffer = multiFrameResource.cardReadBackBuffer.buffer});
+            .buffer = multiFrameResource.cardUpdateBuffer.buffer});
 
         resource.descriptorSet->UpdateDescriptor({
             .binding = PER_FRAME_BINDING_MATERIAL,

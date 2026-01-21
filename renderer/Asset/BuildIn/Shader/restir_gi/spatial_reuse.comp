@@ -6,9 +6,6 @@
 #include "../common/common.glsl"
 #include "include/common.glsl"
 
-
-
-
 float CalculateJacobian(
     vec3 receiverPos,
     vec3 neighborreceiverPos,
@@ -41,16 +38,6 @@ float CalculateJacobian(
     return jacobian;
 }
 
-
-
-
-
-
-
-
-
-
-
 #define THREAD_SIZE_X 16
 #define THREAD_SIZE_Y 16
 #define THREAD_SIZE_Z 1
@@ -60,17 +47,17 @@ layout (local_size_x = THREAD_SIZE_X,
 void main() 
 {
     ivec2 pixel     = ivec2(gl_GlobalInvocationID.xy);
-	ivec2 screenPixel = pixel * 2;
+	ivec2 screenPixel = ivec2(pixel.x * WIDTH_DOWNSAMPLE_RATE, pixel.y * HEIGHT_DOWNSAMPLE_RATE);
     vec2 uv         = ScreenPixToUV(screenPixel); 
 
-   	vec4 gbffer0    = imageLoad(G_BUFFER_DIFFUSE_ROUGHNESS, screenPixel);
-    vec4 gbffer1    = imageLoad(G_BUFFER_NORMAL_METALLIC, screenPixel);
+   	vec4 gbffer0    = imageLoad(G_BUFFER_DIFFUSE_METALLIC, screenPixel);
+    vec4 gbffer1    = imageLoad(G_BUFFER_NORMAL_ROUGHNESS, screenPixel);
     vec4 gbffer2    = imageLoad(G_BUFFER_EMISSION, screenPixel);
     vec3 diffuse    = gbffer0.xyz;
     vec3 normal     = normalize(gbffer1.xyz);
     vec3 emission   = gbffer2.xyz;
-    float roughness = gbffer0.w;
-    float metallic  = gbffer1.w;
+    float roughness = gbffer1.w;
+    float metallic  = gbffer0.w;
     vec4 worldPos   = DepthToWorld(uv); 
 	float depth 	= FetchDepthTex(screenPixel);
 
@@ -93,14 +80,14 @@ void main()
 			float radius = sqrt(RandFloat(rand)) * RESTIR_GI_SETTING.spatialRadius;
 
 			ivec2 randNeighborOffset = ivec2(floor(cos(angle) * radius), floor(sin(angle) * radius));
-			ivec2 randNeighborPixel  = ivec2(clamp(int(pixel.x) + randNeighborOffset.x, 0, int(WINDOW_WIDTH) / 2 - 1),
-											 clamp(int(pixel.y) + randNeighborOffset.y, 0, int(WINDOW_HEIGHT) / 2 - 1));
-            ivec2 randNeighborScreenPixel = randNeighborPixel * 2;
+			ivec2 randNeighborPixel  = ivec2(clamp(int(pixel.x) + randNeighborOffset.x, 0, int(WINDOW_WIDTH) / WIDTH_DOWNSAMPLE_RATE - 1),
+											 clamp(int(pixel.y) + randNeighborOffset.y, 0, int(WINDOW_HEIGHT) / HEIGHT_DOWNSAMPLE_RATE - 1));
+            ivec2 randNeighborScreenPixel = ivec2(randNeighborPixel.x * WIDTH_DOWNSAMPLE_RATE, randNeighborPixel.y * HEIGHT_DOWNSAMPLE_RATE);
 			vec2 randNeighborUV = ScreenPixToUV(randNeighborScreenPixel);
 			uint randIndex 		= ReservoirIndex(randNeighborPixel);	
 			
 			neighborNumStreamSamples[j] = RESERVOIRS[randIndex].numStreamSamples; 
-			neighborNormal[j] = normalize(imageLoad(G_BUFFER_NORMAL_METALLIC, randNeighborScreenPixel).xyz);
+			neighborNormal[j] = normalize(imageLoad(G_BUFFER_NORMAL_ROUGHNESS, randNeighborScreenPixel).xyz);
             neighborWorldPos[j] = DepthToWorld(randNeighborUV); 
 
 			float neighborDepth = FetchDepthTex(randNeighborScreenPixel);
@@ -134,7 +121,7 @@ void main()
             {		
                 if(RESTIR_GI_SETTING.visibilityReuse != 0)		// 可见性测试是最主要的性能开销
                 {
-                    bool shadowed = RayQueryVisibility(neighborWorldPos[j].xyz, res.sampl.hitPos);
+                    bool shadowed = RayQueryVisibility(neighborWorldPos[j].xyz, res.sampl.hitPos, GLOBAL_SETTING.rayTracingOffset);
                     if(shadowed) continue;
                 }
                         
@@ -143,7 +130,7 @@ void main()
 
             if(RESTIR_GI_SETTING.visibilityReuse != 0)
             {
-                bool shadowed = RayQueryVisibility(worldPos.xyz, res.sampl.hitPos);
+                bool shadowed = RayQueryVisibility(worldPos.xyz, res.sampl.hitPos, GLOBAL_SETTING.rayTracingOffset);
                 if(shadowed) 
                 {
                     CleanGIReservoir(res);			

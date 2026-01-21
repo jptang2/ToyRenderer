@@ -10,8 +10,9 @@ class WindowsSemaphore : public Semaphore
 {
 public:
 
-	WindowsSemaphore()
-	: semaphore(CreateSemaphore(nullptr, 0, 1, nullptr))
+	WindowsSemaphore(uint32_t maxCount)
+	: Semaphore(maxCount)
+	, semaphore(CreateSemaphore(nullptr, 0, maxCount, nullptr))
 	{}
 
 	~WindowsSemaphore() { CloseHandle(semaphore); }

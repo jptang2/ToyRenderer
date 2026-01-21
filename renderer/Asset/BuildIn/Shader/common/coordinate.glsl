@@ -43,7 +43,7 @@ vec4 ViewToNDC(in vec4 view)
     return ndc;
 }  
 
-vec2 viewToScreen(in vec4 view)
+vec2 ViewToScreen(in vec4 view)
 {
     return NDCToScreen(ViewToNDC(view).xy);
 }  
@@ -60,17 +60,20 @@ vec4 WorldToView(in vec4 world)
 
 vec4 WorldToClip(in vec4 world)
 {
-    return ViewToClip(WorldToView(world));
+    return CAMERA.viewProj * world;
 }
 
 vec4 WorldToNDC(in vec4 world)
 {
-    return ViewToNDC(WorldToView(world));
+    vec4 ndc = CAMERA.viewProj * world;
+    ndc /= ndc.w;
+
+    return ndc;
 }  
 
 vec2 WorldToScreen(in vec4 world)
 {
-    return viewToScreen(WorldToView(world));
+    return NDCToScreen(WorldToNDC(world).xy);
 }
 
 vec4 NDCToWorld(in vec4 ndc)
@@ -102,6 +105,11 @@ vec4 PrevDepthToView(in vec2 coord)
 vec4 DepthToWorld(in vec2 coord)
 {
     return ViewToWorld(DepthToView(coord));
+}   
+
+vec4 DepthToWorld(in vec2 coord, in float depth)
+{
+    return ViewToWorld(ScreenToView(coord, depth));
 }   
 
 vec4 PrevDepthToWorld(in vec2 coord)

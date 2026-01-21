@@ -33,7 +33,7 @@ void main()
     OUT_TANGENT         = worldTangent;
     OUT_ID              = objectID;
 
-    gl_Position = CAMERA.proj * CAMERA.view * model * pos;
+    gl_Position = CAMERA.viewProj * model * pos;
 }
 
 

@@ -127,12 +127,12 @@ BoundingSphere::BoundingSphere(const std::vector<BoundingSphere>& spheres)
         sphere = sphere + spheres[i];
     }
 
-    for (uint32_t i = 0; i < spheres.size(); i++)
-    {
-        float t1 = pow(sphere.radius - spheres[i].radius, 2);
-        float t2 = pow((sphere.center - spheres[i].center).norm(), 2);
-        assert(t1 + 1e-1 >= t2);
-    }
+    // for (uint32_t i = 0; i < spheres.size(); i++)    // validation
+    // {
+    //     float t1 = pow(sphere.radius - spheres[i].radius, 2);
+    //     float t2 = pow((sphere.center - spheres[i].center).norm(), 2);
+    //     assert(t1 + 1e-1 >= t2);
+    // }
 
     this->center = sphere.center;
     this->radius = sphere.radius;

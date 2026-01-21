@@ -1,9 +1,11 @@
 #include "Material.h"
+#include "Core/Event/AllEvents.h"
 #include "Function/Global/EngineContext.h"
 #include "Function/Render/RenderResource/Shader.h"
 #include "Function/Render/RenderResource/Texture.h"
 #include "Resource/Asset/Asset.h"
 #include <cstdint>
+#include <memory>
 
 CEREAL_REGISTER_TYPE(Material)
 CEREAL_REGISTER_POLYMORPHIC_RELATION(Asset, Material)
@@ -59,6 +61,7 @@ void Material::Update()
     materialInfo.roughness = roughness;
     materialInfo.metallic = metallic;
     materialInfo.alphaClip = alphaClip;
+    materialInfo.useVertexColor = useVertexColor ? 1 : 0;
 
     materialInfo.diffuse = diffuse;
     materialInfo.emission = emission;
@@ -67,6 +70,9 @@ void Material::Update()
     if(textureNormal)   materialInfo.textureNormal = textureNormal->textureID;
     if(textureArm)      materialInfo.textureArm = textureArm->textureID;
     if(textureSpecular) materialInfo.textureSpecular = textureSpecular->textureID;
+    
+    materialInfo.textureOffset = textureOffset;
+    materialInfo.textureScale = textureScale;
 
     materialInfo.ints = ints;
     materialInfo.floats = floats;
@@ -80,7 +86,7 @@ void Material::Update()
         if(textureCube[i]) materialInfo.textureCube[i] = textureCube[i]->textureID;
         if(texture3D[i]) materialInfo.texture3D[i] = texture3D[i]->textureID;
     }
-
     EngineContext::RenderResource()->SetMaterialInfo(materialInfo, materialID);
+    EngineContext::Event()->AsyncDispatch(std::make_shared<MaterialUpdateEvent>(this, (uint64_t)this));
 }
 

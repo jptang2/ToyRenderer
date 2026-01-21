@@ -6,9 +6,7 @@
 #include "../common/common.glsl"
 #include "include/common.glsl"
 
-
-
-void RayTraceSurfaceCache(out HitSample hitSample, vec3 worldPos, vec3 worldDir) 
+bool RayTraceSurfaceCache(out HitSample hitSample, vec3 worldPos, vec3 worldDir) 
 {
 	vec4 lighting;
 	uint hitObjectID;
@@ -17,17 +15,21 @@ void RayTraceSurfaceCache(out HitSample hitSample, vec3 worldPos, vec3 worldDir)
 
 	bool valid = RayQueryHitObject(
 		worldPos, worldPos + normalize(worldDir) * MAX_RAY_TRACING_DISTANCE, 
+		GLOBAL_SETTING.rayTracingOffset,	// 虚拟几何和光追加速结构不一致，做一点偏移 
 		hitObjectID, 
 		hitPos, 
 		hitNormal);
-
+		
 	if(valid)   // 命中物体
 	{
-		FetchSurfaceCacheLighting(lighting, hitObjectID, hitPos.xyz, hitNormal);
+		bool cacheValid = FetchSurfaceCacheLighting(lighting, hitObjectID, hitPos.xyz, hitNormal);
+		cacheValid = cacheValid && dot(-worldDir, hitNormal) >= 0.0f;	//命中背面
 
 		hitSample.hitPos = hitPos.xyz;
 		hitSample.hitNormal = hitNormal;
-		hitSample.outRadiance = lighting.xyz;
+		hitSample.outRadiance = cacheValid ? lighting.xyz : vec3(0.0f);	
+
+		return cacheValid;
 	}
 	else		// 天空盒
 	{
@@ -35,10 +37,10 @@ void RayTraceSurfaceCache(out HitSample hitSample, vec3 worldPos, vec3 worldDir)
 		hitSample.hitNormal = -worldDir;
 		if(RESTIR_GI_SETTING.enableSkybox != 0)	hitSample.outRadiance = FetchSkyLight(worldDir).xyz;
 		else									hitSample.outRadiance = vec3(0.0f);
+
+		return true;
 	}
 }
-
-
 
 #define THREAD_SIZE_X 16
 #define THREAD_SIZE_Y 16
@@ -49,17 +51,17 @@ layout (local_size_x = THREAD_SIZE_X,
 void main() 
 {
     ivec2 pixel     = ivec2(gl_GlobalInvocationID.xy);
-	ivec2 screenPixel = pixel * 2;
+	ivec2 screenPixel = ivec2(pixel.x * WIDTH_DOWNSAMPLE_RATE, pixel.y * HEIGHT_DOWNSAMPLE_RATE);
     vec2 uv         = ScreenPixToUV(screenPixel); 
 
-    vec4 gbffer0    = imageLoad(G_BUFFER_DIFFUSE_ROUGHNESS, screenPixel);
-    vec4 gbffer1    = imageLoad(G_BUFFER_NORMAL_METALLIC, screenPixel);
+    vec4 gbffer0    = imageLoad(G_BUFFER_DIFFUSE_METALLIC, screenPixel);
+    vec4 gbffer1    = imageLoad(G_BUFFER_NORMAL_ROUGHNESS, screenPixel);
     vec4 gbffer2    = imageLoad(G_BUFFER_EMISSION, screenPixel);
     vec3 diffuse    = gbffer0.xyz;
-    vec3 normal     = normalize(gbffer1.xyz);
+    vec3 normal     = gbffer1.xyz;
     vec3 emission   = gbffer2.xyz;
-    float roughness = gbffer0.w;
-    float metallic  = gbffer1.w;
+    float roughness = gbffer1.w;
+    float metallic  = gbffer0.w;
     vec4 worldPos   = DepthToWorld(uv);
 	float depth 	= FetchDepthTex(screenPixel);
 
@@ -67,7 +69,7 @@ void main()
 
     uint reservoirIndex = ReservoirIndex(pixel);
     GIReservoir res = NewGIReservoir();
-    Rand rand = SeedRand(GLOBAL_SETTING.totalTicks, (pixel.y + WINDOW_HEIGHT / 2) * GLOBAL_SETTING.totalTicks + (pixel.x + WINDOW_WIDTH / 2));
+    Rand rand = SeedRand(GLOBAL_SETTING.totalTicks, (pixel.y + WINDOW_HEIGHT / HEIGHT_DOWNSAMPLE_RATE) * GLOBAL_SETTING.totalTicks + (pixel.x + WINDOW_WIDTH / WIDTH_DOWNSAMPLE_RATE));
 
     if(depth == 1.0f)    // 无效的G-Buffer信息
     {
@@ -81,11 +83,33 @@ void main()
 		vec3 L             = normalize(TangentToWorld(newSample.xyz, normal));     
 		float pdf          = newSample.w;															// proposel PDF, 1 / (2 * PI)
 
+		// L = normal;		// 可以用这个法子可视化trace结果
+
+		// vec2 seed           	= vec2(RandFloat(rand), RandFloat(rand));
+		// vec3 N              	= normalize(normal); 
+		// vec4 newSample          = CosineSampleHemisphere(seed);                   // 余弦采样
+		// vec3 L           		= normalize(TangentToWorld(newSample.xyz, N));     
+		// float pdf    			= newSample.w;
+
+		// float a2            = pow(roughness, 4) ; 
+		// vec2 seed           = vec2(RandFloat(rand), RandFloat(rand));
+		// vec4 newSample      = ImportanceSampleGGX(seed, a2);
+		// vec3 N              = normalize(normal); 
+		// vec3 V              = normalize(CAMERA.pos.xyz - worldPos.xyz);	
+		// vec3 H              = normalize(TangentToWorld(newSample.xyz, N));   //半程向量
+		// float HPDF          = newSample.a;
+		// float VoH           = clamp(dot(V, H), 0.0f, 1.0f);
+		// float pdf           = RayPDFToReflectionRayPDF(VoH, HPDF);
+		// vec3 L              = normalize(2.0 * dot(V, H) * H - V);
+
+
+
+
 		HitSample hitSample;
-		RayTraceSurfaceCache(hitSample, worldPos.xyz, L); 
+		bool valid = RayTraceSurfaceCache(hitSample, worldPos.xyz, L); 
 		float pHat = EvaluatePHat(hitSample); 
 
-		AddSampleToGIReservoir(res, hitSample, pHat, pdf, rand);
+		if(valid) AddSampleToGIReservoir(res, hitSample, pHat, pdf, rand);
 	}
 	
 	// 时域复用Reservoir //////////////////////////////////
@@ -94,8 +118,8 @@ void main()
 	{
 		vec4 reprojection   = texelFetch(REPROJECTION_RESULT, screenPixel, 0);	
 		ivec2 prevPixel     = ivec2(reprojection.zw);
-		prevPixel /= 2;
-		bool valid          = prevPixel.x > 0.0f ? true : false;	
+		prevPixel 			= ivec2(prevPixel.x / WIDTH_DOWNSAMPLE_RATE, prevPixel.y / HEIGHT_DOWNSAMPLE_RATE);
+		bool valid          = prevPixel.x > 0.0f ? true : false;		// TODO 是否需要专门计算下采样的重投影？
 
 		if(valid)
 		{
@@ -109,7 +133,7 @@ void main()
 
 	if (RESTIR_GI_SETTING.visibilityReuse != 0) 
 	{
-		bool shadowed = RayQueryVisibility(worldPos.xyz, res.sampl.hitPos);
+		bool shadowed = RayQueryVisibility(worldPos.xyz, res.sampl.hitPos, GLOBAL_SETTING.rayTracingOffset);
 		if (shadowed) 
 		{
 			CleanGIReservoir(res);		
@@ -118,4 +142,23 @@ void main()
 
 	RESERVOIRS[reservoirIndex] = res;
 	// RESULT_RESERVOIRS[reservoirIndex] = res;
+
+
+	// vec3 lighting = vec3(0.0f);
+	// for (int i = 0; i < RESTIR_GI_SETTING.initialSampleCount; i++) 
+	// {	
+	// 	vec4 newSample     = UniformSampleHemisphere(vec2(RandFloat(rand), RandFloat(rand)));     	// 半球均匀采样
+	// 	vec3 L             = normalize(TangentToWorld(newSample.xyz, normal));     
+	// 	float pdf          = newSample.w;															// proposel PDF, 1 / (2 * PI)
+
+	// 	HitSample hitSample;
+	// 	RayTraceSurfaceCache(hitSample, worldPos.xyz, L); 
+	// 	vec3 N = normalize(normal);
+	// 	float NoL = saturate(dot(N, L));
+		
+	// 	lighting += hitSample.outRadiance * NoL / pdf;
+	// }
+	// res.w = 1.0f;
+	// res.sampl.outRadiance = lighting / RESTIR_GI_SETTING.initialSampleCount;
+	// RESERVOIRS[reservoirIndex] = res;
 }

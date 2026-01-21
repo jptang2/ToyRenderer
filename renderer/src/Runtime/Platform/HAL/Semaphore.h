@@ -6,7 +6,7 @@
 class Semaphore // 信号量抽象
 {
 public:
-    Semaphore() {};
+    Semaphore(uint32_t maxCount) {};
     Semaphore(const Semaphore&) = delete;
 	Semaphore& operator=(const Semaphore&) = delete;
 

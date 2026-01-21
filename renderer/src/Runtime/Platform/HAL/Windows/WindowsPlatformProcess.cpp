@@ -2,11 +2,14 @@
 #include "WindowsRunnableThread.h"
 #include "WindowsSemaphore.h"
 #include "WindowsEvent.h"
-#include "Platform/HAL/Windows/WindowsCriticalSection.h"
+#include "WindowsMutex.h"
 
 #include <memory>
+#include <minwindef.h>
+#include <processthreadsapi.h>
 
 #undef CreateSemaphore
+#undef CreateMutex
 
 //线程 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 RunnableThreadRef WindowsPlatformProcess::CreateRunnableThread() 
@@ -21,25 +24,31 @@ void WindowsPlatformProcess::Sleep(float seconds)
 	else					::Sleep(milliseconds);
 }
 
-//信号量 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-SemaphoreRef WindowsPlatformProcess::CreateSemaphore() 
+uint32_t WindowsPlatformProcess::GetThreadID()
 {
-    return std::make_shared<WindowsSemaphore>(); 
+	DWORD threadID = GetCurrentThreadId();
+	return threadID;
+}
+
+//信号量 ////////////////////////////////////////////////////////////////////////////////////////////////////////
+SemaphoreRef WindowsPlatformProcess::CreateSemaphore(uint32_t maxCount) 
+{
+    return std::make_shared<WindowsSemaphore>(maxCount); 
 }
 
 //事件 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-EventRef WindowsPlatformProcess::CreateSyncEvent(bool manualReset)
+SyncEventRef WindowsPlatformProcess::CreateSyncEvent(bool manualReset)
 {
-	EventRef event = std::make_shared<WindowsEvent>();	
+	SyncEventRef event = std::make_shared<WindowsEvent>();	
 	if (!event->Create(manualReset)) event = NULL;
 
 	return event;
 }
 
 //临界区 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-CriticalSectionRef WindowsPlatformProcess::CreateCriticalSection()
+MutexRef WindowsPlatformProcess::CreateMutex()
 {
-	return std::make_shared<WindowsCriticalSection>();
+	return std::make_shared<WindowsMutex>();
 }
 
 

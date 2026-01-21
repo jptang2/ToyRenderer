@@ -19,6 +19,7 @@ public:
 	virtual void OnUpdate(float deltaTime) override;
 
     void SetEnable(bool enable)                     { this->enable = enable; }
+    void SetBlendWeight(float blendWeight)          { this->blendWeight = blendWeight; }
     void SetProbeCounts(IVec3 probeCounts)          { this->probeCounts = probeCounts;  UpdateTexture(); }
     void SetGridStep(Vec3 gridStep)                 { this->gridStep = gridStep; }
     void SetRaysPerProbe(int raysPerProbe)          { this->raysPerProbe = raysPerProbe; UpdateTexture(); }
@@ -62,7 +63,7 @@ private:
     Vec3 gridStep = Vec3(3.0f, 3.0f, 3.0f);     // 探针间隔
     int raysPerProbe = 256;                             // 探针射线数量
     float normalBias = 0.25f;
-    float energyPreservation = 0.95f;                    // 能量守恒系数，防止光爆掉
+    float energyPreservation = 1.0f;                    // 能量守恒系数，防止光爆掉
     float depthSharpness = 50.0f;
     float blendWeight = 0.95f;
     bool visibilityTest = true;
@@ -74,7 +75,7 @@ private:
     float visulaizeProbeScale = 0.3f;                   // 可视化探针尺寸
 
 	int updateFrequences[2]	= { 1, 1 };			//分成两部分更新：更新场景几何信息和更新光照
-	int updateCnts[2]		= { 0, 0 };
+	int updateCnts[2]		= { 0, -1 };
 	bool shouldUpdate[2]    = { false , false };			
 
 	BoundingBox box;                 //包围盒

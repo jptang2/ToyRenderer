@@ -6,7 +6,7 @@
 #include "Function/Render/RHI/RHI.h"
 #include "Function/Render/RHI/RHIResource.h"
 #include "Function/Render/RHI/RHIStructs.h"
-#include "Platform/HAL/CriticalSection.h"
+#include "Platform/HAL/Mutex.h"
 
 #include <memory>
 #include <volk.h>
@@ -145,7 +145,7 @@ private:
     RHICommandListImmediateRef immediateCommand;
 
     // 同步
-    CriticalSectionRef sync;
+    MutexRef sync;
 
     // 是否已初始化ImGui，用于析构时释放资源
     bool initImGui = false;
@@ -201,6 +201,8 @@ public:
 
     virtual void SetScissor(Offset2D min, Offset2D max) override final;
 
+    virtual void ClearScissors(const std::vector<ClearAttachment>& attachments, const std::vector<Rect2D>& scissors, uint32_t baseArrayLayer, uint32_t layerCount) override final;
+
     virtual void SetDepthBias(float constantBias, float slopeBias, float clampBias) override final;
 
     virtual void SetLineWidth(float width) override final;
@@ -239,7 +241,7 @@ public:
 
     virtual void ImGuiCreateFontsTexture() override final;
 
-    virtual void ImGuiRenderDrawData() override final;
+    virtual void ImGuiRenderDrawData(ImGuiDrawFunc func) override final;
 
     const VkCommandBuffer& GetHandle() { return handle; }
 

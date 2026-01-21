@@ -72,8 +72,8 @@ void TAAPass::Build(RDGBuilder& builder)
             command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
             command->BindDescriptorSet(context.descriptors[1], 1);
             command->PushConstants(&setting, sizeof(TAASetting), SHADER_FREQUENCY_COMPUTE);
-            command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                EngineContext::Render()->GetWindowsExtent().height / 16, 
+            command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                 1);
         })
         .Finish();

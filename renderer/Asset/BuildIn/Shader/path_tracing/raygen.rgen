@@ -22,6 +22,7 @@ void main()
 		RAY_PAYLOAD.lightColor = vec3(0.0);
 		RAY_PAYLOAD.distance = 0.0f;
 		RAY_PAYLOAD.pdf = 1.0f; 
+		RAY_PAYLOAD.numBounce = 0;
 
 		vec2 ditterPixel      = pixel + vec2(RandFloat(RAY_PAYLOAD.rand), RandFloat(RAY_PAYLOAD.rand)) - vec2(0.5f);
 		vec2 ditterUV         = ScreenPixToUV(ditterPixel); 
@@ -54,22 +55,23 @@ void main()
 			vec3 hitLightColor	= RAY_PAYLOAD.lightColor;
 			float hitDistance 	= RAY_PAYLOAD.distance;
 			float hitPdf		= RAY_PAYLOAD.pdf;
+			vec3 hitColor 		= throughput * hitLightColor;
 
 			if(hitDistance == MAX_RAY_TRACING_DISTANCE)		// 找到天空
 			{
-				if(SETTING.sampleSkyBox > 0 || b == 0)  outColor += throughput * hitLightColor;	
+				if(SETTING.sampleSkyBox > 0 || b == 0)  outColor += hitColor;	
 				break;
 			}
 			if(SETTING.indirectOnly == 0 || b > 0) 			// 本轮的光照
 			{
-				outColor += throughput * hitLightColor;
+				outColor += hitColor;
 			}			
-			if(hitPdf == 0.0f)								// 下一轮反射的采样无效
+			if(hitPdf < 1e-5)								// 下一轮反射的采样无效
 			{
 				break;
 			}
 
-			throughput *= hitThroughput / hitPdf;			// 更新throughput
+			throughput *= hitThroughput / hitPdf;	// 更新throughput
 
 			origin = origin + hitDistance * direction;		// 更新下一轮反射方向
 			direction = vec4(RAY_PAYLOAD.reflectDir, 0);
@@ -77,13 +79,15 @@ void main()
 			if (b >= 3) 									// Russian Roulette
 			{	
 				float p = max(throughput.x, max(throughput.y, throughput.z));
-				if (RandFloat(RAY_PAYLOAD.rand) > p) break;
+				if (p < 1e-5 || RandFloat(RAY_PAYLOAD.rand) > p) break;
 
 				throughput *= 1 / p;
 			}
 		}
 	}
-	if(any(isnan(outColor))) outColor = vec3(0.0f);
+	if(any(isinf(outColor)) || any(isnan(outColor)))
+		outColor = vec3(0.0f);	
+	//outColor = min(outColor, 15.0f);	// TODO 镜面反射
 
 	bool accumulateHistory 	= SETTING.numSamples < SETTING.totalNumSamples;
 	vec3 historyColor 		= accumulateHistory ? imageLoad(HISTORY_COLOR, pixel).xyz : vec3(0.0f);

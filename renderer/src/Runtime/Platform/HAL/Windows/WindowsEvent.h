@@ -1,9 +1,9 @@
 
-#include "Platform/HAL/Event.h"
+#include "Platform/HAL/SyncEvent.h"
 
 #include <windows.h>
 
-class WindowsEvent : public Event
+class WindowsEvent : public SyncEvent
 {
 public:
 	WindowsEvent()

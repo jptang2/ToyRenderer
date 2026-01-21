@@ -8,8 +8,8 @@ layout(location = 1) in vec2 IN_TEXCOORD;
 layout(location = 2) in vec3 IN_NORMAL;
 layout(location = 3) in flat uint IN_ID;
 
-layout (location = 0) out vec4 OUT_DIFFUSE_ROUGHNESS;
-layout (location = 1) out vec4 OUT_NORMAL_METALLIC;
+layout (location = 0) out vec4 OUT_DIFFUSE_METALLIC;
+layout (location = 1) out vec4 OUT_NORMAL_ROUGHNESS;
 layout (location = 2) out vec4 OUT_EMISSION;
 
 void main() 
@@ -21,7 +21,10 @@ void main()
     float roughness     = FetchRoughness(material, IN_TEXCOORD);
     float metallic      = FetchMetallic(material, IN_TEXCOORD);
 
-    OUT_DIFFUSE_ROUGHNESS = vec4(diffuse.xyz, roughness);
-    OUT_NORMAL_METALLIC = vec4(normalize(IN_NORMAL), metallic);
+    if(material.useVertexColor != 0)
+        diffuse.xyz *= color.xyz;
+
+    OUT_DIFFUSE_METALLIC = vec4(diffuse.xyz, metallic);
+    OUT_NORMAL_ROUGHNESS = vec4(normalize(IN_NORMAL), roughness);
     OUT_EMISSION = vec4(emission, 0.0f);
 }

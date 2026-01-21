@@ -28,7 +28,7 @@ void main()
 
     uint objectID   = FetchObjectIDTex(pixel);
     vec2 velocity   = FetchVelocityTex(pixel);
-    vec3 normal     = texelFetch(CURRENT_NORMAL, pixel, 0).xyz;
+    vec3 normal     = texelFetch(CURRENT_NORMAL, pixel, 0).xyz;     // 这里的法线其实不应该用G-Buffer里带法线贴图的结果
 
     vec2 prevUV;
     ivec2 prevPixel;

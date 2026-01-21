@@ -63,19 +63,19 @@ void DDGIPass::Build(RDGBuilder& builder)
         // !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS) &&    //Surface cache有使用
         !EngineContext::Render()->IsPassEnabled(PATH_TRACING_PASS))
     {
-        volumeLights = EngineContext::Render()->GetLightManager()->GetVolumeLights();
+        volumeLights[EngineContext::ThreadPool()->ThreadFrameIndex()] = EngineContext::Render()->GetLightManager()->GetVolumeLights();
 
-        for (uint32_t i = 0; i < volumeLights.size(); i++)
+        for (uint32_t i = 0; i < volumeLights[EngineContext::ThreadPool()->ThreadFrameIndex()].size(); i++)
 		{
-            auto& volumeLight = volumeLights[i];
+            auto& volumeLight = volumeLights[EngineContext::ThreadPool()->ThreadFrameIndex()][i];
 
             std::string index = " [" + std::to_string(volumeLight->GetVolumeLightID()) + "]";
 
-            RDGTextureHandle diffuseTex = builder.CreateTexture(GetName() + " G-Buffer Diffuse/Roughness " + index)
+            RDGTextureHandle diffuseTex = builder.CreateTexture(GetName() + " G-Buffer Diffuse/Metallic " + index)
                 .Import(volumeLight->GetTextres().diffuseTex->texture, RESOURCE_STATE_UNDEFINED)
                 .Finish();
 
-            RDGTextureHandle normalTex = builder.CreateTexture(GetName() + " G-Buffer Normal/Metallic " + index)
+            RDGTextureHandle normalTex = builder.CreateTexture(GetName() + " G-Buffer Normal/Roughness " + index)
                 .Import(volumeLight->GetTextres().normalTex->texture, RESOURCE_STATE_UNDEFINED)
                 .Finish();
 
@@ -115,7 +115,7 @@ void DDGIPass::Build(RDGBuilder& builder)
                     .ReadWrite(1, 6, 0, depthTex)
                     .Execute([&](RDGPassContext context) {       
                         
-                        auto& volumeLight = volumeLights[context.passIndex[0]];
+                        auto& volumeLight = volumeLights[EngineContext::ThreadPool()->ThreadFrameIndex()][context.passIndex[0]];
 
                         DDGIComputeSetting setting = {};
                         setting.volumeLightID = volumeLight->GetVolumeLightID();
@@ -148,7 +148,7 @@ void DDGIPass::Build(RDGBuilder& builder)
                     .ReadWrite(1, 6, 0, depthTex)
                     .Execute([&](RDGPassContext context) {       
                         
-                        auto& volumeLight = volumeLights[context.passIndex[0]];
+                        auto& volumeLight = volumeLights[EngineContext::ThreadPool()->ThreadFrameIndex()][context.passIndex[0]];
 
                         DDGIComputeSetting setting = {};
                         setting.volumeLightID = volumeLight->GetVolumeLightID();
@@ -177,7 +177,7 @@ void DDGIPass::Build(RDGBuilder& builder)
                     .ReadWrite(1, 6, 0, depthTex)
                     .Execute([&](RDGPassContext context) {       
                         
-                        auto& volumeLight = volumeLights[context.passIndex[0]];
+                        auto& volumeLight = volumeLights[EngineContext::ThreadPool()->ThreadFrameIndex()][context.passIndex[0]];
 
                         DDGIComputeSetting setting = {};
                         setting.volumeLightID = volumeLight->GetVolumeLightID();
@@ -205,7 +205,7 @@ void DDGIPass::Build(RDGBuilder& builder)
                     .ReadWrite(1, 6, 0, depthTex)
                     .Execute([&](RDGPassContext context) {       
                         
-                        auto& volumeLight = volumeLights[context.passIndex[0]];
+                        auto& volumeLight = volumeLights[EngineContext::ThreadPool()->ThreadFrameIndex()][context.passIndex[0]];
 
                         DDGIComputeSetting setting = {};
                         setting.volumeLightID = volumeLight->GetVolumeLightID();
@@ -233,7 +233,7 @@ void DDGIPass::Build(RDGBuilder& builder)
                     .ReadWrite(1, 6, 0, depthTex)
                     .Execute([&](RDGPassContext context) {       
                         
-                        auto& volumeLight = volumeLights[context.passIndex[0]];
+                        auto& volumeLight = volumeLights[EngineContext::ThreadPool()->ThreadFrameIndex()][context.passIndex[0]];
 
                         DDGIComputeSetting setting = {};
                         setting.volumeLightID = volumeLight->GetVolumeLightID();
@@ -261,7 +261,7 @@ void DDGIPass::Build(RDGBuilder& builder)
                     .ReadWrite(1, 6, 0, depthTex)
                     .Execute([&](RDGPassContext context) {       
                         
-                        auto& volumeLight = volumeLights[context.passIndex[0]];
+                        auto& volumeLight = volumeLights[EngineContext::ThreadPool()->ThreadFrameIndex()][context.passIndex[0]];
 
                         DDGIComputeSetting setting = {};
                         setting.volumeLightID = volumeLight->GetVolumeLightID();

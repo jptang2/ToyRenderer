@@ -1,4 +1,5 @@
 #include "BloomPass.h"
+#include "Core/Math/Math.h"
 #include "Function/Global/EngineContext.h"
 #include "Function/Render/RDG/RDGHandle.h"
 #include "Function/Render/RHI/RHIStructs.h"
@@ -87,8 +88,8 @@ void BloomPass::Build(RDGBuilder& builder)
                 command->BindDescriptorSet(context.descriptors[0], 0);
                 command->BindDescriptorSet(EngineContext::RenderResource()->GetSamplerDescriptorSet(), 1);
                 command->PushConstants(&setting, sizeof(BloomSetting), SHADER_FREQUENCY_COMPUTE);
-                command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                    EngineContext::Render()->GetWindowsExtent().height / 16, 
+                command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                    Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                     1);
             })
             .Finish();
@@ -160,7 +161,7 @@ void BloomPass::Build(RDGBuilder& builder)
                 })
                 .Finish();
         }
-
+        
         // pass3 合并结果
         RDGComputePassHandle pass3 = builder.CreateComputePass(GetName() + " Combine")
             .RootSignature(rootSignature)
@@ -174,12 +175,12 @@ void BloomPass::Build(RDGBuilder& builder)
                 command->BindDescriptorSet(context.descriptors[0], 0);
                 command->BindDescriptorSet(EngineContext::RenderResource()->GetSamplerDescriptorSet(), 1);
                 command->PushConstants(&setting, sizeof(BloomSetting), SHADER_FREQUENCY_COMPUTE);
-                command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                    EngineContext::Render()->GetWindowsExtent().height / 16, 
+                command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                    Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                     1);
             })
             .Finish();
-    }
+    } 
     else {
         
         RDGCopyPassHandle copyPass = builder.CreateCopyPass(GetName() + " Copy")

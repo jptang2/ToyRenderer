@@ -2,7 +2,7 @@
 
 #include "RHIStructs.h"
 #include "RHICommandList.h"
-#include "Platform/HAL/CriticalSection.h"
+#include "Platform/HAL/Mutex.h"
 #include "Platform/HAL/PlatformProcess.h"
 
 #include <cstdint>
@@ -82,7 +82,7 @@ public:
 	RHICommandPool(const RHICommandPoolInfo& info)
 	: RHIResource(RHI_COMMAND_POOL)
 	, info(info)
-	, sync(PlatformProcess::CreateCriticalSection())
+	, sync(PlatformProcess::CreateMutex())
 	{}
 
 	RHICommandListRef CreateCommandList(bool byPass = true);
@@ -92,7 +92,7 @@ protected:
 
 	std::queue<RHICommandContextRef> idleContexts = {};  // 暂未运行的线程
 	std::vector<RHICommandContextRef> contexts = {};     // 所有分配的线程
-	CriticalSectionRef sync;
+	MutexRef sync;
 
 	void ReturnToPool(RHICommandContextRef commandContext) { idleContexts.push(commandContext); }
 	friend class RHICommandList;
@@ -211,7 +211,7 @@ public:
 	, info(info)
 	{}
 
-	virtual void Update(const std::vector<RHIAccelerationStructureInstanceInfo>& instanceInfos) = 0;
+	virtual void Update(const std::vector<RHIAccelerationStructureInstanceInfo>& instanceInfos, bool build = false) = 0;
 
 	const RHITopLevelAccelerationStructureInfo& GetInfo() const { return info; }
 

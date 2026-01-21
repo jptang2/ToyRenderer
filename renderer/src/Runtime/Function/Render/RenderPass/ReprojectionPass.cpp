@@ -27,8 +27,8 @@ void ReprojectionPass::Build(RDGBuilder& builder)
 {
     Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
     
-    RDGTextureHandle normal = builder.GetTexture("G-Buffer Normal/Metallic");
-    RDGTextureHandle historyNormal = builder.GetTexture("History G-Buffer Normal/Metallic");
+    RDGTextureHandle normal = builder.GetTexture("G-Buffer Normal/Roughness");
+    RDGTextureHandle historyNormal = builder.GetTexture("History G-Buffer Normal/Roughness");
 
     RDGTextureHandle reprojectionOut = builder.CreateTexture("Reprojection Out")
         .Exetent({windowExtent.width, windowExtent.height, 1})
@@ -50,8 +50,8 @@ void ReprojectionPass::Build(RDGBuilder& builder)
             command->SetComputePipeline(computePipeline);
             command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
             command->BindDescriptorSet(context.descriptors[1], 1);
-            command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                EngineContext::Render()->GetWindowsExtent().height / 16, 
+            command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                 1);
         })
         .Finish();

@@ -24,7 +24,7 @@ void PointLightComponent::OnUpdate(float deltaTime)
 {
     InitComponentIfNeed();
 
-	// UpdateLightInfo();
+	//UpdateLightInfo();
 }
 
 void PointLightComponent::UpdateLightInfo()
@@ -72,6 +72,12 @@ void PointLightComponent::UpdateLightInfo()
 
             info.proj = Math::Perspective(Math::ToRadians(90.0f), 1.0f, near, far);
             //info.proj(1, 1) *= -1;	//Vulkan的NDC的Y坐标是向下的，通常要转一次，这下不转了？？
+
+            for(int i = 0; i < 6; i++)
+            {
+                info.viewProj[i] = info.proj * info.view[i];
+                info.frustum[i] = CreateFrustumFromMatrix(info.viewProj[i], -1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 1.0f);
+            }
         }
     }
 

@@ -26,6 +26,14 @@ inline uint32_t MurmurMix(uint32_t hash)
     return hash;
 }
 
+inline uint32_t Hash(const Vec2& v)
+{
+    union { float f; uint32_t u; } x, y;
+    x.f = (v.x() == 0.f ? 0 : v.x());
+    y.f = (v.y() == 0.f ? 0 : v.y());
+    return MurmurMix(MurmurAdd(x.u, y.u));
+}
+
 inline uint32_t Hash(const Vec3& v)
 {
     union { float f; uint32_t u; } x, y, z;

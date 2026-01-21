@@ -26,8 +26,5 @@ void main()
     OUT_TEXCOORD        = texCoord;
     OUT_ID              = objectID;
 
-    gl_Position = light.proj * light.view * model * pos;
-    //gl_Position = CAMERA.proj * CAMERA.view * model * pos;
-    //gl_Position = CAMERA.proj * light.view * model * pos;
-    //gl_Position = light.proj * CAMERA.view * model * pos;
+    gl_Position = light.viewProj * model * pos;
 }

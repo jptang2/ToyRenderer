@@ -25,7 +25,7 @@ private:
 		int endMip = 0;
 		int maxLoop = 200;
 
-		float maxRoughness = 0.45f;
+		float maxRoughness = 0.75f;
 		float minHitDistance = 0.01f;
 		float importanceSampleBias = 0.1f;
 		float thickness = 0.01;
@@ -39,10 +39,10 @@ private:
 	};
 	SSSRSetting setting = {};
 
-    Shader computeShader[3];
+    Shader computeShader[4];
 
     RHIRootSignatureRef rootSignature;
-    RHIComputePipelineRef computePipeline[3];
+    RHIComputePipelineRef computePipeline[4];
 
 	TextureRef historyColorTex;
 

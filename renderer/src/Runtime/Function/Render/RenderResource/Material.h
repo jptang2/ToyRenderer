@@ -49,6 +49,9 @@ public:
     void SetRoughness(float roughness)                      { this->roughness = roughness;  Update(); }
     void SetMetallic(float metallic)                        { this->metallic = metallic;    Update(); }
     void SetAlphaClip(float alphaClip)                      { this->alphaClip = alphaClip;  Update(); }
+    void SetUseVertexColor(bool useVertexColor)             { this->useVertexColor = useVertexColor;    Update(); }
+    void SetTextureOffset(Vec2 textureOffset)               { this->textureOffset = textureOffset;      Update(); }
+    void SetTextureScale(Vec2 textureScale)                 { this->textureScale = textureScale;        Update(); }
     void SetInt(int32_t data, uint32_t index)               { ints[index] = data;           Update(); }
     void SetFloat(float data, uint32_t index)               { floats[index] = data;         Update(); }
     void SetColor(Vec4 data, uint32_t index)                { colors[index] = data;         Update(); }
@@ -68,6 +71,9 @@ public:
     inline float GetRoughness() const                       { return this->roughness; }
     inline float GetMetallic() const                        { return this->metallic; }
     inline float GetAlphaClip() const                       { return this->alphaClip; }
+    inline bool GetUseVertexColor() const                   { return this->useVertexColor; }
+    inline Vec2 GetTextureOffset() const                    { return this->textureOffset; }
+    inline Vec2 GetTextureScale() const                     { return this->textureScale; }
     inline int32_t GetInt(uint32_t index) const             { return ints[index]; }
     inline float GetFloat(uint32_t index) const             { return floats[index]; }
     inline Vec4 GetColor(uint32_t index) const              { return colors[index]; }
@@ -100,9 +106,12 @@ protected:
     Vec4 diffuse = Vec4::Ones();
     Vec4 emission = Vec4::Zero();
 
-    float roughness = 0.5f;
+    float roughness = 0.9f;
     float metallic = 0.0f;
     float alphaClip = 0.0f;
+    bool useVertexColor = false;
+    Vec2 textureOffset = Vec2::Zero();
+    Vec2 textureScale = Vec2::Ones();
 
     std::array<int32_t, 8> ints = { 0 };
     std::array<float, 8> floats = { 0.0f };
@@ -150,6 +159,8 @@ private:
     SerailizeEntry(roughness)
     SerailizeEntry(metallic)
     SerailizeEntry(alphaClip)
+    SerailizeEntry(useVertexColor)
+    SerailizeEntry(textureScale)
     SerailizeEntry(ints)
     SerailizeEntry(floats)
     SerailizeEntry(colors)

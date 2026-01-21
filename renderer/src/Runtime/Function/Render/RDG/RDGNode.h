@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -130,6 +132,14 @@ typedef RDGBufferNode* RDGBufferNodeRef;
 
 // pass节点/////////////////////////////////////////////////////////////////////////////////////
 
+struct SamplerBind
+{
+    RHISamplerRef sampler;
+    uint32_t set;
+    uint32_t binding;
+    uint32_t index;
+};
+
 class RDGPassNode : public RDGNode
 {
 public:
@@ -155,6 +165,7 @@ protected:
 
     std::vector<RHITextureViewRef> pooledViews;             // 动态分配的池化资源，执行完毕后返回资源池
     std::vector<std::pair<RHIDescriptorSetRef, uint32_t>> pooledDescriptorSets;
+    std::vector<SamplerBind> samplers;                
 
     friend class RDGBuilder;
 };
@@ -172,6 +183,7 @@ public:
 private:
     uint32_t passIndex[3] = { 0, 0, 0};
     RDGPassExecuteFunc execute;
+    uint32_t multiviewCount = 0;    
 
     friend class RDGRenderPassBuilder;
     friend class RDGBuilder;
@@ -241,3 +253,27 @@ private:
     friend class RDGBuilder;
 };
 typedef RDGCopyPassNode* RDGCopyPassNodeRef;
+
+// 依赖图/////////////////////////////////////////////////////////////////////////////////////
+
+class RDGDependencyGraph : public DependencyGraph
+{
+public: 
+    void Link(RDGPassNodeRef from, RDGTextureNodeRef to, RDGTextureEdgeRef edge);
+    void Link(RDGTextureNodeRef from, RDGPassNodeRef to, RDGTextureEdgeRef edge);
+    void Link(RDGPassNodeRef from, RDGBufferNodeRef to, RDGBufferEdgeRef edge);
+    void Link(RDGBufferNodeRef from, RDGPassNodeRef to, RDGBufferEdgeRef edge);
+
+    void ForEachPass(RDGTextureNodeRef texture, const std::function<void(RDGTextureEdgeRef, RDGPassNodeRef)>& func);
+    void ForEachPass(RDGBufferNodeRef buffer, const std::function<void(RDGBufferEdgeRef, RDGPassNodeRef)>& func);
+    void ForEachTexture(RDGPassNodeRef pass, const std::function<void(RDGTextureEdgeRef, RDGTextureNodeRef)>& func);
+    void ForEachBuffer(RDGPassNodeRef pass, const std::function<void(RDGBufferEdgeRef, RDGBufferNodeRef)>& func);
+
+private:    // 避免重复构建这个列表，比上面的快一些
+    std::unordered_map<RDGPassNodeRef, std::vector<std::pair<RDGTextureEdgeRef, RDGTextureNodeRef>>> passTextures;
+    std::unordered_map<RDGPassNodeRef, std::vector<std::pair<RDGBufferEdgeRef, RDGBufferNodeRef>>> passBuffers;
+
+    std::unordered_map<RDGTextureNodeRef, std::vector<std::pair<RDGTextureEdgeRef, RDGPassNodeRef>>> texturePasses;
+    std::unordered_map<RDGBufferNodeRef, std::vector<std::pair<RDGBufferEdgeRef, RDGPassNodeRef>>> bufferPasses;
+};
+typedef std::shared_ptr<RDGDependencyGraph> RDGDependencyGraphRef;

@@ -41,9 +41,6 @@ void Scene::Tick(float deltaTime)
             if(component) component->OnUpdate(deltaTime);
         }
     }
-
-    std::shared_ptr<CameraComponent> camera = GetActiveCamera();    // TODO 
-    if(camera) camera->UpdateCameraInfo();
 }
 
 std::shared_ptr<Entity> Scene::GetEntity(std::string name)

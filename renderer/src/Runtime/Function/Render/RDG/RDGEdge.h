@@ -87,6 +87,8 @@ public:
     bool asOutputRead = false;
     bool asOutputReadWrite = false;
     bool asOutputIndirectDraw = false;
+    bool asTransferSrc = false;
+    bool asTransferDst = false;
 
     virtual bool IsOutput() override { return asOutputRead || asOutputReadWrite || asOutputIndirectDraw; }
 

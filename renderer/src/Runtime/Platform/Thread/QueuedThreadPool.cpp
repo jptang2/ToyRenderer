@@ -16,7 +16,7 @@ QueuedThreadPoolRef QueuedThreadPool::Create(
     const std::string& name)
 {
     QueuedThreadPoolRef pool = std::make_shared<QueuedThreadPool>();
-    pool->sync = PlatformProcess::CreateCriticalSection();
+    pool->sync = PlatformProcess::CreateMutex();
 
     for (uint32_t i = 0; i < numThreads; i++)
     {
@@ -51,6 +51,18 @@ void QueuedThreadPool::AddQueuedWork(QueuedWorkRef queuedWork)
     }
 
     thread->StartWork(queuedWork);
+}
+
+void QueuedThreadPool::WaitIdle()
+{
+    while (true)
+    {
+        ScopeLock lock(sync);   //加锁
+        if (allThreads.size() == idleThreads.size()) 
+            break;
+        
+        PlatformProcess::Sleep(0.0001f); 
+    }
 }
 
 void QueuedThreadPool::Destroy()
@@ -95,7 +107,7 @@ QueuedWorkRef QueuedThreadPool::ReturnToPoolOrGetNextWork(QueuedThread* queuedTh
         cnt++;
         if(cnt % 1000 == 0)  
         {
-            LOG_DEBUG("QueuedThreadPool finished %d works", cnt);
+            //LOG_DEBUG("QueuedThreadPool finished %d works", cnt);
             //cnt = 0;
         }
 

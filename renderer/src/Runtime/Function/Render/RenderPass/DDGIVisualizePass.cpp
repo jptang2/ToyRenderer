@@ -53,11 +53,11 @@ void DDGIVisualizePass::Build(RDGBuilder& builder)
 
         RDGTextureHandle depth = builder.GetTexture("Depth");
 
-        volumeLights = EngineContext::Render()->GetLightManager()->GetVolumeLights();
+        volumeLights[EngineContext::ThreadPool()->ThreadFrameIndex()] = EngineContext::Render()->GetLightManager()->GetVolumeLights();
 
-        for (uint32_t i = 0; i < volumeLights.size(); i++)
+        for (uint32_t i = 0; i < volumeLights[EngineContext::ThreadPool()->ThreadFrameIndex()].size(); i++)
 		{
-            auto& volumeLight = volumeLights[i];
+            auto& volumeLight = volumeLights[EngineContext::ThreadPool()->ThreadFrameIndex()][i];
 
 			if (volumeLight->Enable() &&
 				volumeLight->Visualize())
@@ -70,7 +70,7 @@ void DDGIVisualizePass::Build(RDGBuilder& builder)
                     .DepthStencil(depth, ATTACHMENT_LOAD_OP_LOAD, ATTACHMENT_STORE_OP_STORE, 1.0f, 0)
                     .Execute([&](RDGPassContext context) {
 
-                        auto& volumeLight = volumeLights[context.passIndex[0]];
+                        auto& volumeLight = volumeLights[EngineContext::ThreadPool()->ThreadFrameIndex()][context.passIndex[0]];
 
                         DDGIVisualizeSetting setting = {};
                         setting.volumeLightID   = volumeLight->GetVolumeLightID();

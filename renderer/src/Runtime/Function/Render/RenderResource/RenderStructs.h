@@ -40,6 +40,7 @@ typedef struct RenderGlobalSetting
     uint32_t totalTicks = 0;            //运行帧数
     float totalTickTime = 0;            //运行时间
     float minFrameTime = 0;             //最小帧用时，毫秒单位
+    float rayTracingOffset = 0.05f;     //由于虚拟几何体gbuffer和光追不一致导致需要添加偏移
 
     GlobalIconInfo icons;
     
@@ -49,8 +50,10 @@ typedef struct CameraInfo
 {
     Mat4 view;
     Mat4 proj;
+    Mat4 viewProj;
     Mat4 prevView;
     Mat4 prevProj;
+    Mat4 prevViewProj;
     Mat4 invView;
     Mat4 invProj;
 
@@ -88,6 +91,8 @@ typedef struct ObjectInfo
     
     BoundingSphere sphere;          //包围球，本地空间
     BoundingBox box;                //包围盒，本地空间
+    Vec4 localScale;                //缩放值，物体可能带有从局部坐标到local的变换
+    Vec4 modelScale;
 
     Vec4 debugData;                 //仅debug使用
 
@@ -112,7 +117,7 @@ typedef struct MaterialInfo
     float roughness;
     float metallic;
     float alphaClip;
-    float _padding;
+    uint32_t useVertexColor;    //是否启用顶点颜色
 
     Vec4 diffuse;
     Vec4 emission;
@@ -121,6 +126,9 @@ typedef struct MaterialInfo
     uint32_t textureNormal;
     uint32_t textureArm;        //AO/Roughness/Metallic
     uint32_t textureSpecular;
+
+    Vec2 textureOffset;
+    Vec2 textureScale;
 
     //预留的通用槽位///////////////////////////////
     std::array<int32_t, 8> ints;
@@ -143,6 +151,7 @@ typedef struct DirectionalLightInfo
 {
     Mat4 view;
     Mat4 proj;
+    Mat4 viewProj;
     Vec3 pos;
     float _padding0;
     Vec3 dir;
@@ -164,6 +173,7 @@ typedef struct PointLightInfo
 {
     Mat4 view[6];
     Mat4 proj;
+    Mat4 viewProj[6];
     Vec3 pos;
     float _padding0;
     Vec3 color;
@@ -181,6 +191,7 @@ typedef struct PointLightInfo
     float fogScattering;                    //体积雾散射系数
     float _padding2[3];
 
+    Frustum frustum[6];                     //视锥，用于计算剔除
     BoundingSphere sphere;                  //世界空间包围球，用于计算剔除
 
 } PointLightInfo;
@@ -342,16 +353,20 @@ typedef struct MeshCardInfo     // 单个Card的全部信息
 
 	Mat4 view;
     Mat4 proj;
+    Mat4 viewProj;
     Mat4 invView;
     Mat4 invProj;
 
 	UVec2 atlasOffset = UVec2::Zero();      // 在surface cache中实际用到的尺寸范围，也是光栅化的范围
 	UVec2 atlasExtent = UVec2::Zero();      // 内部不再有padding，尺寸也不对齐tile
 
+    UVec2 sampleAtlasOffset = UVec2::Zero();    // 当存在尺寸变换时，光栅化和光照计算的任务会在新的范围计算
+	UVec2 sampleAtlasExtent = UVec2::Zero();    // 但采样数据还是先保持旧范围（避免更新延迟导致短暂变黑），直到光照计算一次后再更新
+
 } MeshCardInfo;
 
 // 存储每个card最后在GPU端被使用的帧数，每帧回读来决定本帧的更新优先级
-typedef std::array<uint32_t, MAX_PER_FRAME_OBJECT_SIZE * 6> MeshCardReadBack;
+typedef std::array<int32_t, MAX_PER_FRAME_OBJECT_SIZE * 6> MeshCardReadBack;
 
 // typedef struct AnimatedTransformInfo 
 // {

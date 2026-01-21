@@ -87,6 +87,18 @@ float EVSM(vec4 moments, float depth, float c1, float c2)
 	return min(p_x, p_y);
 }
 
+float VSM(vec2 moments, float depth, float c1)
+{
+	float x = exp(c1 * depth);
+	float variance_x = max(moments.y - pow(moments.x, 2), 0.0001);
+	float d_x = x - moments.x;  
+
+	float p_x = variance_x / (variance_x + pow(d_x, 2)); 
+
+	return p_x;
+}
+
+
 // 阴影和衰减计算////////////////////////////////////////////////////////////////////////////
 
 int CascadeLevel(vec4 worldPos)
@@ -154,14 +166,15 @@ float PointShadow(uint lightID, vec4 worldPos)
 	float pointShadow =  pointDistance / pointLight.far - texture(samplerCube(POINT_SHADOW[pointLight.shadowID], SAMPLER[0]), -pointLightVec).r;
 	pointShadow = pointShadow > pointLight.bias ? 0.0f : 1.0f;	//给阴影一点颜色？
 
-#else	// 使用EVSM
+#else	// 使用VSM
 
-	vec4 moments = texture(samplerCube(POINT_SHADOW[pointLight.shadowID], SAMPLER[0]), -pointLightVec);
+	vec2 moments = texture(samplerCube(POINT_SHADOW[pointLight.shadowID], SAMPLER[0]), -pointLightVec).xy;
 
 	float depth = pointDistance / pointLight.far;
 
-	float pointShadow = EVSM(moments, depth, pointLight.c1, pointLight.c2);		//计算点光源阴影取值，[0,1]
-	pointShadow = smoothstep(0.0f, 1.0f, min(1.0, pointShadow / 0.8));	        //重映射，去掉大于0.8的部分
+    float pointShadow = VSM(moments, depth, pointLight.c1);
+	//float pointShadow = EVSM(moments, depth, pointLight.c1, pointLight.c2);		//计算点光源阴影取值，[0,1]
+	pointShadow = smoothstep(0.0f, 1.0f, min(1.0, pointShadow / 0.8));	            //重映射，去掉大于0.8的部分
 
 #endif
 
@@ -185,7 +198,7 @@ float RtDirectionalShadow(vec4 worldPos, float bias)
         vec3 L = -normalize(dirLight.dir);
 
         vec3 origin = worldPos.xyz + bias * L;
-		if(dirLight.castShadow > 0)  dirShadow = RayQueryVisibility(origin, origin + L * MAX_RAY_TRACING_DISTANCE) ? 0.0f : 1.0f; 
+		if(dirLight.castShadow > 0)  dirShadow = RayQueryVisibility(origin, origin + L * MAX_RAY_TRACING_DISTANCE, 0) ? 0.0f : 1.0f; 
     }
     return dirShadow;
 }
@@ -196,7 +209,7 @@ float RtPointShadow(uint lightID, vec4 worldPos)
 
 	PointLight pointLight = LIGHTS.pointLights[lightID];
 
-    float pointShadow = RayQueryVisibility(worldPos.xyz, pointLight.pos) ? 0.0f : 1.0f; 
+    float pointShadow = RayQueryVisibility(worldPos.xyz, pointLight.pos, 0) ? 0.0f : 1.0f; 
     return pointShadow;	     // 光追就不考虑点光源是否开启投射阴影了
 }
 
@@ -226,7 +239,8 @@ vec3 DirectionalLighting(
                         dirLight.color * 
                         dirLight.intencity;        
 
-        vec3 f_r = ResolveBRDF(albedo.xyz, roughness, metallic, N, V, L);
+        BRDFData data = ResolveBRDF(albedo.xyz, roughness, metallic, N, V, L);
+        vec3 f_r = data.diffuse + data.specular;
 
         dirColor += max(vec3(0.0f), f_r * radiance * NoL);	
     }
@@ -252,7 +266,7 @@ vec3 DirectionalDiffuseLighting(
                         dirLight.color * 
                         dirLight.intencity;        
 
-        vec3 f_r = ResolveDiffuseBRDF(albedo.xyz, roughness, metallic, N, V, L);
+        vec3 f_r = ResolveBRDF(albedo.xyz, roughness, metallic, N, V, L).diffuse;
 
         dirColor += max(vec3(0.0f), f_r * radiance * NoL);	
     }
@@ -282,7 +296,8 @@ vec3 PointLighting(
                     pointLight.intencity *
                     attenuation;   
 
-    vec3 f_r = ResolveBRDF(albedo.xyz, roughness, metallic, N, V, L);
+    BRDFData data = ResolveBRDF(albedo.xyz, roughness, metallic, N, V, L);
+    vec3 f_r = data.diffuse + data.specular;
 
     return max(vec3(0.0f), f_r * radiance * NoL);	
 }
@@ -330,7 +345,7 @@ vec3 PointDiffuseLighting(
                     pointLight.intencity *
                     attenuation;   
 
-    vec3 f_r = ResolveDiffuseBRDF(albedo.xyz, roughness, metallic, N, V, L);
+    vec3 f_r = ResolveBRDF(albedo.xyz, roughness, metallic, N, V, L).diffuse;
 
     return max(vec3(0.0f), f_r * radiance * NoL);	
 }

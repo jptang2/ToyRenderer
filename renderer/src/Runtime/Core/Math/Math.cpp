@@ -163,4 +163,22 @@ namespace Math
         newMat[10] = mat.row(2).z();
         newMat[11] = mat.row(2).w();
     }
+
+    Vec3 GetScale(const Mat4 &matrix) 
+    {
+        Vec3 scale;
+        scale.x() = std::sqrt(matrix(0, 0) * matrix(0, 0) + 
+                            matrix(1, 0) * matrix(1, 0) + 
+                            matrix(2, 0) * matrix(2, 0));
+
+        scale.y() = std::sqrt(matrix(0, 1) * matrix(0, 1) + 
+                            matrix(1, 1) * matrix(1, 1) + 
+                            matrix(2, 1) * matrix(2, 1));
+
+        scale.z() = std::sqrt(matrix(0, 2) * matrix(0, 2) + 
+                            matrix(1, 2) * matrix(1, 2) + 
+                            matrix(2, 2) * matrix(2, 2));
+
+        return scale;
+    }
 }

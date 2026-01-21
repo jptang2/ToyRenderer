@@ -43,6 +43,10 @@ bool AssetWidget::MaterialAssetUI(std::shared_ptr<Material> material)
         update |= ImGui::DragFloat("Roughness", &material->roughness, 0.001f, 0.0f, 1.0f);
         update |= ImGui::DragFloat("Metallic", &material->metallic, 0.001f, 0.0f, 1.0f);
         update |= ImGui::DragFloat("Alpha clip", &material->alphaClip, 0.001f, 0.0f, 1.0f);
+        update |= ImGui::Checkbox("Use vertex color", &material->useVertexColor);
+        update |= ImGui::DragFloat2("Texture offset", material->textureOffset.data(), 0.001f);
+        update |= ImGui::DragFloat2("Texture scale", material->textureScale.data(), 0.001f);
+
         update |= ImGui::ColorEdit4("Base color", &material->diffuse[0]);
         update |= ImGui::ColorEdit3("Emission", &material->emission[0]);
         update |= ImGui::DragFloat("Emission instencity", &material->emission[3], 0.001f, 0.0f);

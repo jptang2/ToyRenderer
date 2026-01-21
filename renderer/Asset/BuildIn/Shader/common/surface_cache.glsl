@@ -26,16 +26,16 @@ vec4 BilinearSample(texture2D tex, sampler sampl, vec2 uv, vec4 bilinearWeights)
 float FetchMeshCardData(inout SurfaceCacheData data, uint meshCardID, vec3 localPos, vec3 localNormal, float normalWeight)    
 {
     MeshCardInfo card = MESH_CARDS.slot[meshCardID];
-    if(card.atlasExtent == uvec2(0)) return 0.0f;    // 未分配
+    if(card.sampleAtlasExtent == uvec2(0)) return 0.0f;    // 未分配
     
     vec3 worldPos = localPos * card.scale;           // 在card和对应的虚拟相机所在空间进行后续计算
-    vec3 ndcPos = (card.proj * card.view * vec4(worldPos, 1.0f)).xyz;
+    vec3 ndcPos = (card.viewProj * vec4(worldPos, 1.0f)).xyz;
     vec2 texCoord = ndcPos.xy * 0.5f + 0.5f;
     float depth = ndcPos.z;
 
-    vec2 atlasCoord = (texCoord * card.atlasExtent + card.atlasOffset) / SURFACE_CACHE_SIZE;    // 需要手动做双线性插值
+    vec2 atlasCoord = (texCoord * card.sampleAtlasExtent + card.sampleAtlasOffset) / SURFACE_CACHE_SIZE;    // 需要手动做双线性插值
     // Calculate bilinear weights
-    vec2 bilinearWeightsUV = fract(texCoord * card.atlasExtent + 0.5f);
+    vec2 bilinearWeightsUV = fract(texCoord * card.sampleAtlasExtent + 0.5f);
     vec4 bilinearWeights;
     bilinearWeights.x = (1.0 - bilinearWeightsUV.x) * (bilinearWeightsUV.y);
     bilinearWeights.y = (bilinearWeightsUV.x) * (bilinearWeightsUV.y);
@@ -48,7 +48,7 @@ float FetchMeshCardData(inout SurfaceCacheData data, uint meshCardID, vec3 local
     for (uint i = 0; i < 4; i++)
     {
         depthVisibility[i] = 1.0f - clamp((abs(sampleDepth[i] - depth) - depthThreshold) / depthThreshold, 0, 1);
-        if (sampleDepth[i] >= 0.99f)
+        if (sampleDepth[i] >= 0.9999f)
             depthVisibility[i] = 0.0f;
     }
     float sampleWeight = dot(depthVisibility, bilinearWeights); // 2. 深度权重和双线性插值权重
@@ -57,14 +57,14 @@ float FetchMeshCardData(inout SurfaceCacheData data, uint meshCardID, vec3 local
             
     bilinearWeights *= depthVisibility;
 
-    vec4 diffuseRoughness   = BilinearSample(SURFACE_CACHE[0], SAMPLER[1], atlasCoord, bilinearWeights);
-    vec4 normalMetallic     = BilinearSample(SURFACE_CACHE[1], SAMPLER[1], atlasCoord, bilinearWeights);
+    vec4 diffuseMetallic    = BilinearSample(SURFACE_CACHE[0], SAMPLER[1], atlasCoord, bilinearWeights);
+    vec4 normalRoughness    = BilinearSample(SURFACE_CACHE[1], SAMPLER[1], atlasCoord, bilinearWeights);
     vec4 emission           = BilinearSample(SURFACE_CACHE[2], SAMPLER[1], atlasCoord, bilinearWeights);
 
-    data.diffuse += diffuseRoughness.rgb * sampleWeight;
-    data.roughness += diffuseRoughness.a * sampleWeight;
-    data.normal += normalize(normalMetallic.rgb) * sampleWeight;
-    data.metallic += normalMetallic.a * sampleWeight;
+    data.diffuse += diffuseMetallic.rgb * sampleWeight;
+    data.roughness += normalRoughness.a * sampleWeight;
+    data.normal += normalize(normalRoughness.rgb) * sampleWeight;
+    data.metallic += diffuseMetallic.a * sampleWeight;
     data.emission += emission * sampleWeight;
     return sampleWeight;
 }
@@ -110,17 +110,17 @@ bool FetchSurfaceCacheData(out SurfaceCacheData data, uint objectID, vec3 hitPos
 float FetchMeshCardLighting(inout vec4 lighting, uint meshCardID, vec3 localPos, vec3 localNormal, float normalWeight)    
 {
     MeshCardInfo card = MESH_CARDS.slot[meshCardID];
-    if(card.atlasExtent == uvec2(0)) return 0.0f;    // 未分配
-    MESH_CARD_READBACKS.slot[meshCardID] = GLOBAL_SETTING.totalTicks;   // 写入当前card的最近使用时间
+    if(card.sampleAtlasExtent == uvec2(0)) return 0.0f;    // 未分配
+    MESH_CARD_READBACKS.slot[meshCardID] = int(GLOBAL_SETTING.totalTicks);   // 写入当前card的最近使用时间
     
     vec3 worldPos = localPos * card.scale;           // 在card和对应的虚拟相机所在空间进行后续计算
-    vec3 ndcPos = (card.proj * card.view * vec4(worldPos, 1.0f)).xyz;
+    vec3 ndcPos = (card.viewProj * vec4(worldPos, 1.0f)).xyz;
     vec2 texCoord = ndcPos.xy * 0.5f + 0.5f;
     float depth = ndcPos.z;
 
-    vec2 atlasCoord = (texCoord * card.atlasExtent + card.atlasOffset) / SURFACE_CACHE_SIZE;    // 需要手动做双线性插值
+    vec2 atlasCoord = (texCoord * card.sampleAtlasExtent + card.sampleAtlasOffset) / SURFACE_CACHE_SIZE;    // 需要手动做双线性插值
     // Calculate bilinear weights
-    vec2 bilinearWeightsUV = fract(texCoord * card.atlasExtent + 0.5f);
+    vec2 bilinearWeightsUV = fract(texCoord * card.sampleAtlasExtent + 0.5f);
     vec4 bilinearWeights;
     bilinearWeights.x = (1.0 - bilinearWeightsUV.x) * (bilinearWeightsUV.y);
     bilinearWeights.y = (bilinearWeightsUV.x) * (bilinearWeightsUV.y);

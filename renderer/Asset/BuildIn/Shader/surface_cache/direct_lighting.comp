@@ -78,15 +78,20 @@ void main()
     ivec2 cardPixel = ivec2(dispatch.tileIndex * SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE) + ivec2(gl_LocalInvocationID.xy);             // 在atlasExtent中的像素偏移，无padding
     ivec2 atlasPixel = cardPixel + ivec2(dispatch.tileOffset * SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE) + ivec2(SURFACE_CACHE_PADDING); // 在surface cache全局的像素偏移，带padding
 
-    vec4 diffuseRoughness   = texelFetch(CACHE_DIFFUSE_ROUGHNESS, atlasPixel, 0);
-    vec4 normalMetallic     = texelFetch(CACHE_NORMAL_METALLIC, atlasPixel, 0);
+    vec4 diffuseMetallic    = texelFetch(CACHE_DIFFUSE_METALLIC, atlasPixel, 0);
+    vec4 normalRoughness    = texelFetch(CACHE_NORMAL_ROUGHNESS, atlasPixel, 0);
     vec4 emission           = texelFetch(CACHE_EMISSION, atlasPixel, 0);
     float depth             = texelFetch(CACHE_DEPTH, atlasPixel, 0).x;
-    vec3 diffuse = diffuseRoughness.xyz;
-    vec3 normal = normalMetallic.xyz;
-    float roughness = diffuseRoughness.w;
-    float metallic = normalMetallic.w;
-    if(depth == 1.0f) return;
+    vec3 diffuse = diffuseMetallic.xyz;
+    vec3 normal = normalRoughness.xyz;
+    float roughness = normalRoughness.w;
+    //float metallic = diffuseMetallic.w;
+    float metallic = 0.005f;  // 当作完全非金属处理
+    if(depth == 1.0f) 
+    {
+        imageStore(CACHE_LIGHTING, atlasPixel, vec4(0.0f, 0.0f, 0.0f, 1.0f));
+        return;
+    }
 
     // 从虚拟相机的ndc空间转到物体空间，再转回世界空间
     vec3 ndcPos = vec3(ScreenToNDC(ScreenPixToUV(cardPixel, ivec2(card.atlasExtent))), depth);
@@ -98,8 +103,11 @@ void main()
 
     vec4 finalColor = vec4(0.0f, 0.0f, 0.0f, 1.0f);
 
+
+	vec3 F0 = mix(vec3(0.04f), diffuse, metallic);
     vec3 N = normalize(worldNormal);
-    vec3 V = normalize(CAMERA.pos.xyz - worldPos.xyz);	
+    vec3 V = normalize(CAMERA.pos.xyz - worldPos.xyz);	// 对于漫反射，V取值应该不影响结果
+                                                        // 直接用CAMERA是错误的，观察位置不是用于场景渲染的相机位置，再怎么也该是card光栅使用的虚拟相机位置
 
     vec3 directLightColor = DirectionalDiffuseLighting(diffuse, roughness, metallic, worldPos, N, V) *  
                             RtDirectionalShadow(worldPos, 0.0f);                                        // 平行光源是CSM，对于镜头外的覆盖不对，暂时用光追实现，后续改成虚拟阴影贴图？
@@ -108,11 +116,15 @@ void main()
     for(int i = 0; i < sharedPointLightCount; i++)
     {
         directLightColor += PointDiffuseLighting(diffuse, roughness, metallic, worldPos, N, V, sharedPointLightIDs[i]) *
-                            PointShadow(sharedPointLightIDs[i], worldPos);                              // 点光源阴影的shadow map是正确的
+                            PointShadow(sharedPointLightIDs[i], worldPos);                                  // 点光源阴影的shadow map是正确的
     }
 
-
-    vec3 indirectLightColor = IndirectLighting(diffuse, roughness, metallic, worldPos, N, V);           // 间接光照目前使用的是DDGI，之后改成gather
+    // vec3 indirectLightColor = IndirectLighting(diffuse, roughness, metallic, worldPos, N, V);            // 间接光照目前使用的是DDGI，之后改成gather
+    //                                                                                                      // DDGI里计算切比雪夫系数时会使用V做偏移，置零就不会视角相关   
+    vec3 indirectIrradiance = IndirectIrradiance(diffuse, roughness, metallic, worldPos, N, vec3(0.0f));
+    vec3 f_diffuse  = Diffuse_Lambert(diffuse); 
+    vec3 k_diffuse = vec3(1.0f);    //TODO 
+    vec3 indirectLightColor = (1.0 - metallic) * f_diffuse * k_diffuse * indirectIrradiance;    
 
 
     finalColor.xyz += directLightColor + indirectLightColor + emission.xyz;

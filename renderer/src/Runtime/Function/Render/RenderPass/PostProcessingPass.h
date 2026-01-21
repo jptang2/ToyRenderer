@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RenderPass.h"
+#include <cstdint>
 
 class PostProcessingPass : public RenderPass
 {
@@ -20,9 +21,11 @@ private:
 	struct PostProcessingSetting
 	{
 		float exposure = 0.4f;
+		float luminance = 0.1f;
 		float saturation = 1.0f;
 		float contrast = 1.0f;
 		uint32_t mode = 2;
+		uint32_t fixLuminance = 0;
 	};
 	PostProcessingSetting setting;
 

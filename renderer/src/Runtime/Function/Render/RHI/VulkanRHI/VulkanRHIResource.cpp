@@ -388,6 +388,12 @@ void VulkanRHIBuffer::UnMap()
 
 void VulkanRHIBuffer::Destroy()
 {
+    if(mapped && !(info.creationFlag & BUFFER_CREATION_PERSISTENT_MAP))
+    {
+        vmaUnmapMemory(Backend()->GetMemoryAllocator(), allocation);
+        pointer = nullptr;
+        mapped = false;
+    }
     vmaDestroyBuffer(Backend()->GetMemoryAllocator(), handle, allocation);
 }
 
@@ -840,24 +846,9 @@ VulkanRHITopLevelAccelerationStructure::VulkanRHITopLevelAccelerationStructure(c
         .type = RESOURCE_TYPE_RW_BUFFER | RESOURCE_TYPE_RAY_TRACING,
         .creationFlag = BUFFER_CREATION_PERSISTENT_MAP}); 
 
-    Update(this->info.instanceInfos);
-    this->info.instanceInfos.clear();
-}
-
-void VulkanRHITopLevelAccelerationStructure::Update(const std::vector<RHIAccelerationStructureInstanceInfo>& instanceInfos) 
-{
-    bool update = (handle == VK_NULL_HANDLE) ? false : true;
-
-    std::vector<VkAccelerationStructureInstanceKHR> blasInstances;
-    for(int i = 0; i < instanceInfos.size(); i++)
-    {
-        blasInstances.push_back(VulkanUtil::AccelerationStructureInstanceInfoToVk(instanceInfos[i]));
-    }
-    memcpy(instanceBuffer->Map(), blasInstances.data(), blasInstances.size() * sizeof(VkAccelerationStructureInstanceKHR));
-  
     // 0. 数据结构
     // 填充顶层加速结构使用的几何信息（只有一个），使用的图元是VK_GEOMETRY_TYPE_INSTANCES_KHR
-    VkAccelerationStructureGeometryKHR accelerationStructureGeometry{};
+    accelerationStructureGeometry = {};
     accelerationStructureGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
     accelerationStructureGeometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
     accelerationStructureGeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
@@ -866,24 +857,21 @@ void VulkanRHITopLevelAccelerationStructure::Update(const std::vector<RHIAcceler
     accelerationStructureGeometry.geometry.instances.data.deviceAddress = VulkanUtil::GetBufferDeviceAddress(ResourceCast(instanceBuffer)->GetHandle(), Backend()->GetLogicalDevice());
 
     // 构建加速结构的信息
-    VkAccelerationStructureBuildGeometryInfoKHR accelerationStructureBuildGeometryInfo{};
+    accelerationStructureBuildGeometryInfo = {};
     accelerationStructureBuildGeometryInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-    accelerationStructureBuildGeometryInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;			//顶层
+    accelerationStructureBuildGeometryInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;			// 顶层
     accelerationStructureBuildGeometryInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
-    accelerationStructureBuildGeometryInfo.geometryCount = 1;											//只有一个几何信息，就是顶层的
-    accelerationStructureBuildGeometryInfo.mode = update ?
-                                                                VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR :   //加速结构是否更新
-                                                                VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    accelerationStructureBuildGeometryInfo.geometryCount = 1;											// 只有一个几何信息，就是顶层的
+    accelerationStructureBuildGeometryInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;       // 构建
     accelerationStructureBuildGeometryInfo.pGeometries = &accelerationStructureGeometry;
     accelerationStructureBuildGeometryInfo.srcAccelerationStructure = VK_NULL_HANDLE;
     accelerationStructureBuildGeometryInfo.dstAccelerationStructure = VK_NULL_HANDLE;
-
 
     // 1. 获取需要分配的buffer的尺寸信息
     VkAccelerationStructureBuildSizesInfoKHR buildSize = {};
     buildSize.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
     {    
-        uint32_t primitiveCount = update ? instanceInfos.size() : info.maxInstance;
+        uint32_t primitiveCount = info.maxInstance;
 
         //获取buffer尺寸，在下面进行分配
         vkGetAccelerationStructureBuildSizesKHR(
@@ -894,9 +882,7 @@ void VulkanRHITopLevelAccelerationStructure::Update(const std::vector<RHIAcceler
             &buildSize);
     }
 
-
-    // 2. 如果非更新，需要首先创建加速结构
-    if (update == false)    
+    // 2. 创建加速结构
     {
         accelerationStructureBuffer = Backend()->CreateBuffer({
             .size = buildSize.accelerationStructureSize,
@@ -924,17 +910,36 @@ void VulkanRHITopLevelAccelerationStructure::Update(const std::vector<RHIAcceler
         address = vkGetAccelerationStructureDeviceAddressKHR(Backend()->GetLogicalDevice(), &accelerationDeviceAddressInfo);
     }
 
-
     // 3. 创建构建过程需要使用的scratch buffer
-    RHIBufferRef scratchBuffer = Backend()->CreateBuffer({
-        .size = buildSize.buildScratchSize,
-        .memoryUsage = MEMORY_USAGE_CPU_TO_GPU,
-        .type = RESOURCE_TYPE_RW_BUFFER,
-        .creationFlag = BUFFER_CREATION_PERSISTENT_MAP | BUFFER_CREATION_FORCE_ALIGNMENT}); // scratch buffer有内存对齐的要求
+    {
+        scratchBuffer = Backend()->CreateBuffer({
+            .size = buildSize.buildScratchSize,
+            .memoryUsage = MEMORY_USAGE_CPU_TO_GPU,
+            .type = RESOURCE_TYPE_RW_BUFFER,
+            .creationFlag = BUFFER_CREATION_PERSISTENT_MAP | BUFFER_CREATION_FORCE_ALIGNMENT}); // scratch buffer有内存对齐的要求
+    }
 
+    Update(this->info.instanceInfos, true);
+    this->info.instanceInfos.clear();
+}
 
+void VulkanRHITopLevelAccelerationStructure::Update(const std::vector<RHIAccelerationStructureInstanceInfo>& instanceInfos, bool build) 
+{
+    bool update = (handle == VK_NULL_HANDLE || build) ? false : true;   // 这个build标志位可不可以在内部自动推导？TODO
+
+    std::vector<VkAccelerationStructureInstanceKHR> blasInstances;
+    for(int i = 0; i < instanceInfos.size(); i++)
+    {
+        blasInstances.push_back(VulkanUtil::AccelerationStructureInstanceInfoToVk(instanceInfos[i]));
+    }
+    memcpy(instanceBuffer->Map(), blasInstances.data(), blasInstances.size() * sizeof(VkAccelerationStructureInstanceKHR));
+  
     // 4. 命令执行加速结构创建
     {
+        accelerationStructureBuildGeometryInfo.mode = update ?
+                                                        VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR :
+                                                        VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+
         //补齐构建所需的信息（需要构建的加速结构，和scratch buffer）
         accelerationStructureBuildGeometryInfo.srcAccelerationStructure = update ? 
                                                                                 handle:
@@ -979,7 +984,7 @@ VulkanRHIBottomLevelAccelerationStructure::VulkanRHIBottomLevelAccelerationStruc
     // 填充底层加速结构使用的几何信息，使用的图元是VK_GEOMETRY_TYPE_TRIANGLES_KHR
     VkAccelerationStructureGeometryKHR accelerationStructureGeometry{};
     accelerationStructureGeometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-    accelerationStructureGeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;   //暂时都假定不透明
+    accelerationStructureGeometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR | VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR;   //暂时都假定不透明
     accelerationStructureGeometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
     accelerationStructureGeometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
 
@@ -1257,6 +1262,13 @@ VulkanRHIRenderPass::VulkanRHIRenderPass(const RHIRenderPassInfo& info, VulkanRH
     // 创建renderpass
     std::vector<VkImageView> imageViews;
     VulkanRenderPassAttachments renderPassAttachments = {};
+    renderPassAttachments.viewMask = 0; 
+    if(info.multiviewCount != 0)
+    {
+        for(int i = 0; i < info.multiviewCount; i++)
+            renderPassAttachments.viewMask |= 1 << i;
+    }
+
     for(uint32_t i = 0; i < info.colorAttachments.size(); i++)
     {
         if(info.colorAttachments[i].textureView == nullptr) break;  // attachment不允许中间有间隔的空元素，检查到有空就停止
@@ -1327,6 +1339,7 @@ VulkanRHIGraphicsPipeline::VulkanRHIGraphicsPipeline(const RHIGraphicsPipelineIn
     // 又一处设计失败？
     uint32_t attachmentSize = 0;
     VulkanRenderPassAttachments renderPassAttachments = {};
+    renderPassAttachments.viewMask = info.viewMask; 
     for(uint32_t i = 0; i < info.colorAttachmentFormats.size(); i++)
     {
         if(info.colorAttachmentFormats[i] == FORMAT_UKNOWN) break;

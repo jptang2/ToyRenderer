@@ -25,10 +25,10 @@ public:
         inline NodeID ID() { return id; }
 
         template<typename Type = Edge>
-        std::vector<Type*> InEdges() { return graph->InEdges<Type>(ID()); }
+        inline std::vector<Type*> InEdges() { return graph->InEdges<Type>(ID()); }
 
         template<typename Type = Edge>
-        std::vector<Type*> OutEdges() { return graph->OutEdges<Type>(ID()); }
+        inline std::vector<Type*> OutEdges() { return graph->OutEdges<Type>(ID()); }
 
     private:
         NodeID id;

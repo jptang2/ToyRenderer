@@ -7,17 +7,24 @@
 
 void RenderMeshManager::Init()
 {
-
+    tlas = EngineContext::RHI()->CreateTopLevelAccelerationStructure({
+        .maxInstance = MAX_PER_FRAME_OBJECT_SIZE,
+        .instanceInfos = {}
+    });
+    EngineContext::RenderResource()->SetTLAS(tlas);
+    init = false;
 }
 
 void RenderMeshManager::Tick()
 {
-    PrepareMeshPass();
+    PrepareMeshPass();  
 
 #if ENABLE_RAY_TRACING
     PrepareRayTracePass();
 #endif
 
+    std::shared_ptr<CameraComponent> camera = EngineContext::World()->GetActiveScene()->GetActiveCamera();    // TODO 
+    if(camera) camera->UpdateCameraInfo();  // 更新相机数据
 }
 
 void RenderMeshManager::PrepareMeshPass()
@@ -42,10 +49,7 @@ void RenderMeshManager::PrepareMeshPass()
     for(auto& pass : EngineContext::Render()->GetMeshPasses())
     {
         if(!pass) continue;
-        for(auto& processor : pass->GetMeshPassProcessors())
-        {
-            processor->Process(batches);
-        }
+        pass->GetMeshPassProcessor()->Process(batches);
     }
 }
 
@@ -54,20 +58,17 @@ void RenderMeshManager::PrepareRayTracePass()
     ENGINE_TIME_SCOPE(RenderMeshManager::PrepareRayTracePass);
 
     // 遍历场景，获取光追实例信息
-    std::vector<RHIAccelerationStructureInstanceInfo> instances;
+    instances.clear();
     auto rendererComponents = EngineContext::World()->GetActiveScene()->GetComponents<MeshRendererComponent>();     // 场景物体
     for(auto component : rendererComponents) component->CollectAccelerationStructureInstance(instances);
 
-    if(tlas == nullptr)
-    {
-        tlas = EngineContext::RHI()->CreateTopLevelAccelerationStructure({
-            .maxInstance = MAX_PER_FRAME_OBJECT_SIZE,
-            .instanceInfos = instances
-        });
-        EngineContext::RenderResource()->SetTLAS(tlas);
-    }
-    else 
-    {
-        tlas->Update(instances);
-    }
+    //UpdateTLAS();
+}
+
+void RenderMeshManager::UpdateTLAS()
+{
+    ENGINE_TIME_SCOPE(RenderMeshManager::BuildTLAS);
+    
+    tlas->Update(instances, !init);
+    init = true;
 }

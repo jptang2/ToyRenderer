@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <string>
 
+#include <vector>
+
 void SurfaceCachePass::Init()
 {
     auto backend = EngineContext::RHI();
@@ -20,8 +22,8 @@ void SurfaceCachePass::Init()
 
     RHIRootSignatureInfo rootSignatureInfo = {};
     rootSignatureInfo.AddEntry(EngineContext::RenderResource()->GetPerFrameRootSignature()->GetInfo())
-                     .AddEntry({1, 0, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})      // CACHE_DIFFUSE_ROUGHNESS
-                     .AddEntry({1, 1, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})      // CACHE_NORMAL_METALLIC
+                     .AddEntry({1, 0, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})      // CACHE_DIFFUSE_METALLIC
+                     .AddEntry({1, 1, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})      // CACHE_NORMAL_ROUGHNESS
                      .AddEntry({1, 2, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})      // CACHE_EMISSION
                      .AddEntry({1, 3, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_RW_TEXTURE})   // CACHE_LIGHTING
                      .AddEntry({1, 4, 1, SHADER_FREQUENCY_ALL, RESOURCE_TYPE_TEXTURE})      // CACHE_DEPTH
@@ -53,17 +55,28 @@ void SurfaceCachePass::Init()
         computePipeline                         = backend->CreateComputePipeline(pipelineInfo);
     }
 
+    for(int i = 0; i < 4; i++)
+    {
+        ClearAttachment clearAttachment = {};
+        clearAttachment.binding = i;
+        clearAttachment.clearColor.r = i < 3 ? 0.0f : 1.0f;
+        clearAttachment.clearColor.g = 0.0f;
+        clearAttachment.clearColor.b = 0.0f;
+        clearAttachment.clearColor.a = 0.0f;
+        clearAttachment.aspect = i < 3 ? TEXTURE_ASPECT_COLOR : TEXTURE_ASPECT_DEPTH;
+        clearAttachments.push_back(clearAttachment);
+    }
 }   
 
 void SurfaceCachePass::Build(RDGBuilder& builder) 
 {
     //if (IsEnabled())
     {
-        RDGTextureHandle diffuseTex = builder.CreateTexture("Surface Cache Diffuse/Roughness")
+        RDGTextureHandle diffuseTex = builder.CreateTexture("Surface Cache Diffuse/Metallic")
             .Import(EngineContext::RenderResource()->GetSurfaceCacheTexture(0)->texture, RESOURCE_STATE_UNDEFINED)
             .Finish();
 
-        RDGTextureHandle normalTex = builder.CreateTexture("Surface Cache Normal/Metallic")
+        RDGTextureHandle normalTex = builder.CreateTexture("Surface Cache Normal/Roughness")
             .Import(EngineContext::RenderResource()->GetSurfaceCacheTexture(1)->texture, RESOURCE_STATE_UNDEFINED)
             .Finish();
 
@@ -80,7 +93,7 @@ void SurfaceCachePass::Build(RDGBuilder& builder)
             .Finish();
 
         RDGBufferHandle directLightingBuf = builder.CreateBuffer("Surface Cache Direct Lighting Buffer")
-            .Import(directLightingBuffer[EngineContext::CurrentFrameIndex()].buffer, RESOURCE_STATE_UNDEFINED)
+            .Import(directLightingBuffer[EngineContext::ThreadPool()->ThreadFrameIndex()].buffer, RESOURCE_STATE_UNDEFINED)
             .Finish();
 
         RDGRenderPassHandle pass0 = builder.CreateRenderPass(GetName() + " Rasterize")
@@ -95,6 +108,8 @@ void SurfaceCachePass::Build(RDGBuilder& builder)
                 command->SetDepthBias(0.0f, 0.0f, 0.0f);          
                 command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
                 
+                command->ClearScissors(clearAttachments, EngineContext::Render()->GetSurfaceCacheManager()->GetClearScissors());
+
                 for(auto& draw : EngineContext::Render()->GetSurfaceCacheManager()->GetRasterizeDraws())
                 {
                     SurfaceCacheRasterizeSetting setting = {};
@@ -126,7 +141,7 @@ void SurfaceCachePass::Build(RDGBuilder& builder)
             .Execute([&](RDGPassContext context) {       
                 
                 auto& dispatches = EngineContext::Render()->GetSurfaceCacheManager()->GetDirectLightingDispatches();
-                directLightingBuffer[EngineContext::CurrentFrameIndex()].SetData(dispatches);
+                directLightingBuffer[EngineContext::ThreadPool()->ThreadFrameIndex()].SetData(dispatches);
 
                 RHICommandListRef command = context.command; 
                 command->SetComputePipeline(computePipeline);

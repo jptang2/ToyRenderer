@@ -180,6 +180,7 @@ public:
     void SetTLAS(const RHITopLevelAccelerationStructureRef& tlas);
     void SetCameraInfo(const CameraInfo& cameraInfo);
     void SetObjectInfo(const ObjectInfo& objectInfo, uint32_t objectID);
+    void SetObjectInfos(const std::vector<ObjectInfo>& objectInfos, uint32_t baseObjectID);
     void SetDirectionalLightInfo(const DirectionalLightInfo& directionalLightInfo, uint32_t cascade);
     void SetPointLightInfo(const PointLightInfo& pointLightInfo, uint32_t pointLightID);
     void SetVolumeLightInfo(const VolumeLightInfo& volumeLightInfo, uint32_t volumeLightID);
@@ -188,7 +189,7 @@ public:
     void SetMaterialInfo(const MaterialInfo& materialInfo, uint32_t materialID);
     void SetMeshClusterInfo(const std::vector<MeshClusterInfo>& meshClusterInfo, uint32_t baseMeshClusterID);
     void SetMeshClusterGroupInfo(const std::vector<MeshClusterGroupInfo>& meshClusterGroupInfo, uint32_t baseMeshClusterGroupID);
-    void SetMeshCardInfo(const MeshCardInfo& meshCardInfo, uint32_t meshCardID);
+    void SetMeshCardInfos(const std::vector<MeshCardInfo>& cards, uint32_t size);
     void SetVertexInfo(const VertexInfo& vertexInfo, uint32_t vertexID);
     void SetGizmoDataCommand(void* data, int size);
     void GetMeshCardReadback(MeshCardReadBack& readback);
@@ -197,6 +198,8 @@ public:
     RHIBufferRef GetGlobalClusterDrawInfoBuffer();
     RHIBufferRef GetLightClusterIndexBuffer();
     RHIBufferRef GetGizmoDataBuffer();
+    RHIBufferRef GetCardUpdateBuffer()              { return multiFrameResource.cardUpdateBuffer.buffer; }
+    RHIBufferRef GetCardReadbackBuffer()            { return multiFrameResource.cardReadbackBuffer.buffer; }
     RHIBufferRef GetSurfaceTileBuffer();
 
     RHIRootSignatureRef GetPerFrameRootSignature()  { return perFrameRootSignature; }
@@ -231,7 +234,8 @@ private:
         RHIDescriptorSetRef samplerDescriptorSet;
 
         Buffer<RenderGlobalSetting> globalSettingBuffer;                    // 有固定槽位分配的buffer，且更新频率低
-        Buffer<MeshCardReadBack> cardReadBackBuffer = Buffer<MeshCardReadBack>(RESOURCE_TYPE_RW_BUFFER, MEMORY_USAGE_GPU_TO_CPU); // 需要每帧更新，但是都用同一个
+        Buffer<MeshCardReadBack> cardUpdateBuffer = Buffer<MeshCardReadBack>(RESOURCE_TYPE_RW_BUFFER); // 需要每帧更新，但是都用同一个
+        Buffer<MeshCardReadBack> cardReadbackBuffer = Buffer<MeshCardReadBack>(RESOURCE_TYPE_RW_BUFFER, MEMORY_USAGE_GPU_TO_CPU); 
         ArrayBuffer<MeshClusterInfo, MAX_PER_FRAME_CLUSTER_SIZE> meshClusterBuffer;
         ArrayBuffer<MeshClusterGroupInfo, MAX_PER_FRAME_CLUSTER_SIZE> meshClusterGroupBuffer;
         ArrayBuffer<MaterialInfo, MAX_PER_FRAME_RESOURCE_SIZE> materialBuffer;

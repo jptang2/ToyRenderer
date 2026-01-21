@@ -1,5 +1,6 @@
 #include "PostProcessingPass.h"
 #include "Function/Global/EngineContext.h"
+#include "Function/Render/RDG/RDGHandle.h"
 #include "Function/Render/RHI/RHIStructs.h"
 #include <cstdint>
 
@@ -30,7 +31,7 @@ void PostProcessingPass::Build(RDGBuilder& builder)
 
     RDGBufferHandle exposureData = builder.GetBuffer("Exposure Data");
 
-    RDGTextureHandle outColor = builder.CreateTexture("Final Color")
+    RDGTextureHandle outColor = builder.GetOrCreateTexture("Final Color")
         .Exetent({windowExtent.width, windowExtent.height, 1})
         .Format(EngineContext::Render()->GetColorFormat())
         .ArrayLayers(1)
@@ -51,9 +52,27 @@ void PostProcessingPass::Build(RDGBuilder& builder)
             command->SetComputePipeline(computePipeline);
             command->BindDescriptorSet(context.descriptors[0], 0);
             command->PushConstants(&setting, sizeof(PostProcessingSetting), SHADER_FREQUENCY_COMPUTE);
-            command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                EngineContext::Render()->GetWindowsExtent().height / 16, 
+            command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                 1);
         })
+        .Finish();
+
+
+    // TODO 换个位置
+    // Surface Cache的更新回读
+    
+    RDGBufferHandle cardUpdate = builder.CreateBuffer("Surface Cache Card Update")
+        .Import(EngineContext::RenderResource()->GetCardUpdateBuffer(), RESOURCE_STATE_UNORDERED_ACCESS)
+        .Finish();
+
+    RDGBufferHandle cardReadBack = builder.CreateBuffer("Surface Cache Card Readback")
+        .Import(EngineContext::RenderResource()->GetCardReadbackBuffer(), RESOURCE_STATE_UNDEFINED)
+        .Finish();        
+
+    RDGCopyPassHandle copy = builder.CreateCopyPass("Surface Cache Card Data")
+        .From(cardUpdate, 0, sizeof(MeshCardReadBack))
+        .To(cardReadBack, 0, sizeof(MeshCardReadBack))
+        .OutputReadWrite(cardUpdate)
         .Finish();
 }

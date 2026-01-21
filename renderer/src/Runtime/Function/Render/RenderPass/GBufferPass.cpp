@@ -99,7 +99,7 @@ void GBufferPass::Build(RDGBuilder& builder)
 {
     Extent2D extent = EngineContext::Render()->GetWindowsExtent();
 
-    RDGTextureHandle diffuse = builder.CreateTexture("G-Buffer Diffuse/Roughness")
+    RDGTextureHandle diffuse = builder.CreateTexture("G-Buffer Diffuse/Metallic")
         .Exetent({extent.width, extent.height, 1})
         .Format(FORMAT_R8G8B8A8_UNORM)
         .ArrayLayers(1)
@@ -109,7 +109,7 @@ void GBufferPass::Build(RDGBuilder& builder)
         .AllowRenderTarget()
         .Finish();
 
-    RDGTextureHandle normal = builder.CreateTexture("G-Buffer Normal/Metallic")
+    RDGTextureHandle normal = builder.CreateTexture("G-Buffer Normal/Roughness")
         .Exetent({extent.width, extent.height, 1})
         .Format(FORMAT_R8G8B8A8_SNORM)
         .ArrayLayers(1)
@@ -141,7 +141,7 @@ void GBufferPass::Build(RDGBuilder& builder)
         .Import(EngineContext::RenderResource()->GetPrevObjectIDTexture(), RESOURCE_STATE_UNDEFINED)
         .Finish();
 
-    RDGTextureHandle historyNormal = builder.CreateTexture("History G-Buffer Normal/Metallic")
+    RDGTextureHandle historyNormal = builder.CreateTexture("History G-Buffer Normal/Roughness")
         .Import(historyNormalTex, RESOURCE_STATE_UNDEFINED)
         .Finish();
 

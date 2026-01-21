@@ -9,7 +9,9 @@
 #undef near             // <minwindef.h>
 #undef far
 #undef CreateSemaphore  // <winbase.h>
+#undef CreateMutex      // <synchapi.h>
 #undef CopyFile
 #undef UpdateResource
 #undef CreateFile       // <fileapi.h>
 #undef LoadString       // <libloaderapi.h>
+

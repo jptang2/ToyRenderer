@@ -59,8 +59,8 @@ void ExposurePass::Build(RDGBuilder& builder)
             RHICommandListRef command = context.command; 
             command->SetComputePipeline(computePipeline0);
             command->BindDescriptorSet(context.descriptors[0], 0);
-            command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                EngineContext::Render()->GetWindowsExtent().height / 16, 
+            command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                 1);
         })
         .Finish();

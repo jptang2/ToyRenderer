@@ -33,8 +33,10 @@ public:
 	inline Mat4 GetProjectionMatrix() const					{ return proj; }
 	inline Mat4 GetPrevViewMatrix() const					{ return prevView; }
 	inline Mat4 GetPrevProjectionMatrix() const				{ return prevProj; }
-	inline Mat4 GetInvViewMatrix() const					{ return view.inverse(); }
-	inline Mat4 GetInvProjectionMatrix() const				{ return proj.inverse(); }
+	inline Mat4 GetInvViewMatrix() const					{ return invView; }
+	inline Mat4 GetInvProjectionMatrix() const				{ return invProj; }
+	inline Mat4 GetViewProjectionMatrix() const				{ return viewProj; }
+	inline Mat4 GetInvViewProjectionMatrix() const			{ return invViewProj; }
 
 	Frustum GetFrustum()									{ return frustum; }
 
@@ -48,7 +50,7 @@ private:
 	// float pitch = 0.0f;
 	float fovy = 90.0f;
     float aspect = 16.0f / 9.0f;    // TODO 
-	float near = 0.1f;
+	float near = 0.2f;
 	float far = 1000.0f;
 
 	Vec3 position = Vec3::Zero();
@@ -58,8 +60,12 @@ private:
 
 	Mat4 view;
 	Mat4 proj;
+	Mat4 viewProj;
 	Mat4 prevView;	//前一帧的view
 	Mat4 prevProj;	//前一帧的proj
+	Mat4 invView;
+	Mat4 invProj;
+	Mat4 invViewProj;
 
     Frustum frustum;
 

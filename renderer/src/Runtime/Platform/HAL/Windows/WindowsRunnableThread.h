@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Platform/HAL/RunnableThread.h"
-#include "Platform/HAL/Event.h"
+#include "Platform/HAL/SyncEvent.h"
 
 #include <cstdint>
 #include <windows.h>
@@ -19,7 +19,7 @@ public:
 
 private:
     HANDLE thread = 0;
-    EventRef syncEvent;
+    SyncEventRef syncEvent;
 
     static ::DWORD _ThreadProc(LPVOID pThis)
 	{

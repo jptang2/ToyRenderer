@@ -30,7 +30,7 @@ void FXAAPass::Build(RDGBuilder& builder)
 
     RDGTextureHandle inColor = builder.GetTexture("Bloom Out Color");
     
-    RDGTextureHandle outColor = builder.CreateTexture("FXAA Out Color")
+    RDGTextureHandle outColor = builder.GetOrCreateTexture("FXAA Out Color")
         .Exetent({windowExtent.width, windowExtent.height, 1})
         .Format(EngineContext::Render()->GetHdrColorFormat())
         .ArrayLayers(1)
@@ -51,8 +51,8 @@ void FXAAPass::Build(RDGBuilder& builder)
             command->BindDescriptorSet(context.descriptors[0], 0);
             command->BindDescriptorSet(EngineContext::RenderResource()->GetSamplerDescriptorSet(), 1);
             command->PushConstants(&enable, sizeof(uint32_t), SHADER_FREQUENCY_COMPUTE);
-            command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                EngineContext::Render()->GetWindowsExtent().height / 16, 
+            command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                 1);
         })
         .Finish();

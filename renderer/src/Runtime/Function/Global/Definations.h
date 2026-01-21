@@ -3,7 +3,7 @@
 #define ENABLE_DEBUG_MODE 0                         //启用调试模式
 #define ENABLE_RAY_TRACING 1                        //启用硬件光追
 
-#define FRAMES_IN_FLIGHT 3							//帧缓冲数目
+#define FRAMES_IN_FLIGHT 2							//帧缓冲数目
 #define WINDOW_WIDTH 2048                           //32 * 64   16 * 128
 #define WINDOW_HEIGHT 1152                          //18 * 64   9 * 128
 //#define WINDOW_WIDTH 1920                           
@@ -12,9 +12,9 @@
 #define HALF_WINDOW_WIDTH (WINDOW_WIDTH / 2)
 #define HALF_WINDOW_HEIGHT (WINDOW_HEIGHT / 2)
 
-#define MAX_BINDLESS_RESOURCE_SIZE 10240	        //bindless 单个binding的最大描述符数目
-#define MAX_PER_FRAME_RESOURCE_SIZE 10240			//全局的缓冲大小（个数）,包括动画，材质等
-#define MAX_PER_FRAME_OBJECT_SIZE 10240			    //全局最大支持的物体数目
+#define MAX_BINDLESS_RESOURCE_SIZE 102400	        //bindless 单个binding的最大描述符数目
+#define MAX_PER_FRAME_RESOURCE_SIZE 102400			//全局的缓冲大小（个数）,包括动画，材质等
+#define MAX_PER_FRAME_OBJECT_SIZE 102400		    //全局最大支持的物体数目
 
 #define DIRECTIONAL_SHADOW_SIZE 4096				//方向光源尺寸
 #define DIRECTIONAL_SHADOW_CASCADE_LEVEL 4			//CSM级数
@@ -26,10 +26,10 @@
 
 #define CLUSTER_TRIANGLE_SIZE 128                   //每个cluster内的三角形数目，固定尺寸
 #define CLUSTER_GROUP_SIZE 32                       //每个cluster ghroup内的最大cluster数目
-#define MAX_PER_FRAME_CLUSTER_SIZE 1024000          //全局最大支持的cluster数目
-#define MAX_PER_FRAME_CLUSTER_GROUP_SIZE 102400     //全局最大支持的cluster group数目
-#define MAX_PER_PASS_PIPELINE_STATE_COUNT 1024      //每个mesh pass支持的最大的不同管线状态数目
-#define MAX_SUPPORTED_MESH_PASS_COUNT 256           //全局支持的最大mesh pass数目 
+#define MAX_PER_FRAME_CLUSTER_SIZE 102400           //全局最大支持的cluster数目
+#define MAX_PER_FRAME_CLUSTER_GROUP_SIZE 20480      //全局最大支持的cluster group数目
+#define MAX_PER_PASS_PIPELINE_STATE_COUNT 64        //每个mesh pass支持的最大的不同管线状态数目
+#define MAX_SUPPORTED_MESH_PASS_COUNT 32            //全局支持的最大mesh pass数目 
 
 #define MAX_LIGHTS_PER_CLUSTER 8                    //每个cluster最多支持存储的光源数目
 #define LIGHT_CLUSTER_GRID_SIZE 64                  //cluster based lighting裁剪时使用的tile像素尺寸
@@ -47,14 +47,14 @@
 #define DDGI_IRRADIANCE_PROBE_SIZE 8                //DDGI使用的辐照度贴图，单个probe的纹理尺寸
 #define DDGI_DEPTH_PROBE_SIZE 16                    //DDGI使用的深度贴图，单个probe的纹理尺寸
 
-#define HALF_SIZE_SSSR false                        //SSSR是否使用半精度
+#define HALF_SIZE_SSSR true                        //SSSR是否使用半精度
 
 #define VOLUMETRIC_FOG_SIZE_X 320                   //体积雾使用的屏幕空间texture3d的分辨率
 #define VOLUMETRIC_FOG_SIZE_Y 180
 #define VOLUMETRIC_FOG_SIZE_Z 128
 
-#define CLIPMAP_VOXEL_COUNT 128                     //clipmap的边长
-#define CLIPMAP_MIN_VOXEL_SIZE 0.1                  //clipmap的mip0层级体素尺寸
+#define CLIPMAP_VOXEL_COUNT 64                      //clipmap的边长
+#define CLIPMAP_MIN_VOXEL_SIZE 0.2                  //clipmap的mip0层级体素尺寸
 #define CLIPMAP_MIPLEVEL 5                          //clipmap的mip层级
 
 #define MAX_GIZMO_PRIMITIVE_COUNT 102400            //gizmo可以绘制的最大图元数目

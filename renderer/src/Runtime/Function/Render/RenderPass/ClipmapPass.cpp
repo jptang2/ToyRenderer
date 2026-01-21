@@ -33,11 +33,11 @@ void ClipmapPass::Init()
     pipelineInfo.shaderBindingTable         = sbt;
     rayTracingPipeline   = backend->CreateRayTracingPipeline(pipelineInfo);
 
-    Extent3D extent = Extent3D( CLIPMAP_VOXEL_COUNT, 
+    Extent3D extent = Extent3D( CLIPMAP_VOXEL_COUNT,    
                                 CLIPMAP_VOXEL_COUNT * CLIPMAP_MIPLEVEL, 
                                 CLIPMAP_VOXEL_COUNT * 6);
-    clipmapTexture = EngineContext::RHI()->CreateTexture({
-        .format = FORMAT_R32G32B32A32_SFLOAT,
+    clipmapTexture = EngineContext::RHI()->CreateTexture({                  // CLIPMAP_VOXEL_COUNT设成128就是480MB 超级大
+        .format = FORMAT_R16G16B16A16_SFLOAT,
         .extent = {extent.width, extent.height, extent.depth},
         .arrayLayers = 1,
         .mipLevels = 1,
@@ -73,9 +73,9 @@ void ClipmapPass::Build(RDGBuilder& builder)
         for(int i = 0; i < clipmap->LevelCount(); i++) updateRegions.push_back(clipmap->GetRegion(i));
     }
 
-    clipmapInfoBuffer[EngineContext::CurrentFrameIndex()].SetData(clipmap->GetInfo());
+    clipmapInfoBuffer[EngineContext::ThreadPool()->ThreadFrameIndex()].SetData(clipmap->GetInfo());
     RDGBufferHandle clipmapBuf = builder.CreateBuffer("VXGI Clipmap Buffer")
-        .Import(clipmapInfoBuffer[EngineContext::CurrentFrameIndex()].buffer, RESOURCE_STATE_UNDEFINED)
+        .Import(clipmapInfoBuffer[EngineContext::ThreadPool()->ThreadFrameIndex()].buffer, RESOURCE_STATE_UNDEFINED)
         .Finish();
 
     RDGTextureHandle clipmapTex = builder.CreateTexture("VXGI Clipmap Texture")

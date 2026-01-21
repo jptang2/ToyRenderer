@@ -112,6 +112,16 @@ namespace Math
         return 32 - CountLeadingZeros(Arg - 1);
     }
 
+    inline uint32_t CeilDivide(uint32_t Arg, uint32_t Divider)
+    {
+        return (Arg + Divider - 1) / Divider;
+    }
+
+    inline uint32_t FloorDivide(uint32_t Arg, uint32_t Divider)
+    {
+        return Arg / Divider;
+    }
+
     inline uint32_t RoundUpToPowerOfTwo(uint32_t Arg)
     {
         return 1 << CeilLogTwo(Arg);
@@ -128,6 +138,11 @@ namespace Math
         return _BitScanReverse64(&BitIndex, Value) ? BitIndex : 0;
     }
 
+    inline float Mode(float arg, float mode)
+    {
+        return arg - floorf(arg / mode) * mode;
+    }
+
     Vec3 ClampEulerAngle(Vec3 angle);
 
     Vec3 ToEulerAngle(const Quaternion& q);  
@@ -141,4 +156,6 @@ namespace Math
     Mat4 Ortho(float left, float right, float bottom, float top, float near, float far);
 
     void Mat3x4(Mat4 mat, float* newMat);
+
+    Vec3 GetScale(const Mat4 &matrix);
 }

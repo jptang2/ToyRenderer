@@ -1,6 +1,7 @@
 #include "WorldManager.h"
 #include "Function/Framework/Scene/Scene.h"
 #include "Function/Global/EngineContext.h"
+#include "Core/Event/AllEvents.h"
 #include <memory>
 
 void WorldManager::Init(std::string defaultScenePath)
@@ -12,10 +13,13 @@ void WorldManager::Init(std::string defaultScenePath)
 void WorldManager::Tick(float deltaTime)
 {
     ENGINE_TIME_SCOPE(WorldManager::Tick);
+    EngineContext::Event()->Dispatch(std::make_shared<BeforeUpdateEvent>());
     if (activeScene) 
     {
+        EngineContext::Event()->Dispatch(std::make_shared<OnUpdateEvent>());
         activeScene->Tick(deltaTime);
     }
+    EngineContext::Event()->Dispatch(std::make_shared<AfterUpdateEvent>());
 }
 
 void WorldManager::Save()

@@ -11,6 +11,7 @@
 #include "Function/Render/RHI/RHIStructs.h"
 
 #include <array>
+#include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -70,6 +71,36 @@ RDGBufferBuilder RDGBuilder::CreateBuffer(std::string name)
     RDGBufferNodeRef bufferNode = graph->CreateNode<RDGBufferNode>(name);
     blackBoard.AddBuffer(bufferNode);
     return RDGBufferBuilder(this, bufferNode);
+}
+
+RDGTextureBuilder RDGBuilder::GetOrCreateTexture(std::string name)
+{
+    RDGTextureNodeRef textureNode = blackBoard.Texture(name);
+
+    bool validationMode = true;
+    if(textureNode == nullptr)
+    {
+        textureNode = graph->CreateNode<RDGTextureNode>(name);
+        blackBoard.AddTexture(textureNode);
+        validationMode = false;
+    }
+    
+    return RDGTextureBuilder(this, textureNode);
+}
+
+RDGBufferBuilder RDGBuilder::GetOrCreateBuffer(std::string name)
+{   
+    RDGBufferNodeRef bufferNode = blackBoard.Buffer(name);
+
+    bool validationMode = true;
+    if(bufferNode == nullptr)
+    {
+        bufferNode = graph->CreateNode<RDGBufferNode>(name);
+        blackBoard.AddBuffer(bufferNode);
+        validationMode = false;
+    }
+       
+    return RDGBufferBuilder(this, bufferNode, validationMode);
 }
 
 RDGRenderPassBuilder RDGBuilder::CreateRenderPass(std::string name)
@@ -157,14 +188,14 @@ void RDGBuilder::Execute()
         //ReleaseResource(pass);
         for(auto& descriptor : pass->pooledDescriptorSets)  // 池化的view在pass结束后就可以释放，但是描述符得全部执行完再释放？
         {
-            RDGDescriptorSetPool::Get(EngineContext::CurrentFrameIndex())->Release({descriptor.first}, pass->rootSignature, descriptor.second);
+            RDGDescriptorSetPool::Get(EngineContext::ThreadPool()->ThreadFrameIndex())->Release({descriptor.first}, pass->rootSignature, descriptor.second);
         }
     }
 }
 
 void RDGBuilder::CreateInputBarriers(RDGPassNodeRef pass)
 {
-    pass->ForEachTexture([&](RDGTextureEdgeRef edge, RDGTextureNodeRef texture){
+    graph->ForEachTexture(pass, [&](RDGTextureEdgeRef edge, RDGTextureNodeRef texture){
 
         if(edge->IsOutput()) return;
         RHIResourceState previousState = PreviousState(texture, pass, edge->subresource, false);
@@ -182,7 +213,7 @@ void RDGBuilder::CreateInputBarriers(RDGPassNodeRef pass)
         }
     });
 
-    pass->ForEachBuffer([&](RDGBufferEdgeRef edge, RDGBufferNodeRef buffer){
+    graph->ForEachBuffer(pass, [&](RDGBufferEdgeRef edge, RDGBufferNodeRef buffer){
         
         if(edge->IsOutput()) return;
         RHIResourceState previousState = PreviousState(buffer, pass, false);
@@ -204,7 +235,7 @@ void RDGBuilder::CreateInputBarriers(RDGPassNodeRef pass)
 
 void RDGBuilder::CreateOutputBarriers(RDGPassNodeRef pass)
 {
-    pass->ForEachTexture([&](RDGTextureEdgeRef edge, RDGTextureNodeRef texture){
+    graph->ForEachTexture(pass, [&](RDGTextureEdgeRef edge, RDGTextureNodeRef texture){
 
         if(!edge->IsOutput()) return;
         RHIResourceState previousState = PreviousState(texture, pass, edge->subresource, true);
@@ -222,7 +253,7 @@ void RDGBuilder::CreateOutputBarriers(RDGPassNodeRef pass)
         }
     });
 
-    pass->ForEachBuffer([&](RDGBufferEdgeRef edge, RDGBufferNodeRef buffer){
+    graph->ForEachBuffer(pass, [&](RDGBufferEdgeRef edge, RDGBufferNodeRef buffer){
         
         if(!edge->IsOutput()) return;
         RHIResourceState previousState = PreviousState(buffer, pass, true);
@@ -244,7 +275,7 @@ void RDGBuilder::CreateOutputBarriers(RDGPassNodeRef pass)
 
 void RDGBuilder::PrepareDescriptorSet(RDGPassNodeRef pass)
 {
-    pass->ForEachTexture([&](RDGTextureEdgeRef edge, RDGTextureNodeRef texture){
+    graph->ForEachTexture(pass, [&](RDGTextureEdgeRef edge, RDGTextureNodeRef texture){
 
         if(edge->IsOutput()) return;    // 作为output声明时不需要view
         RHITextureViewRef view = RDGTextureViewPool::Get()->Allocate({
@@ -256,7 +287,7 @@ void RDGBuilder::PrepareDescriptorSet(RDGPassNodeRef pass)
 
         if(pass->descriptorSets[edge->set] == nullptr && pass->rootSignature != nullptr)
         {
-            auto descriptor = RDGDescriptorSetPool::Get(EngineContext::CurrentFrameIndex())->Allocate(pass->rootSignature, edge->set).descriptor;
+            auto descriptor = RDGDescriptorSetPool::Get(EngineContext::ThreadPool()->ThreadFrameIndex())->Allocate(pass->rootSignature, edge->set).descriptor;
             pass->descriptorSets[edge->set] = descriptor;
             pass->pooledDescriptorSets.push_back({descriptor, edge->set});
         }
@@ -274,11 +305,11 @@ void RDGBuilder::PrepareDescriptorSet(RDGPassNodeRef pass)
         }
     });
 
-    pass->ForEachBuffer([&](RDGBufferEdgeRef edge, RDGBufferNodeRef buffer){
+    graph->ForEachBuffer(pass, [&](RDGBufferEdgeRef edge, RDGBufferNodeRef buffer){
 
         if(pass->descriptorSets[edge->set] == nullptr && pass->rootSignature != nullptr)
         {
-            auto descriptor = RDGDescriptorSetPool::Get(EngineContext::CurrentFrameIndex())->Allocate(pass->rootSignature, edge->set).descriptor;
+            auto descriptor = RDGDescriptorSetPool::Get(EngineContext::ThreadPool()->ThreadFrameIndex())->Allocate(pass->rootSignature, edge->set).descriptor;
             pass->descriptorSets[edge->set] = descriptor;
             pass->pooledDescriptorSets.push_back({descriptor, edge->set});
         }
@@ -299,10 +330,32 @@ void RDGBuilder::PrepareDescriptorSet(RDGPassNodeRef pass)
         }
     });
 
+    for(auto& sampler : pass->samplers)
+    {
+        if(pass->descriptorSets[sampler.set] == nullptr && pass->rootSignature != nullptr)
+        {
+            auto descriptor = RDGDescriptorSetPool::Get(EngineContext::ThreadPool()->ThreadFrameIndex())->Allocate(pass->rootSignature, sampler.set).descriptor;
+            pass->descriptorSets[sampler.set] = descriptor;
+            pass->pooledDescriptorSets.push_back({descriptor, sampler.set});
+        }
+
+        if(pass->descriptorSets[sampler.set] != nullptr)
+        {
+            RHIDescriptorUpdateInfo updateInfo = {
+                .binding = sampler.binding,
+                .index = sampler.index,
+                .resourceType = RESOURCE_TYPE_SAMPLER,
+                .sampler = sampler.sampler
+            };
+
+            pass->descriptorSets[sampler.set]->UpdateDescriptor(updateInfo); 
+        }
+    }
 }
 
 void RDGBuilder::PrepareRenderTarget(RDGRenderPassNodeRef pass, RHIRenderPassInfo& renderPassInfo)
 {
+    renderPassInfo.multiviewCount = pass->multiviewCount;
     pass->ForEachTexture([&](RDGTextureEdgeRef edge, RDGTextureNodeRef texture){
 
         if(edge->IsOutput()) return;                            // 作为output声明时不需要view
@@ -317,7 +370,8 @@ void RDGBuilder::PrepareRenderTarget(RDGRenderPassNodeRef pass, RHIRenderPassInf
         if(edge->asColor)
         {
             renderPassInfo.extent = {texture->info.extent.width, texture->info.extent.height};
-            renderPassInfo.layers = edge->subresource.layerCount > 0 ? edge->subresource.layerCount : 1;
+            renderPassInfo.layers = pass->multiviewCount > 0 ? 1 :                      // 启用multiview特性时，textureview的layer还是多个，framebuffer强制为1
+                edge->subresource.layerCount > 0 ? edge->subresource.layerCount : 1;
 
             renderPassInfo.colorAttachments[edge->binding] = {
                 .textureView = view,
@@ -329,7 +383,8 @@ void RDGBuilder::PrepareRenderTarget(RDGRenderPassNodeRef pass, RHIRenderPassInf
         else if (edge->asDepthStencil) 
         {
             renderPassInfo.extent = {texture->info.extent.width, texture->info.extent.height};
-            renderPassInfo.layers = edge->subresource.layerCount > 0 ? edge->subresource.layerCount : 1;
+            renderPassInfo.layers = pass->multiviewCount > 0 ? 1 :
+                edge->subresource.layerCount > 0 ? edge->subresource.layerCount : 1;
 
             renderPassInfo.depthStencilAttachment = {
                 .textureView = view,
@@ -493,20 +548,43 @@ void RDGBuilder::ExecutePass(RDGPresentPassNodeRef pass)
 
 void RDGBuilder::ExecutePass(RDGCopyPassNodeRef pass)
 {
-    RDGTextureNodeRef from;
-    RDGTextureNodeRef to;
+    RDGBufferNodeRef bufferFrom = nullptr;
+    RDGBufferNodeRef bufferTo = nullptr;
+    uint32_t offsetFrom;
+    uint32_t offsetTo;
+    uint32_t size;
+
+    RDGTextureNodeRef textureFrom = nullptr;
+    RDGTextureNodeRef textureTo = nullptr;
     TextureSubresourceLayers fromSubresource;
     TextureSubresourceLayers toSubresource;
+
+    pass->ForEachBuffer([&](RDGBufferEdgeRef edge, RDGBufferNodeRef buffer){
+
+        if(edge->asTransferSrc)
+        {
+            bufferFrom = buffer;
+            offsetFrom = edge->offset;
+            size = edge->size;
+        }
+        else if(edge->asTransferDst)
+        {
+            bufferTo = buffer;
+            offsetTo = edge->offset;
+            size = edge->size;
+        }
+    });
+
     pass->ForEachTexture([&](RDGTextureEdgeRef edge, RDGTextureNodeRef texture){
 
         if(edge->asTransferSrc)
         {
-            from = texture;
+            textureFrom = texture;
             fromSubresource = edge->subresourceLayer;
         }
         else if(edge->asTransferDst)
         {
-            to = texture;
+            textureTo = texture;
             toSubresource = edge->subresourceLayer;
         }
     });
@@ -515,24 +593,30 @@ void RDGBuilder::ExecutePass(RDGCopyPassNodeRef pass)
 
     CreateInputBarriers(pass);
 
-    if(from && to)
+    if(bufferFrom != nullptr && bufferTo != nullptr)
     {
-        command->CopyTexture(   Resolve(from), fromSubresource, 
-                                Resolve(to), toSubresource);
+        command->CopyBuffer(Resolve(bufferFrom), offsetFrom, 
+                            Resolve(bufferTo), offsetTo, size);
+    }
+
+    if(textureFrom != nullptr && textureTo != nullptr)
+    {
+        command->CopyTexture(   Resolve(textureFrom), fromSubresource, 
+                                Resolve(textureTo), toSubresource);
 
         if(pass->generateMip) 
         {
             RHITextureBarrier barrier = {
-                .texture = Resolve(to),
+                .texture = Resolve(textureTo),
                 .srcState = RESOURCE_STATE_TRANSFER_DST,
                 .dstState = RESOURCE_STATE_TRANSFER_SRC,
                 .subresource = {} 
             };
             command->TextureBarrier(barrier);
-            command->GenerateMips(Resolve(to)); // 默认纹理处于src状态，需要手动加屏障
+            command->GenerateMips(Resolve(textureTo)); // 默认纹理处于src状态，需要手动加屏障
 
             barrier = {
-                .texture = Resolve(to),
+                .texture = Resolve(textureTo),
                 .srcState = RESOURCE_STATE_TRANSFER_SRC,
                 .dstState = RESOURCE_STATE_TRANSFER_DST,
                 .subresource = {} 
@@ -616,7 +700,7 @@ RHIResourceState RDGBuilder::PreviousState(RDGTextureNodeRef textureNode, RDGPas
 
     RHIResourceState previousState = textureNode->initState;        // 若没有前序引用，那状态就是资源本身的初始状态
 
-    textureNode->ForEachPass([&](RDGTextureEdgeRef edge, RDGPassNodeRef pass){
+    graph->ForEachPass(textureNode, [&](RDGTextureEdgeRef edge, RDGPassNodeRef pass){
 
         bool isOutputFirst = output ? !edge->IsOutput() : edge->IsOutput();
         bool isPrevoiusPass = output ? pass->ID() <= currentID : pass->ID() < currentID;
@@ -649,7 +733,7 @@ RHIResourceState RDGBuilder::PreviousState(RDGBufferNodeRef bufferNode, RDGPassN
 
     RHIResourceState previousState = bufferNode->initState;         // 若没有前序引用，那状态就是资源本身的初始状态
 
-    bufferNode->ForEachPass([&](RDGBufferEdgeRef edge, RDGPassNodeRef pass){
+    graph->ForEachPass(bufferNode, [&](RDGBufferEdgeRef edge, RDGPassNodeRef pass){
 
         bool isOutputFirst = output ? !edge->IsOutput() : edge->IsOutput();
         bool isPrevoiusPass = output ? pass->ID() <= currentID : pass->ID() < currentID;
@@ -679,7 +763,7 @@ bool RDGBuilder::IsLastUsedPass(RDGTextureNodeRef textureNode, RDGPassNodeRef pa
     NodeID currentID = passNode->ID();
     bool last = true;
 
-    textureNode->ForEachPass([&](RDGTextureEdgeRef edge, RDGPassNodeRef pass){
+    graph->ForEachPass(textureNode, [&](RDGTextureEdgeRef edge, RDGPassNodeRef pass){
         if(pass->ID() > currentID) last = false;
         if(!output && pass->ID() == currentID && edge->IsOutput()) last = false;
     });
@@ -692,7 +776,7 @@ bool RDGBuilder::IsLastUsedPass(RDGBufferNodeRef bufferNode, RDGPassNodeRef pass
     NodeID currentID = passNode->ID();
     bool last = true;
 
-    bufferNode->ForEachPass([&](RDGBufferEdgeRef edge, RDGPassNodeRef pass){
+    graph->ForEachPass(bufferNode, [&](RDGBufferEdgeRef edge, RDGPassNodeRef pass){
         if(pass->ID() > currentID) last = false;
         if(!output && pass->ID() == currentID && edge->IsOutput()) last = false;
     });
@@ -702,110 +786,235 @@ bool RDGBuilder::IsLastUsedPass(RDGBufferNodeRef bufferNode, RDGPassNodeRef pass
 
 RDGTextureBuilder& RDGTextureBuilder::Import(RHITextureRef texture, RHIResourceState initState)
 {
-    this->texture->isImported = true;
-    this->texture->texture = texture;
-    this->texture->info = texture->GetInfo();
-    this->texture->initState = initState;
+    if(validationMode)
+    {
+        assert(this->texture->isImported == true);
+        assert(this->texture->texture == texture);
+        assert(this->texture->initState == initState);
+    }
+    else
+    {
+        this->texture->isImported = true;
+        this->texture->texture = texture;
+        this->texture->info = texture->GetInfo();
+        this->texture->initState = initState;
+    }
+
     return *this;
 }
 
 RDGTextureBuilder& RDGTextureBuilder::Exetent(Extent3D extent)
 {
-    texture->info.extent = extent;
+    if(validationMode)
+    {
+        assert(texture->info.extent == extent);
+    }
+    else
+    {
+        texture->info.extent = extent;
+    }
+
     return *this;
 }
 
 RDGTextureBuilder& RDGTextureBuilder::Format(RHIFormat format)
 {
-    texture->info.format = format;
+    if(validationMode)
+    {
+        assert(texture->info.format == format);
+    }
+    else
+    {
+        texture->info.format = format;
+    }
+
     return *this;
 }
 
 RDGTextureBuilder& RDGTextureBuilder::MemoryUsage(enum MemoryUsage memoryUsage)
 {
-    texture->info.memoryUsage = memoryUsage;
+    if(validationMode)
+    {
+        assert(texture->info.memoryUsage == memoryUsage);
+    }
+    else
+    {
+        texture->info.memoryUsage = memoryUsage;
+    }
+    
     return  *this;
 }
 
 RDGTextureBuilder& RDGTextureBuilder::AllowReadWrite()
 {
-    texture->info.type |= RESOURCE_TYPE_RW_TEXTURE;
-    //texture->initState = RESOURCE_STATE_UNORDERED_ACCESS;
+    if(validationMode)
+    {
+        assert(texture->info.type & RESOURCE_TYPE_RW_TEXTURE);
+    }
+    else
+    {
+        texture->info.type |= RESOURCE_TYPE_RW_TEXTURE;
+    }
+
     return  *this;
 }
 
 RDGTextureBuilder& RDGTextureBuilder::AllowRenderTarget()
 {
-    texture->info.type |= RESOURCE_TYPE_RENDER_TARGET;
-    //texture->initState = RESOURCE_STATE_COLOR_ATTACHMENT;
+    if(validationMode)
+    {
+        assert(texture->info.type & RESOURCE_TYPE_RENDER_TARGET);
+    }
+    else
+    {
+        texture->info.type |= RESOURCE_TYPE_RENDER_TARGET;
+    }
+
     return  *this;
 }
 
 RDGTextureBuilder& RDGTextureBuilder::AllowDepthStencil()
 {
-    texture->info.type |= RESOURCE_TYPE_RENDER_TARGET;
-    //texture->initState = RESOURCE_STATE_DEPTH_STENCIL_ATTACHMENT;
+    if(validationMode)
+    {
+        assert(texture->info.type & RESOURCE_TYPE_RENDER_TARGET);
+    }
+    else
+    {
+        texture->info.type |= RESOURCE_TYPE_RENDER_TARGET;
+    }
+
     return  *this;
 }
 
 RDGTextureBuilder& RDGTextureBuilder::MipLevels(uint32_t mipLevels)
 {
-    texture->info.mipLevels = mipLevels;
+    if(validationMode)
+    {
+        assert(texture->info.mipLevels = mipLevels);
+    }
+    else
+    {
+        texture->info.mipLevels = mipLevels;
+    }
+
     return *this;
 }   
 
 RDGTextureBuilder& RDGTextureBuilder::ArrayLayers(uint32_t arrayLayers)
 {
-    texture->info.arrayLayers = arrayLayers;
+    if(validationMode)
+    {
+        assert(texture->info.arrayLayers == arrayLayers);
+    }
+    else
+    {
+        texture->info.arrayLayers = arrayLayers;
+    }
+    
     return *this;
 }
 
 RDGBufferBuilder& RDGBufferBuilder::Import(RHIBufferRef buffer, RHIResourceState initState)
 {
-    this->buffer->isImported = true;
-    this->buffer->buffer = buffer;
-    this->buffer->info = buffer->GetInfo();
-    this->buffer->initState = initState;
+    if(validationMode)
+    {
+        assert(this->buffer->isImported == true);
+        assert(this->buffer->buffer == buffer);
+        assert(this->buffer->initState == initState);
+    }
+    else 
+    {
+        this->buffer->isImported = true;
+        this->buffer->buffer = buffer;
+        this->buffer->info = buffer->GetInfo();
+        this->buffer->initState = initState;
+    }
+
     return *this;
 }
 
 RDGBufferBuilder& RDGBufferBuilder::Size(uint32_t size)
 {
-    buffer->info.size = size;
+    if(validationMode)
+    {
+        assert(buffer->info.size == size);
+    }
+    else
+    {
+        buffer->info.size = size;
+    }
+
     return *this;
 }
 
 RDGBufferBuilder& RDGBufferBuilder::MemoryUsage(enum MemoryUsage memoryUsage)
 {
-    buffer->info.memoryUsage = memoryUsage;
+    if(validationMode)
+    {
+        assert(buffer->info.memoryUsage == memoryUsage);
+    }
+    else
+    {
+        buffer->info.memoryUsage = memoryUsage;
+    }
+
     return  *this;
 }
 
 RDGBufferBuilder& RDGBufferBuilder::AllowVertexBuffer()
 {
-    buffer->info.type |= RESOURCE_TYPE_VERTEX_BUFFER;
-    //buffer->initState = RESOURCE_STATE_VERTEX_BUFFER;
+    if(validationMode)
+    {
+        assert(buffer->info.type & RESOURCE_TYPE_VERTEX_BUFFER);
+    }
+    else
+    {
+        buffer->info.type |= RESOURCE_TYPE_VERTEX_BUFFER;
+    }
+
     return *this;
 }
 
 RDGBufferBuilder& RDGBufferBuilder::AllowIndexBuffer()
 {
-    buffer->info.type |= RESOURCE_TYPE_INDEX_BUFFER;
-    //buffer->initState = RESOURCE_STATE_INDEX_BUFFER;
+    if(validationMode)
+    {
+        assert(buffer->info.type & RESOURCE_TYPE_INDEX_BUFFER);
+    }
+    else
+    {
+        buffer->info.type |= RESOURCE_TYPE_INDEX_BUFFER;
+    }
+
     return *this;
 }
 
 RDGBufferBuilder& RDGBufferBuilder::AllowReadWrite()
 {
-    buffer->info.type |= RESOURCE_TYPE_RW_BUFFER;
-    //buffer->initState = RESOURCE_STATE_UNORDERED_ACCESS;
+    if(validationMode)
+    {
+        assert(buffer->info.type & RESOURCE_TYPE_RW_BUFFER);
+    }
+    else
+    {
+        buffer->info.type |= RESOURCE_TYPE_RW_BUFFER;
+    }
+
     return *this;
 }
 
 RDGBufferBuilder& RDGBufferBuilder::AllowRead()
 {
-    buffer->info.type |= RESOURCE_TYPE_UNIFORM_BUFFER;
-    //buffer->initState = RESOURCE_STATE_SHADER_RESOURCE;
+    if(validationMode)
+    {
+        assert(buffer->info.type & RESOURCE_TYPE_UNIFORM_BUFFER);
+    }
+    else
+    {
+        buffer->info.type |= RESOURCE_TYPE_UNIFORM_BUFFER;
+    }
+
     return *this;    
 }
 
@@ -829,6 +1038,17 @@ RDGRenderPassBuilder& RDGRenderPassBuilder::DescriptorSet(uint32_t set, RHIDescr
     return *this;  
 }
 
+RDGRenderPassBuilder& RDGRenderPassBuilder::Sampler(uint32_t set, uint32_t binding, uint32_t index, RHISamplerRef sampler)
+{
+    pass->samplers.push_back({
+        .sampler = sampler,
+        .set = set,
+        .binding = binding,
+        .index = index
+    });
+    return *this;
+}
+
 RDGRenderPassBuilder& RDGRenderPassBuilder::Read(uint32_t set, uint32_t binding, uint32_t index, RDGBufferHandle buffer, uint32_t offset, uint32_t size)
 {
     RDGBufferEdgeRef edge = graph->CreateEdge<RDGBufferEdge>();
@@ -841,7 +1061,7 @@ RDGRenderPassBuilder& RDGRenderPassBuilder::Read(uint32_t set, uint32_t binding,
     edge->index = index;
     edge->type = RESOURCE_TYPE_UNIFORM_BUFFER;
 
-    graph->Link(graph->GetNode(buffer.ID()), pass, edge);
+    graph->Link(graph->GetNode<RDGBufferNode>(buffer.ID()), pass, edge);
 
     return *this;
 }
@@ -858,7 +1078,7 @@ RDGRenderPassBuilder& RDGRenderPassBuilder::Read(uint32_t set, uint32_t binding,
     edge->type = RESOURCE_TYPE_TEXTURE;
     edge->viewType = viewType;
 
-    graph->Link(graph->GetNode(texture.ID()), pass, edge);
+    graph->Link(graph->GetNode<RDGTextureNode>(texture.ID()), pass, edge);
 
     return *this;
 }
@@ -875,7 +1095,7 @@ RDGRenderPassBuilder& RDGRenderPassBuilder::ReadWrite(uint32_t set, uint32_t bin
     edge->index = index;
     edge->type = RESOURCE_TYPE_RW_BUFFER;
 
-    graph->Link(pass, graph->GetNode(buffer.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGBufferNode>(buffer.ID()), edge);
 
     return *this;
 }
@@ -892,7 +1112,7 @@ RDGRenderPassBuilder& RDGRenderPassBuilder::ReadWrite(uint32_t set, uint32_t bin
     edge->type = RESOURCE_TYPE_RW_TEXTURE;
     edge->viewType = viewType;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
 
     return *this;
 }
@@ -913,7 +1133,7 @@ RDGRenderPassBuilder& RDGRenderPassBuilder::Color(  uint32_t binding, RDGTexture
     edge->binding = binding;
     edge->viewType = subresource.layerCount > 1 ? VIEW_TYPE_2D_ARRAY : VIEW_TYPE_2D;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
 
     return *this;
 }   
@@ -935,7 +1155,14 @@ RDGRenderPassBuilder& RDGRenderPassBuilder::DepthStencil(   RDGTextureHandle tex
     edge->asDepthStencil = true;
     edge->viewType = subresource.layerCount > 1 ? VIEW_TYPE_2D_ARRAY : VIEW_TYPE_2D;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
+
+    return *this;
+}
+
+RDGRenderPassBuilder& RDGRenderPassBuilder::Multiview(uint32_t multiviewCount)
+{
+    pass->multiviewCount = multiviewCount;
 
     return *this;
 }
@@ -947,9 +1174,8 @@ RDGRenderPassBuilder& RDGRenderPassBuilder::OutputRead(RDGBufferHandle buffer, u
     edge->offset = offset;
     edge->size = size;
     edge->asOutputRead = true;
-    edge->type = RESOURCE_TYPE_BUFFER;
 
-    graph->Link(pass, graph->GetNode(buffer.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGBufferNode>(buffer.ID()), edge);
 
     return *this;
 }
@@ -960,9 +1186,8 @@ RDGRenderPassBuilder& RDGRenderPassBuilder::OutputRead(RDGTextureHandle texture,
     edge->state = RESOURCE_STATE_SHADER_RESOURCE;
     edge->subresource = subresource;
     edge->asOutputReadWrite = true;
-    edge->type = RESOURCE_TYPE_TEXTURE;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
 
     return *this;
 }
@@ -974,9 +1199,8 @@ RDGRenderPassBuilder& RDGRenderPassBuilder::OutputReadWrite(RDGBufferHandle buff
     edge->offset = offset;
     edge->size = size;
     edge->asOutputReadWrite = true;
-    edge->type = RESOURCE_TYPE_RW_BUFFER;
 
-    graph->Link(pass, graph->GetNode(buffer.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGBufferNode>(buffer.ID()), edge);
 
     return *this;
 }
@@ -987,9 +1211,8 @@ RDGRenderPassBuilder& RDGRenderPassBuilder::OutputReadWrite(RDGTextureHandle tex
     edge->state = RESOURCE_STATE_UNORDERED_ACCESS;
     edge->subresource = subresource;
     edge->asOutputReadWrite = true;
-    edge->type = RESOURCE_TYPE_RW_TEXTURE;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
 
     return *this;
 }
@@ -1020,6 +1243,17 @@ RDGComputePassBuilder& RDGComputePassBuilder::DescriptorSet(uint32_t set, RHIDes
     return *this;  
 }  
 
+RDGComputePassBuilder& RDGComputePassBuilder::Sampler(uint32_t set, uint32_t binding, uint32_t index, RHISamplerRef sampler)
+{
+    pass->samplers.push_back({
+        .sampler = sampler,
+        .set = set,
+        .binding = binding,
+        .index = index
+    });
+    return *this;
+}
+
 RDGComputePassBuilder& RDGComputePassBuilder::Read(uint32_t set, uint32_t binding, uint32_t index, RDGBufferHandle buffer, uint32_t offset, uint32_t size)
 {
     RDGBufferEdgeRef edge = graph->CreateEdge<RDGBufferEdge>();
@@ -1032,7 +1266,7 @@ RDGComputePassBuilder& RDGComputePassBuilder::Read(uint32_t set, uint32_t bindin
     edge->index = index;
     edge->type = RESOURCE_TYPE_UNIFORM_BUFFER;
 
-    graph->Link(graph->GetNode(buffer.ID()), pass, edge);
+    graph->Link(graph->GetNode<RDGBufferNode>(buffer.ID()), pass, edge);
 
     return *this;
 }
@@ -1049,7 +1283,7 @@ RDGComputePassBuilder& RDGComputePassBuilder::Read(uint32_t set, uint32_t bindin
     edge->type = RESOURCE_TYPE_TEXTURE;
     edge->viewType = viewType;
 
-    graph->Link(graph->GetNode(texture.ID()), pass, edge);
+    graph->Link(graph->GetNode<RDGTextureNode>(texture.ID()), pass, edge);
 
     return *this;
 }
@@ -1066,7 +1300,7 @@ RDGComputePassBuilder& RDGComputePassBuilder::ReadWrite(uint32_t set, uint32_t b
     edge->index = index;
     edge->type = RESOURCE_TYPE_RW_BUFFER;
 
-    graph->Link(pass, graph->GetNode(buffer.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGBufferNode>(buffer.ID()), edge);
 
     return *this;
 }
@@ -1083,7 +1317,7 @@ RDGComputePassBuilder& RDGComputePassBuilder::ReadWrite(uint32_t set, uint32_t b
     edge->type = RESOURCE_TYPE_RW_TEXTURE;
     edge->viewType = viewType;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
 
     return *this;
 }
@@ -1095,9 +1329,8 @@ RDGComputePassBuilder& RDGComputePassBuilder::OutputRead(RDGBufferHandle buffer,
     edge->offset = offset;
     edge->size = size;
     edge->asOutputRead = true;
-    edge->type = RESOURCE_TYPE_BUFFER;
 
-    graph->Link(pass, graph->GetNode(buffer.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGBufferNode>(buffer.ID()), edge);
 
     return *this;
 }
@@ -1108,9 +1341,8 @@ RDGComputePassBuilder& RDGComputePassBuilder::OutputRead(RDGTextureHandle textur
     edge->state = RESOURCE_STATE_SHADER_RESOURCE;
     edge->subresource = subresource;
     edge->asOutputReadWrite = true;
-    edge->type = RESOURCE_TYPE_TEXTURE;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
 
     return *this;
 }
@@ -1122,9 +1354,8 @@ RDGComputePassBuilder& RDGComputePassBuilder::OutputReadWrite(RDGBufferHandle bu
     edge->offset = offset;
     edge->size = size;
     edge->asOutputReadWrite = true;
-    edge->type = RESOURCE_TYPE_RW_BUFFER;
 
-    graph->Link(pass, graph->GetNode(buffer.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGBufferNode>(buffer.ID()), edge);
 
     return *this;
 }
@@ -1135,9 +1366,8 @@ RDGComputePassBuilder& RDGComputePassBuilder::OutputReadWrite(RDGTextureHandle t
     edge->state = RESOURCE_STATE_UNORDERED_ACCESS;
     edge->subresource = subresource;
     edge->asOutputReadWrite = true;
-    edge->type = RESOURCE_TYPE_RW_TEXTURE;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
 
     return *this;
 }
@@ -1149,9 +1379,8 @@ RDGComputePassBuilder& RDGComputePassBuilder::OutputIndirectDraw(RDGBufferHandle
     edge->offset = offset;
     edge->size = size;
     edge->asOutputIndirectDraw = true;
-    edge->type = RESOURCE_TYPE_INDIRECT_BUFFER;
 
-    graph->Link(pass, graph->GetNode(buffer.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGBufferNode>(buffer.ID()), edge);
 
     return *this;
 }
@@ -1182,6 +1411,17 @@ RDGRayTracingPassBuilder& RDGRayTracingPassBuilder::DescriptorSet(uint32_t set, 
     return *this;  
 }  
 
+RDGRayTracingPassBuilder& RDGRayTracingPassBuilder::Sampler(uint32_t set, uint32_t binding, uint32_t index, RHISamplerRef sampler)
+{
+    pass->samplers.push_back({
+        .sampler = sampler,
+        .set = set,
+        .binding = binding,
+        .index = index
+    });
+    return *this; 
+}
+
 RDGRayTracingPassBuilder& RDGRayTracingPassBuilder::Read(uint32_t set, uint32_t binding, uint32_t index, RDGBufferHandle buffer, uint32_t offset, uint32_t size)
 {
     RDGBufferEdgeRef edge = graph->CreateEdge<RDGBufferEdge>();
@@ -1194,7 +1434,7 @@ RDGRayTracingPassBuilder& RDGRayTracingPassBuilder::Read(uint32_t set, uint32_t 
     edge->index = index;
     edge->type = RESOURCE_TYPE_UNIFORM_BUFFER;
 
-    graph->Link(graph->GetNode(buffer.ID()), pass, edge);
+    graph->Link(graph->GetNode<RDGBufferNode>(buffer.ID()), pass, edge);
 
     return *this;
 }
@@ -1211,7 +1451,7 @@ RDGRayTracingPassBuilder& RDGRayTracingPassBuilder::Read(uint32_t set, uint32_t 
     edge->type = RESOURCE_TYPE_TEXTURE;
     edge->viewType = viewType;
 
-    graph->Link(graph->GetNode(texture.ID()), pass, edge);
+    graph->Link(graph->GetNode<RDGTextureNode>(texture.ID()), pass, edge);
 
     return *this;
 }
@@ -1228,7 +1468,7 @@ RDGRayTracingPassBuilder& RDGRayTracingPassBuilder::ReadWrite(uint32_t set, uint
     edge->index = index;
     edge->type = RESOURCE_TYPE_RW_BUFFER;
 
-    graph->Link(pass, graph->GetNode(buffer.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGBufferNode>(buffer.ID()), edge);
 
     return *this;
 }
@@ -1245,7 +1485,7 @@ RDGRayTracingPassBuilder& RDGRayTracingPassBuilder::ReadWrite(uint32_t set, uint
     edge->type = RESOURCE_TYPE_RW_TEXTURE;
     edge->viewType = viewType;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
 
     return *this;
 }
@@ -1257,9 +1497,8 @@ RDGRayTracingPassBuilder& RDGRayTracingPassBuilder::OutputRead(RDGBufferHandle b
     edge->offset = offset;
     edge->size = size;
     edge->asOutputRead = true;
-    edge->type = RESOURCE_TYPE_BUFFER;
 
-    graph->Link(pass, graph->GetNode(buffer.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGBufferNode>(buffer.ID()), edge);
 
     return *this;
 }
@@ -1270,9 +1509,8 @@ RDGRayTracingPassBuilder& RDGRayTracingPassBuilder::OutputRead(RDGTextureHandle 
     edge->state = RESOURCE_STATE_SHADER_RESOURCE;
     edge->subresource = subresource;
     edge->asOutputReadWrite = true;
-    edge->type = RESOURCE_TYPE_TEXTURE;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
 
     return *this;
 }
@@ -1284,9 +1522,8 @@ RDGRayTracingPassBuilder& RDGRayTracingPassBuilder::OutputReadWrite(RDGBufferHan
     edge->offset = offset;
     edge->size = size;
     edge->asOutputReadWrite = true;
-    edge->type = RESOURCE_TYPE_RW_BUFFER;
 
-    graph->Link(pass, graph->GetNode(buffer.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGBufferNode>(buffer.ID()), edge);
 
     return *this;
 }
@@ -1297,9 +1534,8 @@ RDGRayTracingPassBuilder& RDGRayTracingPassBuilder::OutputReadWrite(RDGTextureHa
     edge->state = RESOURCE_STATE_UNORDERED_ACCESS;
     edge->subresource = subresource;
     edge->asOutputReadWrite = true;
-    edge->type = RESOURCE_TYPE_RW_TEXTURE;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
 
     return *this;
 }
@@ -1316,7 +1552,7 @@ RDGPresentPassBuilder& RDGPresentPassBuilder::Texture(RDGTextureHandle texture, 
     edge->state = RESOURCE_STATE_TRANSFER_SRC;
     edge->subresourceLayer = subresource;
 
-    graph->Link(graph->GetNode(texture.ID()), pass, edge);
+    graph->Link(graph->GetNode<RDGTextureNode>(texture.ID()), pass, edge);
 
     return *this;
 }
@@ -1327,9 +1563,22 @@ RDGPresentPassBuilder& RDGPresentPassBuilder::PresentTexture(RDGTextureHandle te
     edge->state = RESOURCE_STATE_PRESENT;
     edge->asPresent = true;
 
-    graph->Link(graph->GetNode(texture.ID()), pass, edge);
+    graph->Link(graph->GetNode<RDGTextureNode>(texture.ID()), pass, edge);
 
     return *this;    
+}
+
+RDGCopyPassBuilder& RDGCopyPassBuilder::From(RDGBufferHandle buffer, uint32_t offset, uint32_t size)
+{
+    RDGBufferEdgeRef edge = graph->CreateEdge<RDGBufferEdge>();
+    edge->state = RESOURCE_STATE_TRANSFER_SRC;
+    edge->offset = offset;
+    edge->size = size;
+    edge->asTransferSrc = true;
+
+    graph->Link(graph->GetNode<RDGBufferNode>(buffer.ID()), pass, edge);
+
+    return *this;
 }
 
 RDGCopyPassBuilder& RDGCopyPassBuilder::From(RDGTextureHandle texture, TextureSubresourceLayers subresource)
@@ -1339,9 +1588,22 @@ RDGCopyPassBuilder& RDGCopyPassBuilder::From(RDGTextureHandle texture, TextureSu
     edge->subresourceLayer = subresource;
     edge->asTransferSrc = true;
 
-    graph->Link(graph->GetNode(texture.ID()), pass, edge);
+    graph->Link(graph->GetNode<RDGTextureNode>(texture.ID()), pass, edge);
 
     return *this;    
+}
+
+RDGCopyPassBuilder& RDGCopyPassBuilder::To(RDGBufferHandle buffer, uint32_t offset, uint32_t size)
+{
+    RDGBufferEdgeRef edge = graph->CreateEdge<RDGBufferEdge>();
+    edge->state = RESOURCE_STATE_TRANSFER_DST;
+    edge->offset = offset;
+    edge->size = size;
+    edge->asTransferDst = true;
+
+    graph->Link(pass, graph->GetNode<RDGBufferNode>(buffer.ID()), edge);
+
+    return *this;
 }
 
 RDGCopyPassBuilder& RDGCopyPassBuilder::To(RDGTextureHandle texture, TextureSubresourceLayers subresource)
@@ -1351,7 +1613,7 @@ RDGCopyPassBuilder& RDGCopyPassBuilder::To(RDGTextureHandle texture, TextureSubr
     edge->subresourceLayer = subresource;
     edge->asTransferDst = true;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
 
     return *this;    
 }
@@ -1362,17 +1624,42 @@ RDGCopyPassBuilder& RDGCopyPassBuilder::GenerateMips()
     return *this;   
 }
 
+RDGCopyPassBuilder& RDGCopyPassBuilder::OutputRead(RDGBufferHandle buffer, uint32_t offset, uint32_t size)
+{
+    RDGBufferEdgeRef edge = graph->CreateEdge<RDGBufferEdge>();
+    edge->state = RESOURCE_STATE_SHADER_RESOURCE;
+    edge->offset = offset;
+    edge->size = size;
+    edge->asOutputRead = true;
+
+    graph->Link(pass, graph->GetNode<RDGBufferNode>(buffer.ID()), edge);
+
+    return *this;
+}
+
 RDGCopyPassBuilder& RDGCopyPassBuilder::OutputRead(RDGTextureHandle texture, TextureSubresourceLayers subresource)
 {
     RDGTextureEdgeRef edge = graph->CreateEdge<RDGTextureEdge>();
     edge->state = RESOURCE_STATE_UNORDERED_ACCESS;
     edge->subresourceLayer = subresource;
     edge->asOutputRead = true;
-    edge->type = RESOURCE_TYPE_TEXTURE;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
 
     return *this; 
+}
+
+RDGCopyPassBuilder& RDGCopyPassBuilder::OutputReadWrite(RDGBufferHandle buffer, uint32_t offset, uint32_t size)
+{
+    RDGBufferEdgeRef edge = graph->CreateEdge<RDGBufferEdge>();
+    edge->state = RESOURCE_STATE_UNORDERED_ACCESS;
+    edge->offset = offset;
+    edge->size = size;
+    edge->asOutputReadWrite = true;
+
+    graph->Link(pass, graph->GetNode<RDGBufferNode>(buffer.ID()), edge);
+
+    return *this;
 }
 
 RDGCopyPassBuilder& RDGCopyPassBuilder::OutputReadWrite(RDGTextureHandle texture, TextureSubresourceLayers subresource)
@@ -1381,9 +1668,10 @@ RDGCopyPassBuilder& RDGCopyPassBuilder::OutputReadWrite(RDGTextureHandle texture
     edge->state = RESOURCE_STATE_UNORDERED_ACCESS;
     edge->subresourceLayer = subresource;
     edge->asOutputReadWrite = true;
-    edge->type = RESOURCE_TYPE_RW_TEXTURE;
 
-    graph->Link(pass, graph->GetNode(texture.ID()), edge);
+    graph->Link(pass, graph->GetNode<RDGTextureNode>(texture.ID()), edge);
 
     return *this; 
 }
+
+

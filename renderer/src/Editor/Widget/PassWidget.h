@@ -2,6 +2,7 @@
 
 #include "Function/Render/RenderPass/BloomPass.h"
 #include "Function/Render/RenderPass/ClipmapVisualizePass.h"
+#include "Function/Render/RenderPass/NRDPass.h"
 #include "Function/Render/RenderPass/PathTracingPass.h"
 #include "Function/Render/RenderPass/PostProcessingPass.h"
 #include "Function/Render/RenderPass/DeferredLightingPass.h"
@@ -36,6 +37,7 @@ private:
     static void ReSTIRDIPassUI(std::shared_ptr<ReSTIRDIPass> pass);  
     static void ReSTIRGIPassUI(std::shared_ptr<ReSTIRGIPass> pass);  
     static void SVGFPassUI(std::shared_ptr<SVGFPass> pass); 
+    static void NRDPassUI(std::shared_ptr<NRDPass> pass); 
     static void ClipmapVisualizePassUI(std::shared_ptr<ClipmapVisualizePass> pass);  
     static void PathTracingPassUI(std::shared_ptr<PathTracingPass> pass);
     static void BloomPassUI(std::shared_ptr<BloomPass> pass);

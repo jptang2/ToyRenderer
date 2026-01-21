@@ -14,6 +14,7 @@ layout(push_constant) uniform TAASetting
     int sharpen;
     int reprojectionOnly;
     int showVelocity;
+    int showReprojectionVaild;
     float velocityFactor;
     float blendFactor;
     
@@ -153,6 +154,9 @@ void main()
             else            outColor = vec4(0.0f, 0.0f, 0.0f, 1.0f);
         }
     }
+
+    if(SETTING.showReprojectionVaild != 0)
+        outColor = valid ? vec4(1.0f) : vec4(0.0f);
 
     imageStore(OUT_COLOR, pixel, outColor);
 }

@@ -1,20 +1,28 @@
 
 #include "MeshCluster.h"
 
+#include "Core/Math/Math.h"
+#include "Core/Mesh/TangentSpace.h"
 #include "Partitioner.h"
 #include "Core/Mesh/MeshOptimizor/MeshOptimizor.h"
 #include "Core/Math/Hash.h"
-#include "Core/Math/HashTable.h"
 // #include "../bounding_box.h"
 // #include "../mesh_optimizor/mesh_optimizor.h"
 // #include "../../math/hash_table.h"
 // #include "../../math/hash.h"
 
 #include <assert.h>
+#include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <functional>
 #include <memory>
+#include <queue>
+#include <set>
 #include <span>
+#include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 // 将原来的数位以2个0分隔：10111->1000001001001，用于生成莫顿码 
@@ -174,7 +182,7 @@ void BuildLocalityLinks(
                     else
                     {
                         // Add to sorted list
-                        float adjDist2 = pow((center - GetTriangleCenter(adjIndex, mesh)).norm(), 2);
+                        float adjDist2 = (center - GetTriangleCenter(adjIndex, mesh)).squaredNorm();
                         for (int k = 0; k < maxLinksPerElement; k++)
                         {
                             if (adjDist2 < closestDist2[k])
@@ -211,6 +219,25 @@ void BuildLocalityLinks(
 
 // step 1. 为一组三角面生成cluster////////////////////////////////////////////////////////////////
 
+uint32_t HashVertex(const std::shared_ptr<Mesh>& mesh, uint32_t index)
+{
+    uint32_t hash = Hash(mesh->position[index]);
+    if(mesh->HasNormal())   hash = Hash(hash, Hash(mesh->normal[index]));
+    if(mesh->HasTexCoord()) hash = Hash(hash, Hash(mesh->texCoord[index]));
+
+    return hash;
+}
+
+bool VertexEqual(const std::shared_ptr<Mesh>& mesh0, uint32_t index0, const std::shared_ptr<Mesh>& mesh1, uint32_t index1)
+{
+    bool equal = true;
+    equal &= (mesh0->position[index0] == mesh1->position[index1]);
+    if(mesh0->HasNormal())      equal &= (mesh0->normal[index0] == mesh1->normal[index1]);
+    if(mesh0->HasTexCoord())    equal &= (mesh0->texCoord[index0] == mesh1->texCoord[index1]);
+
+    return equal;
+}
+
 // 使用半边结构来构建模型的
 // 半边邻接图和三角面邻接图
 inline uint32_t Cycle3(uint32_t i) {
@@ -230,21 +257,19 @@ void BuildEdgeGraph(
     auto& positions = mesh->position;
     uint32_t indexCount = indices.size();
 
-    HashTable edgeHash(indexCount);
+    std::unordered_map<uint32_t, std::vector<uint32_t>> edgeHash;
     edgeGraph.Init(indexCount);
 
     for (uint32_t i = 0; i < indexCount; i++)
     {
-        Vec3 p0 = positions[indices[i]];
-        Vec3 p1 = positions[indices[Cycle3(i)]];    //每条边作为半边被加入两次，每个顶点索引也对应了一个半边，每三个相邻索引对应同一个三角形
-        //Vertex p0 = vertices[indices[i]];
-        //Vertex p1 = vertices[indices[Cycle3(i)]];
-        edgeHash.Add(Hash(p0, p1), i);
+        uint32_t v0 = HashVertex(mesh, indices[i]);
+        uint32_t v1 = HashVertex(mesh, indices[Cycle3(i)]);
+        edgeHash[Hash(v0, v1)].push_back(i);
 
-        for (uint32_t j : edgeHash[Hash(p1, p0)])         //三角形的手性是一致的，则若查找到了共享顶点且相反的半边
-        {                                                   //说明该边邻接着两个三角面，更新权重以将这两个边互相索引
-            if (p1 == positions[indices[j]] &&
-                p0 == positions[indices[Cycle3(j)]])
+        for (uint32_t j : edgeHash[Hash(v1, v0)])         //三角形的手性是一致的，则若查找到了共享顶点且相反的半边
+        {                                                       //说明该边邻接着两个三角面，更新权重以将这两个边互相索引
+            if(VertexEqual(mesh, indices[Cycle3(i)], mesh, indices[j]) &&
+               VertexEqual(mesh, indices[i], mesh, indices[Cycle3(j)]))
             {
                 edgeGraph.IncreaseEdgeCost(i, j, 1);
                 edgeGraph.IncreaseEdgeCost(j, i, 1);
@@ -339,7 +364,7 @@ void BuildClustersEdgeGraph(
     const std::vector<std::pair<uint32_t, uint32_t>>& externalEdges,
     PartitionGraph& edgeGraph) 
 {
-    HashTable edgeHash(externalEdges.size());
+    std::unordered_map<uint32_t, std::vector<uint32_t>> edgeHash;
     edgeGraph.Init(externalEdges.size());
 
     uint32_t i = 0;
@@ -349,13 +374,12 @@ void BuildClustersEdgeGraph(
         uint32_t originEdgeID = pair.second;
 
         auto& indices = clusters[clusterID]->mesh->index;
-        auto& positions = clusters[clusterID]->mesh->position;
 
-        Vec3 p0 = positions[indices[originEdgeID]];
-        Vec3 p1 = positions[indices[Cycle3(originEdgeID)]];
-        edgeHash.Add(Hash(p0, p1), i);
+        uint32_t v0 = HashVertex(clusters[clusterID]->mesh, indices[originEdgeID]);
+        uint32_t v1 = HashVertex(clusters[clusterID]->mesh, indices[Cycle3(originEdgeID)]);
+        edgeHash[Hash(v0, v1)].push_back(i);
 
-        for (uint32_t j : edgeHash[Hash(p1, p0)])     // 和BuildEdgeGraph中基本一致，只是需要额外通过cluster索引原边界半边的信息
+        for (uint32_t j : edgeHash[Hash(v1, v0)])     // 和BuildEdgeGraph中基本一致，只是需要额外通过cluster索引原边界半边的信息
         {
             auto& pair1 = externalEdges[j];
 
@@ -363,10 +387,9 @@ void BuildClustersEdgeGraph(
             uint32_t otherOriginEdgeID = pair1.second;
 
             auto& indices1 = clusters[otherClusterID]->mesh->index;
-            auto& positions1 = clusters[otherClusterID]->mesh->position;
 
-            if (positions1[indices1[otherOriginEdgeID]] == p1 &&
-                positions1[indices1[Cycle3(otherOriginEdgeID)]] == p0)
+            if(VertexEqual(clusters[clusterID]->mesh, indices[Cycle3(originEdgeID)], clusters[otherClusterID]->mesh, indices1[otherOriginEdgeID]) &&
+               VertexEqual(clusters[clusterID]->mesh, indices[originEdgeID], clusters[otherClusterID]->mesh, indices1[Cycle3(otherOriginEdgeID)]))
             {
                 edgeGraph.IncreaseEdgeCost(i, j, 1);
                 edgeGraph.IncreaseEdgeCost(j, i, 1);
@@ -490,24 +513,20 @@ void BuildParentClusters(
     // 简化网格  
     MeshOptimizor::RemapMesh(tempMesh);  //子cluster各组还有重复的顶点要去除
     uint32_t prevIndexSize = tempMesh->index.size();
-    float error = MeshOptimizor::SimplifyMesh(tempMesh, 0.3f, 1e50, tempIndex);        //减面
-    if ((float)tempIndex.size() / prevIndexSize > 0.5)
+    float error = MeshOptimizor::SimplifyMesh(tempMesh, 0.25f, 1e50, tempIndex);        //减面
+    if ((float)tempIndex.size() / prevIndexSize > 0.9)  // 完全减不下去再中断
     {
-        printf("ERROR SimplifyMesh at level [%d], rate [%f], indexCnt [%d], try to do it sloppy...\n", clusterGroup->mipLevel + 1, (float)tempIndex.size() / prevIndexSize, prevIndexSize);
-        
-        //return; //TODO 减面算法还是有问题，减不下去了直接返回
-
-        float error = MeshOptimizor::SimplifyMeshSloppy(tempMesh, 0.3f, 1e50, tempIndex);  //TODO 减面算法还是有问题，减不下去了就用sloppy的？
-        
-        assert((float)tempIndex.size() / prevIndexSize < 0.5);
-        if (tempIndex.size() == 0) for (int i = 0; i < 3; i++) tempIndex.push_back(tempMesh->index[0]);
-    }
-    //MeshOptimizor::RemapMesh(tempMesh); 
+        printf("ERROR SimplifyMesh at level [%d], rate [%f], indexCnt [%d]\n", clusterGroup->mipLevel + 1, (float)tempIndex.size() / prevIndexSize, prevIndexSize);
+        clusterGroup->lodBound = parentLodBound;
+        clusterGroup->parentLodError = 1000.0f;
+        return; 
+     }
+    printf("SimplifyMesh at level [%d], rate [%f], indexCnt [%d]\n", clusterGroup->mipLevel + 1, (float)tempIndex.size() / prevIndexSize, prevIndexSize);
     parentLodError = std::max(parentLodError, sqrt(error));
 
-
     MeshRef parentMesh = std::make_shared<Mesh>(*tempMesh.get(), tempIndex);
-   // 生成新cluster
+    MeshOptimizor::RemapMesh(tempMesh); 
+    // 生成新cluster
     std::vector<MeshClusterRef> parentClusters;
     ClusterTriangles(parentMesh, parentClusters);
 
@@ -524,4 +543,3 @@ void BuildParentClusters(
 
     for (auto& cluster : parentClusters) clusters.push_back(cluster);
 }
-

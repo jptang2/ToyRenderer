@@ -57,7 +57,7 @@ void ProbeBlend(in DDGISetting ddgi, ivec2 currentCoord, uint numRays, inout vec
 
 #if !defined(DEPTH_PROBE) 
         vec3 radiance       = sharedRadiance[i] * ENERGY_CONSERVATION;   
-        float weight        = max(0.0, dot(texelDirection, rayDirection));    //权重为探针像素法向量和辐射率方向向量的余弦,IBL里用的是采样数
+        float weight        = max(0.0, dot(texelDirection, rayDirection));    //权重为探针像素法向量和辐射率方向向量的余弦NOL, IBL里用的是采样数
         if(weight >= FLT_EPS) 
         {
             result          += vec3(radiance * weight);                         //辐射率加权
@@ -117,7 +117,7 @@ void main()
 
     // 时域加权混合
     vec3 history = imageLoad(TEXTURE, currentCoord).rgb;
-    result = mix(result, history, RGBtoLuminance(history) < 0.01f ? 0.0f : volumeLight.setting.blendWeight);
+    result = mix(result, history, volumeLight.setting.blendWeight);
 
     // 此处计算得到的实际上是半球范围内的radiance的平均值，需要再乘半球面积2 PI来得到半球辐照度irradiance
     imageStore(TEXTURE, currentCoord, vec4( result, 0.0 ));

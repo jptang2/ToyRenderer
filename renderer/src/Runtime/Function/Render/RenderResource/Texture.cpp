@@ -91,6 +91,8 @@ void Texture::InitRHI()
                                     IsDepthFormat(format) ? TEXTURE_ASPECT_DEPTH :
                                     IsStencilFormat(format) ? TEXTURE_ASPECT_STENCIL : TEXTURE_ASPECT_COLOR;
 
+    bool force2D = extent.width == 1 && extent.height == 1; //TODO 
+
     RHITextureInfo textureInfo = {
         .format = format,
         .extent = extent,
@@ -98,7 +100,7 @@ void Texture::InitRHI()
         .mipLevels = mipLevels,
         .memoryUsage = MEMORY_USAGE_GPU_ONLY,
         .type = resourceType,
-        .creationFlag = TEXTURE_CREATION_NONE};
+        .creationFlag = force2D ? TEXTURE_CREATION_FORCE_2D : TEXTURE_CREATION_NONE};
     texture = EngineContext::RHI()->CreateTexture(textureInfo);
 
     RHITextureViewInfo textureViewInfo = {
@@ -130,10 +132,11 @@ void Texture::LoadFromFile()
         std::vector<uint8_t> data;
         EngineContext::File()->LoadBinary(paths[i], data);
 
+        int targetChannel = FormatChanelCounts(format);
         int width, height, channels;
         stbi_info_from_memory(data.data(), data.size(), &width, &height, &channels);
-        stbi_uc* pixels = stbi_load_from_memory(data.data(), data.size(), &width, &height, &channels, 4);   // 这个函数非常慢,10~100ms
-        uint32_t bufferSize = width * height * sizeof(uint32_t);
+        stbi_uc* pixels = stbi_load_from_memory(data.data(), data.size(), &width, &height, &channels, targetChannel);   // 这个函数非常慢,10~100ms
+        uint32_t bufferSize = width * height * sizeof(uint8_t) * targetChannel;
 
         // bool is16Bit = stbi_is_16_bit_from_memory(data.data(), data.size());
         // bool hdr = stbi_is_hdr_from_memory(data.data(), data.size());

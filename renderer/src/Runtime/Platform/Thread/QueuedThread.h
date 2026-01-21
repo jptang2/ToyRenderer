@@ -23,7 +23,7 @@ public:
 protected:
     bool timeToDie;
     QueuedWorkRef queuedWork;
-    EventRef doWorkEvent;
+    SyncEventRef doWorkEvent;
     QueuedThread* ownerThread;
 
     friend class QueuedThread;

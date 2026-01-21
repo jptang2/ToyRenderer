@@ -34,7 +34,7 @@ void main()
     OUT_NORMAL          = normal;
     OUT_ID              = objectID;
 
-    gl_Position = card.proj * card.view * position;
+    gl_Position = card.viewProj * position;
 }
 
 

@@ -49,6 +49,7 @@ static const char* DEVICE_EXTENTIONS[] = {
     //VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,      // 已经在vk1.2中改为VkPhysicalDeviceVulkan12Features指示，并入核心
     //VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
     VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME,
+    VK_KHR_MULTIVIEW_EXTENSION_NAME,
 };
 
 static const char* RAY_TRACING_DEVICE_EXTENTIONS[] = {
@@ -277,6 +278,13 @@ public:
         case FORMAT_D32_SFLOAT_S8_UINT:   format = VK_FORMAT_D32_SFLOAT_S8_UINT;      break;
         case FORMAT_D24_UNORM_S8_UINT:    format = VK_FORMAT_D24_UNORM_S8_UINT;       break;
 
+        case FORMAT_A2R10G10B10_SNORM:    format = VK_FORMAT_A2R10G10B10_SNORM_PACK32;  break;
+        case FORMAT_A2R10G10B10_UNORM:    format = VK_FORMAT_A2R10G10B10_UNORM_PACK32;  break;
+        case FORMAT_A2R10G10B10_SINT:     format = VK_FORMAT_A2R10G10B10_SINT_PACK32;   break;
+        case FORMAT_A2R10G10B10_UINT:     format = VK_FORMAT_A2R10G10B10_UINT_PACK32;   break;
+        case FORMAT_B10G11R11_UFLOAT:     format = VK_FORMAT_B10G11R11_UFLOAT_PACK32;   break;
+        case FORMAT_E5B9G9R9_UFLOAT:      format = VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;    break;
+
         default:                          format = VK_FORMAT_UNDEFINED;               break;
         }
 
@@ -352,6 +360,13 @@ public:
         case VK_FORMAT_D32_SFLOAT:           format = FORMAT_D32_SFLOAT;              break;
         case VK_FORMAT_D32_SFLOAT_S8_UINT:   format = FORMAT_D32_SFLOAT_S8_UINT;      break;
         case VK_FORMAT_D24_UNORM_S8_UINT:    format = FORMAT_D24_UNORM_S8_UINT;       break;
+        
+        case VK_FORMAT_A2R10G10B10_SNORM_PACK32:    format = FORMAT_A2R10G10B10_SNORM;  break;
+        case VK_FORMAT_A2R10G10B10_UNORM_PACK32:    format = FORMAT_A2R10G10B10_UNORM;  break;
+        case VK_FORMAT_A2R10G10B10_SINT_PACK32:     format = FORMAT_A2R10G10B10_SINT;   break;
+        case VK_FORMAT_A2R10G10B10_UINT_PACK32:     format = FORMAT_A2R10G10B10_UINT;   break;
+        case VK_FORMAT_B10G11R11_UFLOAT_PACK32:     format = FORMAT_B10G11R11_UFLOAT;   break;
+        case VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:      format = FORMAT_E5B9G9R9_UFLOAT;    break;
 
         default:                             format = FORMAT_UKNOWN;                   break;
         }
@@ -388,7 +403,7 @@ public:
         case SPV_REFLECT_FORMAT_R32G32B32_SFLOAT:       format = FORMAT_R32G32B32_SFLOAT;       break;
         case SPV_REFLECT_FORMAT_R32G32B32A32_UINT:      format = FORMAT_R32G32B32A32_UINT;      break;
         case SPV_REFLECT_FORMAT_R32G32B32A32_SINT:      format = FORMAT_R32G32B32A32_SINT;      break;
-        case SPV_REFLECT_FORMAT_R32G32B32A32_SFLOAT:    format = FORMAT_R32G32B32A32_SFLOAT;    break;
+        case SPV_REFLECT_FORMAT_R32G32B32A32_SFLOAT:    format = FORMAT_R32G32B32A32_SFLOAT;    break;  
         default:                                        LOG_FATAL("Unsupported reflect format type!"); 
         }
 
@@ -889,6 +904,8 @@ typedef struct VulkanRenderPassAttachments
 {
 	std::vector<VkAttachmentDescription> colorAttachments;
 	VkAttachmentDescription depthStencilAttachment = {};
+
+    uint32_t viewMask = 0b00000000;  // for multiview
 	
 } VulkanRenderPassAttachments;
 

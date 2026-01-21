@@ -25,7 +25,7 @@ void VolumeLightComponent::OnUpdate(float deltaTime)
 {
     InitComponentIfNeed();
 
-	// UpdateLightInfo();
+	//UpdateLightInfo();
 
     for (int i = 0; i < 2; i++)	//检测更新频率
 	{

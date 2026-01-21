@@ -35,7 +35,9 @@ void main()
     vec3 normal         = FetchNormal(material, texCoord, worldNormal, worldTangent);
     float roughness     = FetchRoughness(material, texCoord);
     float metallic      = FetchMetallic(material, texCoord);
-
+    
+    if(material.useVertexColor != 0)
+        diffuse.xyz *= color.xyz;
 
 	float dist = length(worldPos.xyz - gl_WorldRayOriginEXT);
 

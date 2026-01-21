@@ -166,6 +166,8 @@ public:
 
     virtual void SetScissor(Offset2D min, Offset2D max) = 0;
 
+    virtual void ClearScissors(const std::vector<ClearAttachment>& attachments, const std::vector<Rect2D>& scissors, uint32_t baseArrayLayer, uint32_t layerCount) = 0;
+
     virtual void SetDepthBias(float constantBias, float slopeBias, float clampBias) = 0;
 
     virtual void SetLineWidth(float width) = 0;
@@ -207,7 +209,7 @@ public:
 
     virtual void ImGuiCreateFontsTexture() = 0;
 
-    virtual void ImGuiRenderDrawData() = 0;
+    virtual void ImGuiRenderDrawData(ImGuiDrawFunc func) = 0;
 
 private:
     RHICommandPoolRef pool;

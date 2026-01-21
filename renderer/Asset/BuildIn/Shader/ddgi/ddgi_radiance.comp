@@ -29,14 +29,14 @@ void main()
     vec3  origin      = FetchProbeWorldPos(volumeLight.setting, probeCoord);
 
     vec4 dirDist    = imageLoad(G_BUFFER_POSITION,          pixel);
-    vec4 normal     = imageLoad(G_BUFFER_NORMAL_METALLIC,   pixel);
-    vec4 diffuse    = imageLoad(G_BUFFER_DIFFUSE_ROUGHNESS, pixel);
+    vec4 normal     = imageLoad(G_BUFFER_NORMAL_ROUGHNESS,   pixel);
+    vec4 diffuse    = imageLoad(G_BUFFER_DIFFUSE_METALLIC, pixel);
     vec4 emission   = imageLoad(G_BUFFER_EMISSION,          pixel);
 
     vec3 direction  = dirDist.xyz;
     float dist      = dirDist.w;
-    float roughness = diffuse.w;     //粗糙度
-    float metallic  = normal.w;      //金属度
+    float roughness = normal.w;     //粗糙度
+    float metallic  = diffuse.w;    //金属度
 
     vec3 radiance   = vec3(0.0f);    //漫反射辐射率
 
@@ -50,6 +50,7 @@ void main()
         vec3 N = normalize(normal.xyz);	                //法线
         vec3 V = normalize(-direction);	                //视线，此处的视线原点是探针位置
         vec3 R = normalize(reflect(-V, N));             //反射
+        float NoV = dot(N, V); 
 
         // 直接光照计算，仅漫反射 //////////////////////////////////
 
@@ -66,6 +67,9 @@ void main()
         //合并////////////////////////////////////////////////////////////////////////////////////////////////////////
         radiance = directLightColor + indirectLightColor;
         radiance += emission.xyz;
+
+        if(NoV <= 0.0f)
+            radiance.xyz = vec3(0.0f);    // trace到背面了
     }
     else if(dist == MAX_RAY_TRACING_DISTANCE)
     {

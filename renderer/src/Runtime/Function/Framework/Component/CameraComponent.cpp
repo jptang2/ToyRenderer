@@ -38,6 +38,7 @@ void CameraComponent::InputMove(float deltaTime)
 
 	// 位移
     Vec3 deltaPosition = Vec3::Zero();
+	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_LEFT_SHIFT))		delta *= 5;
 	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_W))				deltaPosition += transformComponent->Front() * delta;
 	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_S))				deltaPosition -= transformComponent->Front() * delta;
 	if(EngineContext::Input()->KeyIsPressed(KEY_TYPE_A))				deltaPosition -= transformComponent->Right() * delta;
@@ -88,17 +89,24 @@ void CameraComponent::UpdateMatrix()
 	view = Math::LookAt(position, position + front, up);
 	proj = Math::Perspective(Math::ToRadians(fovy), aspect, near, far);
 	proj(1, 1) *= -1;		// Vulkan的NDC是y向下
+	viewProj = proj * view;
+
+	invView = view.inverse();
+	invProj = proj.inverse();
+	invViewProj = viewProj.inverse();
 
 	move = (prevView == view && prevProj == proj) ? false : true;	// 记录相机是否更新
 
-	frustum = CreateFrustumFromMatrix(proj * view, -1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 1.0f);
+	frustum = CreateFrustumFromMatrix(viewProj, -1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 1.0f);
 
 	cameraInfo.view = view;
 	cameraInfo.proj = proj;
+	cameraInfo.viewProj = viewProj;
 	cameraInfo.prevView = prevView;
 	cameraInfo.prevProj = prevProj;
-	cameraInfo.invView = GetInvViewMatrix();
-	cameraInfo.invProj = GetInvProjectionMatrix();
+	cameraInfo.prevViewProj = prevProj * prevView;
+	cameraInfo.invView = invView;
+	cameraInfo.invProj = invProj;
 	cameraInfo.pos = position;
 	cameraInfo.front = front;
 	cameraInfo.up = up;

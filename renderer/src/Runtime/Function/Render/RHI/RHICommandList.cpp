@@ -139,6 +139,13 @@ void RHICommandList::SetScissor(Offset2D min, Offset2D max)
     else ADD_COMMAND(SetScissor, min, max);
 }
 
+void RHICommandList::ClearScissors(const std::vector<ClearAttachment>& attachments, const std::vector<Rect2D>& scissors, uint32_t baseArrayLayer, uint32_t layerCount)
+{
+    COMMANDLIST_DEBUG_OUTPUT();
+    if(info.byPass) info.context->ClearScissors(attachments, scissors, baseArrayLayer, layerCount);
+    else ADD_COMMAND(ClearScissors, attachments, scissors, baseArrayLayer, layerCount);
+}
+
 void RHICommandList::SetDepthBias(float constantBias, float slopeBias, float clampBias)
 {
     COMMANDLIST_DEBUG_OUTPUT();
@@ -258,11 +265,11 @@ void RHICommandList::ImGuiCreateFontsTexture()
     else ADD_COMMAND(ImGuiCreateFontsTexture);
 }
 
-void RHICommandList::ImGuiRenderDrawData()
+void RHICommandList::ImGuiRenderDrawData(ImGuiDrawFunc func)
 {
     COMMANDLIST_DEBUG_OUTPUT();
-    if(info.byPass) info.context->ImGuiRenderDrawData();
-    else ADD_COMMAND(ImGuiRenderDrawData);
+    if(info.byPass) info.context->ImGuiRenderDrawData(func);
+    else ADD_COMMAND(ImGuiRenderDrawData, func);
 }
 
 
@@ -345,6 +352,8 @@ void RHICommandSetViewport::Execute(RHICommandContextRef context) { context->Set
 
 void RHICommandSetScissor::Execute(RHICommandContextRef context) { context->SetScissor(min, max); }
 
+void RHICommandClearScissors::Execute(RHICommandContextRef context) { context->ClearScissors(attachments, scissors, baseArrayLayer, layerCount); }
+
 void RHICommandSetDepthBias::Execute(RHICommandContextRef context) { context->SetDepthBias(constantBias, slopeBias, clampBias); }
 
 void RHICommandSetLineWidth::Execute(RHICommandContextRef context) { context->SetLineWidth(width); }
@@ -379,7 +388,7 @@ void RHICommandDrawIndexedIndirect::Execute(RHICommandContextRef context) { cont
 
 void RHICommandImGuiCreateFontsTexture::Execute(RHICommandContextRef context) { context->ImGuiCreateFontsTexture(); }
 
-void RHICommandImGuiRenderDrawData::Execute(RHICommandContextRef context) { context->ImGuiRenderDrawData(); }
+void RHICommandImGuiRenderDrawData::Execute(RHICommandContextRef context) { context->ImGuiRenderDrawData(func); }
 
 void RHICommandImmediateTextureBarrier::Execute(RHICommandContextImmediateRef context) { context->TextureBarrier(barrier); }
 

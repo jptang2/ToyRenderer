@@ -23,8 +23,6 @@ typedef std::shared_ptr<class RunnableThread> RunnableThreadRef;
 
 class RunnableThread // 线程抽象
 {
-	static uint32_t RunnableTlsSlot;
-
 public:
 	static RunnableThreadRef Create(
         RunnableRef runnable, 

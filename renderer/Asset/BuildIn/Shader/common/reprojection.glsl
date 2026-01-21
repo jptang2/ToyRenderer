@@ -4,18 +4,17 @@
 // 计算速度 ////////////////////////////////////////////////////////////////////
 vec2 CalculateVelocity(vec4 pos, vec4 prevPos)
 {
-    vec4 clipPos            = CAMERA.proj * CAMERA.view * pos;
+    vec4 clipPos            = CAMERA.viewProj * pos;
     clipPos                 /= clipPos.w;
     vec2 coordPos           = clipPos.xy * 0.5 + vec2(0.5);
 
-    vec4 prevClipPos        = CAMERA.prevProj * CAMERA.prevView * prevPos;
+    vec4 prevClipPos        = CAMERA.prevViewProj * prevPos;
     prevClipPos             /= prevClipPos.w;
     vec2 prevCoordPos       = prevClipPos.xy * 0.5 + vec2(0.5);
 
     vec2 velocity           = vec2(prevCoordPos.xy - coordPos.xy);
-    //velocity             = vec4(vec2(coordPos.xy - prevCoordPos.xy), coordPos.xy);
 
-    //vec4 velocity             = vec4(vec3(clipPos.xyz - prevClipPos.xyz), 0.0f);
+    //vec4 velocity         = vec4(vec3(clipPos.xyz - prevClipPos.xyz), 0.0f);
     //velocity.xy          -= (CAMERA.prev_jitter.xy - CAMERA.jitter.xy);
     //velocity.z          = 0.0f;
 

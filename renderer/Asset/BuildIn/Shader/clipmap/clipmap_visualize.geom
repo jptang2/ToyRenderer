@@ -11,7 +11,7 @@ layout(push_constant) uniform clipmap_visualize_setting {
 	int maxMipLevel;		
 } SETTING;
 
-layout(set = 1, binding = 0, rgba32f) uniform readonly image3D VXGI_CLIPMAP;
+layout(set = 1, binding = 0, rgba16f) uniform readonly image3D VXGI_CLIPMAP;
 layout(set = 1, binding = 1) buffer VXGI_CLIPMAP_BUFFER {
 	ClipmapInfo clipmapInfo;
 };
@@ -69,15 +69,15 @@ void main()
 
 	// if(CAMERA.pos.y - worldPos.y < 5.0) return;
 
-	mat4 viewPorj = CAMERA.proj * CAMERA.view;
-	vec4 v0 = viewPorj * vec4(worldPos + halfVoxelSize * ivec3(-1, -1, -1), 1.0f);
-	vec4 v1 = viewPorj * vec4(worldPos + halfVoxelSize * ivec3(1, -1, -1), 1.0f);
-	vec4 v2 = viewPorj * vec4(worldPos + halfVoxelSize * ivec3(1, -1, 1), 1.0f);
-	vec4 v3 = viewPorj * vec4(worldPos + halfVoxelSize * ivec3(-1, -1, 1), 1.0f);
-	vec4 v4 = viewPorj * vec4(worldPos + halfVoxelSize * ivec3(-1, 1, -1), 1.0f);
-	vec4 v5 = viewPorj * vec4(worldPos + halfVoxelSize * ivec3(1, 1, -1), 1.0f);
-	vec4 v6 = viewPorj * vec4(worldPos + halfVoxelSize * ivec3(1, 1, 1), 1.0f);
-	vec4 v7 = viewPorj * vec4(worldPos + halfVoxelSize * ivec3(-1, 1, 1), 1.0f);
+	mat4 viewProj = CAMERA.viewProj;
+	vec4 v0 = viewProj * vec4(worldPos + halfVoxelSize * ivec3(-1, -1, -1), 1.0f);
+	vec4 v1 = viewProj * vec4(worldPos + halfVoxelSize * ivec3(1, -1, -1), 1.0f);
+	vec4 v2 = viewProj * vec4(worldPos + halfVoxelSize * ivec3(1, -1, 1), 1.0f);
+	vec4 v3 = viewProj * vec4(worldPos + halfVoxelSize * ivec3(-1, -1, 1), 1.0f);
+	vec4 v4 = viewProj * vec4(worldPos + halfVoxelSize * ivec3(-1, 1, -1), 1.0f);
+	vec4 v5 = viewProj * vec4(worldPos + halfVoxelSize * ivec3(1, 1, -1), 1.0f);
+	vec4 v6 = viewProj * vec4(worldPos + halfVoxelSize * ivec3(1, 1, 1), 1.0f);
+	vec4 v7 = viewProj * vec4(worldPos + halfVoxelSize * ivec3(-1, 1, 1), 1.0f);
 
 	// vec4 colors[6] = {
 	// 	vec4(1.0f, 1.0, 1.0, 1.0),

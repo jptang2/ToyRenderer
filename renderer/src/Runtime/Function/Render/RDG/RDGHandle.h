@@ -32,47 +32,47 @@ protected:
 class RDGPassHandle : public RDGResoruceHandle
 {
 public:
-    RDGPassHandle(NodeID id) : RDGResoruceHandle(id) {};
+    RDGPassHandle(NodeID id = UINT32_MAX) : RDGResoruceHandle(id) {};
 };
 
 class RDGRenderPassHandle : public RDGPassHandle
 {
 public:
-    RDGRenderPassHandle(NodeID id) : RDGPassHandle(id) {};
+    RDGRenderPassHandle(NodeID id = UINT32_MAX) : RDGPassHandle(id) {};
 };
 
 class RDGComputePassHandle : public RDGPassHandle
 {
 public:
-    RDGComputePassHandle(NodeID id) : RDGPassHandle(id) {};
+    RDGComputePassHandle(NodeID id = UINT32_MAX) : RDGPassHandle(id) {};
 };
 
 class RDGRayTracingPassHandle : public RDGPassHandle
 {
 public:
-    RDGRayTracingPassHandle(NodeID id) : RDGPassHandle(id) {};
+    RDGRayTracingPassHandle(NodeID id = UINT32_MAX) : RDGPassHandle(id) {};
 };
 
 class RDGPresentPassHandle : public RDGPassHandle
 {
 public:
-    RDGPresentPassHandle(NodeID id) : RDGPassHandle(id) {};
+    RDGPresentPassHandle(NodeID id = UINT32_MAX) : RDGPassHandle(id) {};
 };
 
 class RDGCopyPassHandle : public RDGPassHandle
 {
 public:
-    RDGCopyPassHandle(NodeID id) : RDGPassHandle(id) {};
+    RDGCopyPassHandle(NodeID id = UINT32_MAX) : RDGPassHandle(id) {};
 };
 
 class RDGTextureHandle : public RDGResoruceHandle
 {
 public:
-    RDGTextureHandle(NodeID id) : RDGResoruceHandle(id) {};
+    RDGTextureHandle(NodeID id = UINT32_MAX) : RDGResoruceHandle(id) {};
 };
 
 class RDGBufferHandle : public RDGResoruceHandle
 {
 public:
-    RDGBufferHandle(NodeID id) : RDGResoruceHandle(id) {};
+    RDGBufferHandle(NodeID id = UINT32_MAX) : RDGResoruceHandle(id) {};
 };

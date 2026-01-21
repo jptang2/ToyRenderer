@@ -6,8 +6,6 @@
 #include "RenderPass.h"
 #include <cstdint>
 
-#define NUM_NEIGHBORS 4
-
 class ReSTIRGIPass : public RenderPass
 {
 public:
@@ -45,12 +43,15 @@ private:
         float spatialNormalThreshold = 45.0f;
         float spatialRadius = 30.0f;                // 空域采样像素半径
 
+        float surfaceCacheFactor = 1.0f;            // 由于表面缓存由于无法处理镜面反射，且存在失效问题，实际得到的GI结果会偏暗，
+                                                    // TODO 
+
+        uint32_t combineMode = 0;                   // 立即合并/降噪后合并
         uint32_t visibilityReuse = 1;               // 开启可见性测试
         uint32_t temporalReuse = 1;                 // 开启时域重用
         uint32_t spatialReuse = 1;                  // 开启空域重用
         uint32_t unbias = 1;                        // 开启无偏
         uint32_t enableSkybox = 1;                  // 采样天空盒
-        uint32_t giOnly = 0;                        // 仅显示GI
         uint32_t showRadiance = 0;                  // 显示gather的入射radiance结果
     };
     RestirGISetting setting = {};
@@ -76,5 +77,5 @@ private:
     };
 
     Buffer<RestirGISetting> restirSettingBuffer;
-    ArrayBuffer<GIReservoir, WINDOW_WIDTH * WINDOW_HEIGHT / 4> reservoirsBuffer[FRAMES_IN_FLIGHT] = {};
+    ArrayBuffer<GIReservoir, WINDOW_WIDTH * WINDOW_HEIGHT> reservoirsBuffer[3] = {};
 };

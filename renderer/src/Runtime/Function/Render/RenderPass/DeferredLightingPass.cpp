@@ -28,11 +28,11 @@ void DeferredLightingPass::Build(RDGBuilder& builder)
 {
     Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
 
-    RDGTextureHandle diffuse        = builder.GetTexture("G-Buffer Diffuse/Roughness");
-    RDGTextureHandle normal         = builder.GetTexture("G-Buffer Normal/Metallic");
+    RDGTextureHandle diffuse        = builder.GetTexture("G-Buffer Diffuse/Metallic");
+    RDGTextureHandle normal         = builder.GetTexture("G-Buffer Normal/Roughness");
     RDGTextureHandle emission       = builder.GetTexture("G-Buffer Emission");
 
-    RDGTextureHandle outColor = builder.CreateTexture("Mesh Pass Out Color") 
+    RDGTextureHandle outColor = builder.GetOrCreateTexture("Mesh Pass Out Color") 
         .Exetent({windowExtent.width, windowExtent.height, 1})
         .Format(EngineContext::Render()->GetHdrColorFormat())
         .ArrayLayers(1)
@@ -55,13 +55,17 @@ void DeferredLightingPass::Build(RDGBuilder& builder)
             .ReadWrite(1, 3, 0, outColor)
             .Execute([&](RDGPassContext context) {       
 
+                DeferredLightingSetting newSetting = setting;
+                if(EngineContext::Render()->IsPassEnabled(RESTIR_GI_PASS))
+                    newSetting.directOnly = 1;
+
                 RHICommandListRef command = context.command; 
                 command->SetComputePipeline(computePipeline);
                 command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);
                 command->BindDescriptorSet(context.descriptors[1], 1);
-                command->PushConstants(&setting, sizeof(DeferredLightingSetting), SHADER_FREQUENCY_COMPUTE);
-                command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                    EngineContext::Render()->GetWindowsExtent().height / 16, 
+                command->PushConstants(&newSetting, sizeof(DeferredLightingSetting), SHADER_FREQUENCY_COMPUTE);
+                command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                    Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                     1);
             })
             .Finish();

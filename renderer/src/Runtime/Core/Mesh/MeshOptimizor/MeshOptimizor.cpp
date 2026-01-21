@@ -2,6 +2,7 @@
 #include "Core/Log/Log.h"
 #include "Core/Math/Math.h"
 #include <cstdint>
+#include <vector>
 
 bool MeshOptimizor::RemapMesh(MeshRef mesh)
 {
@@ -14,7 +15,27 @@ bool MeshOptimizor::RemapMesh(MeshRef mesh)
 	{
 		//生成重映射表
 		std::vector<uint32_t> remap(indexCount); // allocate temporary memory for the remap table
-		newVertexCount = meshopt_generateVertexRemap(remap.data(), mesh->index.data(), indexCount, mesh->position.data(), vertexCount, sizeof(Vec3));
+		//newVertexCount = meshopt_generateVertexRemap(remap.data(), mesh->index.data(), indexCount, mesh->position.data(), vertexCount, sizeof(Vec3));
+
+		std::vector<meshopt_Stream> streams(1);
+		streams.back().data = mesh->position.data();
+		streams.back().size = sizeof(Vec3);
+		streams.back().stride = sizeof(Vec3);
+		if(mesh->HasTexCoord())		// 同位置处的顶点可能存在不同UV和法线
+		{
+			streams.emplace_back();
+			streams.back().data = mesh->texCoord.data();
+			streams.back().size = sizeof(Vec2);
+			streams.back().stride = sizeof(Vec2);
+		}
+		if(mesh->HasNormal())
+		{
+			streams.emplace_back();
+			streams.back().data = mesh->normal.data();
+			streams.back().size = sizeof(Vec3);
+			streams.back().stride = sizeof(Vec3);
+		}
+		newVertexCount = meshopt_generateVertexRemapMulti(remap.data(), mesh->index.data(), indexCount, vertexCount, streams.data(), streams.size());
 
 		if (newVertexCount < vertexCount)
 		{

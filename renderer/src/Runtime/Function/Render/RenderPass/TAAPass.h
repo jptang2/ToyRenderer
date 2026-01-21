@@ -24,6 +24,7 @@ private:
         int sharpen = 0;
         int reprojectionOnly = 0;
         int showVelocity = 0;
+        int showReprojectionVaild = 0;
 		float velocityFactor = 1.0f;
 		float blendFactor = 0.1f;
         

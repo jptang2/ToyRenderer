@@ -127,7 +127,7 @@ vec4 TraceHiz( int startLevel,
             float finalHitDepth     = LinearEyeDepth(SampleDepth(DEPTH[0], SAMPLER[2], 0, current.xy),   CAMERA.near, CAMERA.far);
 
             // 命中判定：厚度满足要求（反射march到的深度与该点处遮挡深度差），并非无限远处，uv有效，不是到循环才停止，trace距离足够远
-            if( (finalMarchDepth > finalHitDepth - thickness) &&    // 在指定厚度的前面（trace到的结果可见）
+            if( //(finalMarchDepth > finalHitDepth - thickness) &&    // 在指定厚度的前面（trace到的结果可见）
                 !(FetchDepth(current.xy) > 0.999f) &&               // 并非trace到天空盒
                 ValidUV(current.xy, vec2(0.01)) &&                  // UV有效
                 loop < maxLoop &&                                   // 未超出最大循环
@@ -135,7 +135,7 @@ vec4 TraceHiz( int startLevel,
             {
                 valid = 1.0f;
 
-                // if(!(finalMarchDepth > finalHitDepth - thickness)) valid = 2.0f;
+                if(!(finalMarchDepth > finalHitDepth - thickness)) valid = 2.0f;  // 遮挡   
             }
             break;
         }
@@ -144,25 +144,29 @@ vec4 TraceHiz( int startLevel,
     return vec4(current.xy, 1.0 / current.z, valid);
 }
 
-
 vec4 RayTraceSurfaceCache(
     out vec4 lighting,
     vec3 worldPos,
     vec3 worldDir)
 {
-    uint hitObjectID;
-    vec4 hitPos;
-    vec3 hitNormal;
+#if ENABLE_RAY_TRACING > 0
+    uint hitObjectID = 0;
+    vec4 hitPos = vec4(0.0f);
+    vec3 hitNormal = vec3(0.0f);
 
     bool valid = RayQueryHitObject(
-    worldPos, worldPos + normalize(worldDir) * MAX_RAY_TRACING_DISTANCE, 
-    hitObjectID, 
-    hitPos, 
-    hitNormal);
+        worldPos, worldPos + normalize(worldDir) * MAX_RAY_TRACING_DISTANCE, 
+        GLOBAL_SETTING.rayTracingOffset,	// 虚拟几何和光追加速结构不一致，做一点偏移
+        hitObjectID, 
+        hitPos, 
+        hitNormal);
 
     if(valid)   FetchSurfaceCacheLighting(lighting, hitObjectID, hitPos.xyz, hitNormal);
     if(valid)   return hitPos;
     else        return vec4(0.0f);
+#else
+    return vec4(0.0f);
+#endif
 }
 
 
@@ -190,12 +194,12 @@ void main() {
 
     float depth = FetchDepthTex(samplePixel);
 
-    vec4 gbffer0    = imageLoad(G_BUFFER_DIFFUSE_ROUGHNESS, samplePixel);
-    vec4 gbffer1    = imageLoad(G_BUFFER_NORMAL_METALLIC, samplePixel);
+    vec4 gbffer0    = imageLoad(G_BUFFER_DIFFUSE_METALLIC, samplePixel);
+    vec4 gbffer1    = imageLoad(G_BUFFER_NORMAL_ROUGHNESS, samplePixel);
     vec3 diffuse    = gbffer0.xyz;
     vec3 normal     = gbffer1.xyz;
-    float roughness = gbffer0.w;
-    float metallic  = gbffer1.w;
+    float roughness = max(gbffer1.w, 0.05f);
+    float metallic  = gbffer0.w;
     vec4 worldPos   = DepthToWorld(uv);  // 从UV重建的世界坐标会有一些精度误差，不算大
     
     // 光照参数计算 //////////////////////////////////
@@ -233,36 +237,36 @@ void main() {
 
     if(SETTING.mode == 0)
     {
-        vec4 tarceResult    = TraceHiz(SETTING.startMip, SETTING.maxMip, SETTING.endMip, SETTING.maxLoop, SETTING.thickness, worldPos.xyz, L);
-        if(tarceResult.a == 1.0f) 
-            tarceResult.a   = Square(tarceResult.a * GetScreenFadeBord(tarceResult.xy, SETTING.screenFade));     //屏幕边缘淡出
+        vec4 traceResult    = TraceHiz(SETTING.startMip, SETTING.maxMip, SETTING.endMip, SETTING.maxLoop, SETTING.thickness, worldPos.xyz, L);
+        if(traceResult.a == 1.0f) 
+            traceResult.a   = Square(traceResult.a * GetScreenFadeBord(traceResult.xy, SETTING.screenFade));     //屏幕边缘淡出
 
-        imageStore(SSSR_HIT_RESULT, ivec2(pixel.xy), tarceResult);
+        imageStore(SSSR_HIT_RESULT, ivec2(pixel.xy), traceResult);
         imageStore(SSSR_PDF, ivec2(pixel.xy), vec4(pdf, vec3(0.0f)));
     }
     else if(SETTING.mode == 1)
     {
-        vec4 hitColor;
-        vec4 hitPos = RayTraceSurfaceCache(hitColor, worldPos.xyz, L);
-
+        vec4 hitColor = vec4(0.0f);
+        vec4 hitPos = RayTraceSurfaceCache(hitColor, worldPos.xyz, L);  // 由于虚拟几何体减面后的结构与光追加速结构不一致，可能存在自相交问题
+                                                                                    // megalights和lumen里都有单独的介绍
         imageStore(SSSR_HIT_COLOR, ivec2(pixel.xy), hitColor);
         imageStore(SSSR_HIT_RESULT, ivec2(pixel.xy), hitPos);
     }
     else if(SETTING.mode == 2)
     {
-        vec4 tarceResult    = TraceHiz(SETTING.startMip, SETTING.maxMip, SETTING.endMip, SETTING.maxLoop, SETTING.thickness, worldPos.xyz, L);
+        vec4 traceResult    = TraceHiz(SETTING.startMip, SETTING.maxMip, SETTING.endMip, SETTING.maxLoop, SETTING.thickness, worldPos.xyz, L);
 
-        vec4 hitColor;
-        vec4 hitPos;
-        if(tarceResult.a == 0.0f) 
+        vec4 hitColor = vec4(0.0f);
+        vec4 hitPos = vec4(0.0f);
+        if(traceResult.a == 0.0f || traceResult.a == 2.0f)   // 屏幕空间trace失效
         {
-            // worldPos = DepthToWorld(tarceResult.xy);
+            // worldPos = DepthToWorld(traceResult.xy);
             hitPos = RayTraceSurfaceCache(hitColor, worldPos.xyz, L);
         }
         else 
         {
-            hitPos = DepthToWorld(tarceResult.xy);
-            hitColor = textureLod(sampler2D(IN_COLOR_PYRAMID, SAMPLER[0]), tarceResult.xy, 0); 
+            hitPos = DepthToWorld(traceResult.xy);
+            hitColor = textureLod(sampler2D(IN_COLOR_PYRAMID, SAMPLER[0]), traceResult.xy, 0); 
         }
 
         imageStore(SSSR_HIT_COLOR, ivec2(pixel.xy), hitColor);

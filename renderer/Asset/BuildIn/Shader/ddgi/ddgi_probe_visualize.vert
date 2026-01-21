@@ -37,7 +37,7 @@ void main()
     OUT_ID                  = instance;
     OUT_NORMAL              = normal;
 
-    gl_Position = CAMERA.proj * CAMERA.view * worldPos;
+    gl_Position = CAMERA.viewProj * worldPos;
 }
 
 

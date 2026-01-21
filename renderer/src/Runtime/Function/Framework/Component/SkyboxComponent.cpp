@@ -31,19 +31,19 @@ SkyboxComponent::SkyboxComponent()
     material->SetVertexShader(vertexShader);
     material->SetFragmentShader(fragmentShader);
 
-    // ModelProcessSetting processSetting =  {
-    //     .smoothNormal = false,
-    //     .flipUV = false,
-    //     .loadMaterials = false,
-    //     .tangentSpace = true,
-    //     .generateBVH = false,
-    //     .generateCluster = false,
-    //     .generateVirtualMesh = false,
-    //     .cacheCluster = false
-    // };
-    // model = std::make_shared<Model>("Asset/BuildIn/Model/Basic/cube.obj", processSetting);
+    ModelProcessSetting processSetting =  {
+        .smoothNormal = false,
+        .flipUV = false,
+        .loadMaterials = false,
+        .tangentSpace = true,
+        .generateBVH = false,
+        .generateCluster = false,
+        .generateVirtualMesh = false,
+        .cacheCluster = false
+    };
+    model = std::make_shared<Model>("Asset/BuildIn/Model/Basic/cube.obj", processSetting);
     // EngineContext::Asset()->SaveAsset(model, "Asset/BuildIn/Model/Basic/cube.asset");
-    model = EngineContext::Asset()->GetOrLoadAsset<Model>("Asset/BuildIn/Model/Basic/cube.asset");
+    // model = EngineContext::Asset()->GetOrLoadAsset<Model>("Asset/BuildIn/Model/Basic/cube.asset");
 }
 
 SkyboxComponent::~SkyboxComponent()
@@ -100,6 +100,8 @@ void SkyboxComponent::OnUpdate(float deltaTime)
         .indexID = model->Submesh(0).indexBuffer->indexID,
         .sphere = model->Submesh(0).mesh->sphere,
         .box = model->Submesh(0).mesh->box,
+        .localScale = Vec4::Ones(),
+        .modelScale = Vec4::Ones(),
         .debugData = Vec4::Zero()
     };
 
@@ -120,10 +122,9 @@ void SkyboxComponent::SetSkyboxTexture(TextureRef texture)
 
 void SkyboxComponent::CollectDrawBatch(std::vector<DrawBatch>& batches)
 {
-    batches.push_back({
-        .objectID = objectID,
-        .vertexBuffer = model->Submesh(0).vertexBuffer,
-        .indexBuffer = model->Submesh(0).indexBuffer,
-        .material = material
-    });
+    batches.emplace_back();
+    batches.back().objectID = objectID;
+    batches.back().vertexBuffer = model->Submesh(0).vertexBuffer;
+    batches.back().indexBuffer = model->Submesh(0).indexBuffer;
+    batches.back().material = material;
 }

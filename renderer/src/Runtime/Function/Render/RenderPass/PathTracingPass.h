@@ -26,6 +26,7 @@ private:
 		
 		int sampleSkyBox = 1;		// 是否采样来自天空盒的光照
 		int indirectOnly = 0;		// 仅间接光照
+		int diffuseOnly = 0;		// 仅漫反射
 		int mode = 0;
 	};
 	PathTracingSetting setting = {};

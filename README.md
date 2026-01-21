@@ -20,14 +20,14 @@
 - RDG
 - Virtual Geometry
 - GPU-Driven Pipeline
-- Surface Cache             *(WIP)*
+- Surface Cache             
 - CSM+PCF
 - EVSM
 - Cluster-Based Lighting
 - IBL
 - DDGI
 - Volumetric Fog
-- SSSR                      *(WIP)*
+- SSSR                      
 - Bloom
 - FXAA
 - TAA
@@ -36,6 +36,7 @@
 - ReSTIR DI
 - ReSTIR GI
 - SVGF                      *(WIP)*
+- NRD
 - Path Tracing
 
 
@@ -64,16 +65,19 @@ https://github.com/diharaw/hybrid-rendering
 https://github.com/NVIDIAGameWorks/RTXDI  
 https://github.com/liameitimie/learn-nanite  
 https://github.com/KhronosGroup/Vulkan-Samples  
+https://github.com/NVIDIA-RTX/NRD
 
 
 ## 截图
-![](snapshot/Bunny_1.png)  
-![](snapshot/Bunny_2.png) 
-![](snapshot/GI.png)  
+![](snapshot/Summary.png) 
+![](snapshot/GI.png) 
 ![](snapshot/ReSTIR_DI.png) 
+![](snapshot/Bunny.png)  
 ![](snapshot/Path_Tracing.png) 
 ![](snapshot/GPU_Driven.png)
 ![](snapshot/Surface_Cache.png) 
 ![](snapshot/RDG.png) 
 ![](snapshot/DDGI.png)
-![](snapshot/PBR(Legacy).png)
+![](snapshot/PBR.png)
+![](snapshot/Material.png)
+![](snapshot/Cornell_Box/Final%20Lighting.png)

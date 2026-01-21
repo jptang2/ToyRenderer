@@ -18,12 +18,8 @@ RHIGraphicsPipelineRef PointShadowPassProcessor::OnCreatePipeline(const DrawPipe
 
 void PointShadowPass::Init()
 {
-    for(uint32_t i = 0; i < MAX_POINT_SHADOW_COUNT; i++)
-    {
-        auto processor = std::make_shared<PointShadowPassProcessor>(this);
-        processor->Init();
-        meshPassProcessors.push_back(processor);
-    }
+    meshPassProcessor = std::make_shared<PointShadowPassProcessor>(this);
+    meshPassProcessor->Init(MAX_POINT_SHADOW_COUNT * 6);
 
     auto backend = EngineContext::RHI();
 
@@ -31,7 +27,7 @@ void PointShadowPass::Init()
     {
         vertexShader        = Shader(EngineContext::File()->ShaderPath() + "shadow/point_shadow.vert.spv", SHADER_FREQUENCY_VERTEX);
         clusterVertexShader = Shader(EngineContext::File()->ShaderPath() + "shadow/point_shadow_cluster.vert.spv", SHADER_FREQUENCY_VERTEX);
-        geometryShader      = Shader(EngineContext::File()->ShaderPath() + "shadow/point_shadow.geom.spv", SHADER_FREQUENCY_GEOMETRY);
+        //geometryShader      = Shader(EngineContext::File()->ShaderPath() + "shadow/point_shadow.geom.spv", SHADER_FREQUENCY_GEOMETRY);
         fragmentShader      = Shader(EngineContext::File()->ShaderPath() + "shadow/point_shadow.frag.spv", SHADER_FREQUENCY_FRAGMENT);
 
         RHIRootSignatureInfo rootSignatureInfo = {};
@@ -41,15 +37,16 @@ void PointShadowPass::Init()
 
         RHIGraphicsPipelineInfo pipelineInfo = {};
         pipelineInfo.vertexShader       = vertexShader.shader;
-        pipelineInfo.geometryShader     = geometryShader.shader;
+        //pipelineInfo.geometryShader     = geometryShader.shader;    
         pipelineInfo.fragmentShader     = fragmentShader.shader;
         pipelineInfo.rootSignature      = rootSignature0;
         pipelineInfo.primitiveType      = PRIMITIVE_TYPE_TRIANGLE_LIST;
         pipelineInfo.rasterizerState    = { FILL_MODE_SOLID, CULL_MODE_FRONT, DEPTH_CLIP, 0.0f, 0.0f };  // 应该是某个矩阵搞反了，剔除变成了正面
         pipelineInfo.blendState.renderTargets[0].enable = false;                                                                                     // TODO
-        pipelineInfo.colorAttachmentFormats[0]      = FORMAT_R32G32B32A32_SFLOAT;                   
+        pipelineInfo.colorAttachmentFormats[0]      = FORMAT_R32G32_SFLOAT;                   
         pipelineInfo.depthStencilState              = { COMPARE_FUNCTION_LESS_EQUAL, true, true };
         pipelineInfo.depthStencilAttachmentFormat   = FORMAT_D32_SFLOAT;
+        //pipelineInfo.viewMask                       = 0b00111111;   // 多视口
         pipeline                                    = GraphicsPipelineCache::Get()->Allocate(pipelineInfo).pipeline;    // 普通mesh的默认绘制管线
 
         pipelineInfo.vertexShader                   = clusterVertexShader.shader;
@@ -82,14 +79,14 @@ void PointShadowPass::Build(RDGBuilder& builder)
         // !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS) &&    //Surface cache有使用
         !EngineContext::Render()->IsPassEnabled(PATH_TRACING_PASS))
     {
-        pointShadowLights = EngineContext::Render()->GetLightManager()->GetPointShadowLights();
-        for(uint32_t i = 0; i < pointShadowLights.size(); i++)
+        pointShadowLights[EngineContext::ThreadPool()->ThreadFrameIndex()] = EngineContext::Render()->GetLightManager()->GetPointShadowLights();
+        for(uint32_t i = 0; i < pointShadowLights[EngineContext::ThreadPool()->ThreadFrameIndex()].size(); i++)
         {
             std::string index = " [" + std::to_string(i) + "]";
 
             RDGTextureHandle color = builder.CreateTexture("Point Shadow Color" + index)
                 .Exetent({POINT_SHADOW_SIZE, POINT_SHADOW_SIZE, 1})
-                .Format(FORMAT_R32G32B32A32_SFLOAT)
+                .Format(FORMAT_R32G32_SFLOAT)
                 .ArrayLayers(6)
                 .MipLevels(1)
                 .AllowRenderTarget()
@@ -117,23 +114,31 @@ void PointShadowPass::Build(RDGBuilder& builder)
                     {0.0f, 0.0f, 0.0f, 0.0f}, {TEXTURE_ASPECT_COLOR, 0, 1, 0, 6})
                 .DepthStencil(depth, ATTACHMENT_LOAD_OP_CLEAR, ATTACHMENT_STORE_OP_STORE, 
                     1.0f, 0, {TEXTURE_ASPECT_DEPTH, 0, 1, 0, 6})
+                //.Multiview(6)
                 .Execute([&](RDGPassContext context) {
 
                     Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
                     uint32_t index = context.passIndex[0];
-                    uint32_t pointLightID = pointShadowLights[index]->GetPointLightID();
+                    uint32_t pointLightID = pointShadowLights[EngineContext::ThreadPool()->ThreadFrameIndex()][index]->GetPointLightID();
 
                     RHICommandListRef command = context.command;      
                     command->SetGraphicsPipeline(pipeline);                                      
                     command->SetViewport({0, 0}, {POINT_SHADOW_SIZE, POINT_SHADOW_SIZE});
                     command->SetScissor({0, 0}, {POINT_SHADOW_SIZE, POINT_SHADOW_SIZE}); 
-                    command->SetDepthBias(pointShadowLights[index]->GetConstantBias(), 
-                                            pointShadowLights[index]->GetSlopeBias(), 
+                    command->SetDepthBias(pointShadowLights[EngineContext::ThreadPool()->ThreadFrameIndex()][index]->GetConstantBias(), 
+                                            pointShadowLights[EngineContext::ThreadPool()->ThreadFrameIndex()][index]->GetSlopeBias(), 
                                             0.0f);            
-                    command->PushConstants(&pointLightID, sizeof(uint32_t), SHADER_FREQUENCY_GRAPHICS);
                     command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
 
-                    meshPassProcessors[index]->Draw(command);                      
+                    for(int face = 0; face < 6; face++)
+                    {
+                        uint32_t data[2];
+                        data[0] = pointLightID;
+                        data[1] = face;
+
+                        command->PushConstants(&data, sizeof(uint32_t) * 2, SHADER_FREQUENCY_GRAPHICS);
+                        meshPassProcessor->Draw(command, index * 6 + face);    
+                    }                  
                 })
                 .OutputRead(depth)
                 .OutputRead(color)  // 手动屏障

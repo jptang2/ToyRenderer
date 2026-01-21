@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Math/BoundingBox.h"
+#include "Core/Math/Math.h"
 #include "Core/Mesh/Mesh.h"
 #include "Core/Mesh/VirtualMesh/VirtualMesh.h"
 #include "Core/Serialize/Serializable.h"
@@ -54,6 +56,7 @@ typedef struct ModelProcessSetting
     bool generateCluster = false;               // 生成Cluster
     bool generateVirtualMesh = false;           // 生成虚拟几何体
     bool cacheCluster = false;                  // 对于虚拟几何体和Cluster做缓存，只需要生成一次
+    bool forcePngTexture = false;               // 强制纹理使用.png后缀（目前不支持部分纹理格式，自己手动处理生成png文件）
 
 private:
     BeginSerailize()
@@ -65,12 +68,16 @@ private:
     SerailizeEntry(generateCluster)
     SerailizeEntry(generateVirtualMesh)
     SerailizeEntry(cacheCluster)
+    SerailizeEntry(forcePngTexture)
     EndSerailize
 
 }ModelProcessSetting;
 
 struct SubmeshData
 {
+    Mat4 transform = Mat4::Identity();                          // 模型载入时还有一个矩阵 从树的局部坐标变换到local坐标系，类似骨骼
+    Vec3 scale;                                                 // 对应的缩放向量
+
     std::shared_ptr<Mesh> mesh;                                 // CPU端的mesh和cluster信息
     std::vector<MeshClusterRef> clusters;                       // 仅生成cluster时的信息
     std::shared_ptr<VirtualMesh> virtualMesh;                   // 生成cluster + cluster group时的信息
@@ -112,8 +119,9 @@ public:
 
 protected:
     bool LoadFromFile(std::string path);
-    void ProcessNode(aiNode* node, const aiScene* scene, std::vector<aiMesh*>& processMeshes);
+    void ProcessNode(aiNode* node, const aiScene* scene, std::vector<aiMesh*>& processMeshes, aiMatrix4x4 mat);
     void ProcessMesh(aiMesh* mesh, const aiScene* scene, int index);
+    Mat4 ProcessTransform(aiMatrix4x4 mat);  
     void ExtractBoneWeights(Mesh* submesh, aiMesh* mesh, const aiScene* scene);
     std::shared_ptr<Texture> LoadMaterialTexture(aiMaterial* mat, aiTextureType type);
 

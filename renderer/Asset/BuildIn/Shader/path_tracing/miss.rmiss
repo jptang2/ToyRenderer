@@ -14,4 +14,5 @@ void main()
 	RAY_PAYLOAD.lightColor = FetchSkyLight(gl_WorldRayDirectionEXT);
     RAY_PAYLOAD.distance = MAX_RAY_TRACING_DISTANCE;
     RAY_PAYLOAD.pdf = 1.0f;
+    RAY_PAYLOAD.numBounce++;
 }

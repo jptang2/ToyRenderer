@@ -1,9 +1,11 @@
 #pragma once
 
 #include "Function/Framework/Component/PointLightComponent.h"
+#include "Function/Global/Definations.h"
 #include "Function/Render/RHI/RHIStructs.h"
 #include "MeshPass.h"
 #include "RenderPass.h"
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -20,8 +22,6 @@ public:
 	virtual std::string GetName() override final { return "Point Shadow"; }
 
     virtual PassType GetType() override final { return POINT_SHADOW_PASS; }
-
-    virtual std::vector<MeshPassProcessorRef> GetMeshPassProcessors() override final   { return meshPassProcessors; } 
 
 private:
     // pass0 阴影
@@ -46,12 +46,9 @@ private:
     RHIRootSignatureRef rootSignature1;
     RHIComputePipelineRef computePipeline;
 
-
+    std::array<std::vector<std::shared_ptr<PointLightComponent>>, FRAMES_IN_FLIGHT> pointShadowLights;
 
     friend class PointShadowPassProcessor;
-
-    std::vector<MeshPassProcessorRef> meshPassProcessors;
-    std::vector<std::shared_ptr<PointLightComponent>> pointShadowLights;
 
 private:
 	EnablePassEditourUI()

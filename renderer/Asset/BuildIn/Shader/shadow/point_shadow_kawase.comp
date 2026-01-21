@@ -5,7 +5,7 @@
 #include "../common/screen.glsl"
 
 layout(set = 0, binding = 0) uniform texture2D IN_TEX[6];
-layout(set = 0, binding = 1, rgba32f) uniform image2D OUT_TEX[6];
+layout(set = 0, binding = 1, rg32f) uniform image2D OUT_TEX[6];
 layout(set = 1, binding = 0) uniform sampler SAMPLER[];
 
 layout(push_constant) uniform kawase_setting {

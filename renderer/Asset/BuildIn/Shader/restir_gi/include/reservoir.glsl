@@ -19,9 +19,9 @@ struct GIReservoir
 	uint numStreamSamples;		// 已处理的采样总数，M 
 };
 
-uint ReservoirIndex(ivec2 pixel)
+uint ReservoirIndex(ivec2 pixel)	// 降分辨率像素到reservoir的索引
 {
-	return pixel.y * WINDOW_WIDTH / 2 + pixel.x;
+	return pixel.y * int(WINDOW_WIDTH / WIDTH_DOWNSAMPLE_RATE) + pixel.x;
 }
 
 void CleanGIReservoir(inout GIReservoir res)

@@ -11,6 +11,7 @@
 #include <imgui.h>
 #include <memory>
 #include <queue>
+#include <unordered_map>
 
 void InspectorWidget::UI()
 {
@@ -91,7 +92,23 @@ void InspectorWidget::InfoUI()
 		ImGui::SameLine();
 		if (ImGui::RadioButton("Triangle", globalSetting->clusterInspectMode == 2))
 			globalSetting->clusterInspectMode = 2;
+		ImGui::SameLine();
+		if (ImGui::RadioButton("Hybrid", globalSetting->clusterInspectMode == 3))
+			globalSetting->clusterInspectMode = 3;
 		ImGui::Separator();
+
+		ImGui::DragFloat("Ray tracing offset", &globalSetting->rayTracingOffset, 0.01f);
+
+		ImGui::Separator();
+		static bool surfaceCacheUpdate = true;
+		static bool surfaceCacheFixScale = false;
+		ImGui::Checkbox("Update surface cache", &surfaceCacheUpdate);
+		ImGui::SameLine();
+		ImGui::Checkbox("Surface cache fix scale", &surfaceCacheFixScale);
+
+		EngineContext::Render()->SetSurfaceCacheUpdate(surfaceCacheUpdate);
+		EngineContext::Render()->SetSurfaceCacheFixScale(surfaceCacheFixScale);
+
 	}
 
 	// 帧数统计
@@ -99,7 +116,7 @@ void InspectorWidget::InfoUI()
 		static std::queue<float> frameTimes;
 		static float totalFrameTime = 0.0f;
 
-		if(frameTimes.size() >= 1000)
+		if(frameTimes.size() >= 100)
 		{
 			totalFrameTime -= frameTimes.front();
 			frameTimes.pop();
@@ -119,21 +136,21 @@ void InspectorWidget::InfoUI()
 		ImGui::SeparatorText("Flame Graph");
 
 		static bool update = false;
-		static std::shared_ptr<TimeScopes> previousTimer;
+		static std::map<uint32_t, std::shared_ptr<TimeScopes>> previousTimers;
 
 		ImGui::Checkbox("Update", &update);
 		if(update)
 		{
-			previousTimer = EngineContext::GetTimeScope(EngineContext::PreviousFrameIndex());
+			previousTimers = EngineContext::GetHistoryTimeScopes();
 		}
 		ImGui::SameLine();
 		if(ImGui::Button("Update once"))
 		{
-			previousTimer = EngineContext::GetTimeScope(EngineContext::PreviousFrameIndex());
+			previousTimers = EngineContext::GetHistoryTimeScopes();
 		}
 
-		if(!previousTimer) previousTimer = EngineContext::GetTimeScope(EngineContext::PreviousFrameIndex());
-		TimerWidget::TimeScopeUI(*previousTimer.get());
+		if(previousTimers.empty()) previousTimers = EngineContext::GetHistoryTimeScopes();
+		TimerWidget::TimeScopeUI(previousTimers);
 	}
 	
 }

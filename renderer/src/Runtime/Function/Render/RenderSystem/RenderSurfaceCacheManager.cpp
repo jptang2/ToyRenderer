@@ -1,10 +1,15 @@
 #include "RenderSurfaceCacheManager.h"
+#include "Core/Event/AllEvents.h"
+#include "Core/Event/Event.h"
 #include "Core/Math/BoundingBox.h"
 #include "Core/Math/Math.h"
 #include "Core/SurfaceCache/SurfaceCache.h"
 #include "Function/Global/Definations.h"
 #include "Function/Global/EngineContext.h"
 #include "Function/Framework/Component/MeshRendererComponent.h"
+#include "Function/Render/RHI/RHIStructs.h"
+#include "Function/Render/RenderPass/RenderPass.h"
+#include "Function/Render/RenderResource/RenderStructs.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -15,13 +20,38 @@
 void RenderSurfaceCacheManager::Init()
 {
     cache = std::vector<MeshCardCache>(MAX_PER_FRAME_OBJECT_SIZE * 6 + 1); 
+    cards = std::vector<MeshCardInfo>(MAX_PER_FRAME_OBJECT_SIZE * 6 + 1); 
     sortedID = std::vector<uint32_t>(MAX_PER_FRAME_OBJECT_SIZE * 6 + 1);
     std::iota(sortedID.begin(), sortedID.end(), 0);
+
+    // 注册材质更新事件，在材质更新后要同时强制更新表面缓存
+    materialUpdateEvent = EngineContext::Event()->AddListener([this] (const std::shared_ptr<Event>& event){
+        auto eve = std::dynamic_pointer_cast<MaterialUpdateEvent>(event);
+        this->materialUpdate[eve->material->GetMaterialID()] = true;
+    }, EVENT_MATERIAL_UPDATE);
 }
 
 void RenderSurfaceCacheManager::Tick()
 {
     UpdateSurfaceCache();
+
+    for(auto& pair : materialUpdate)    // 清空材质更新状况
+        pair.second = false;
+}
+
+const std::vector<SurfaceCacheRasterizeDraw>& RenderSurfaceCacheManager::GetRasterizeDraws()               
+{ 
+    return perFrameTasks[EngineContext::ThreadPool()->ThreadFrameIndex()].rasterizeDraws; 
+}
+
+const std::vector<SurfaceCacheLightingDispatch>& RenderSurfaceCacheManager::GetDirectLightingDispatches()  
+{ 
+    return perFrameTasks[EngineContext::ThreadPool()->ThreadFrameIndex()].directLightingDispatches; 
+}
+
+const std::vector<Rect2D>& RenderSurfaceCacheManager::GetClearScissors()                                   
+{ 
+    return perFrameTasks[EngineContext::ThreadPool()->ThreadFrameIndex()].clearScissors; 
 }
 
 void RenderSurfaceCacheManager::ReleaseCache(uint32_t meshCardID)
@@ -97,7 +127,7 @@ void RenderSurfaceCacheManager::InitCache(const SurfaceCacheTask& task)
         MeshCardCache entry = {};
         entry.valid = true;
         entry.objectID = task.objectID;
-        auto& card = entry.meshCard;
+        auto& card = cards[task.meshCardID + face];
         card.viewPosition   = center.array() + extent.array() / 2 * direction[face].array();
         card.viewExtent     = Vec3(extent[viewAxis.x()], extent[viewAxis.y()], extent[viewAxis.z()]);
         card.scale          = task.scale;
@@ -107,6 +137,7 @@ void RenderSurfaceCacheManager::InitCache(const SurfaceCacheTask& task)
                                         0.0, card.viewExtent.z());
         card.proj(1, 1) *= -1;		// Vulkan的NDC是y向下                                
         //card.proj = Math::Perspective(Math::ToRadians(90.0f), 1.0f, 0.01f, card.viewExtent.z());
+        card.viewProj = card.proj * card.view;
         card.invView = card.view.inverse();
         card.invProj = card.proj.inverse();
 
@@ -116,134 +147,213 @@ void RenderSurfaceCacheManager::InitCache(const SurfaceCacheTask& task)
 
 void RenderSurfaceCacheManager::UpdateSurfaceCache()
 {
+    if(!dynamicUpdate) return;
+
     ENGINE_TIME_SCOPE(RenderSurfaceCacheManager::UpdateSurfaceCache);
 
-    // auto camera = EngineContext::World()->GetActiveScene()->GetActiveCamera();
+    auto& perFrameTask = perFrameTasks[EngineContext::ThreadPool()->ThreadFrameIndex()];
+    perFrameTask.rasterizeDraws.clear();
+    perFrameTask.clearScissors.clear();
+    perFrameTask.directLightingDispatches.clear();
+
+    if( !EngineContext::Render()->IsPassEnabled(RESTIR_GI_PASS) &&
+        !EngineContext::Render()->IsPassEnabled(SSSR_PASS) &&  
+        !EngineContext::Render()->IsPassEnabled(RAY_TRACING_BASE_PASS))
+        return; // 更新的CPU侧开销很大(没优化)，渲染没用上就不更新了
+
+    auto camera = EngineContext::World()->GetActiveScene()->GetActiveCamera();
+    Vec3 cameraPos = camera->GetPosition();
+    UVec2 padding = UVec2(SURFACE_CACHE_PADDING, SURFACE_CACHE_PADDING);
 
     // 遍历场景，获取绘制信息
     // TODO 场景的CPU端剔除
     std::vector<SurfaceCacheTask> tasks;
-    auto rendererComponents = EngineContext::World()->GetActiveScene()->GetComponents<MeshRendererComponent>();     // 场景物体
-    for(auto component : rendererComponents) component->CollectSurfaceCacheTask(tasks);
+    {
+        ENGINE_TIME_SCOPE(RenderSurfaceCacheManager::CollectTask);
+        auto rendererComponents = EngineContext::World()->GetActiveScene()->GetComponents<MeshRendererComponent>();     // 场景物体
+        for(auto& component : rendererComponents) component->CollectSurfaceCacheTask(tasks);
+    }
 
     // 在这里完成每帧内surface cache的主要操作，包括
     // 为新card分配空间、动态更新每个card所占cache分辨率、确定光栅化和光照计算的范围等
 
-    // 目前的写法等同于：在物体首次加入渲染时，根据其当时的世界空间尺寸分配一次cache，之后不做尺寸更新
-    // cache分辨率大致等于 每一米范围 ~ 8像素分辨率
-    uint32_t rasterizeBuget = MAX_SURFACE_CACHE_RASTERIZE_SIZE * MAX_SURFACE_CACHE_RASTERIZE_SIZE;
-    UVec2 padding = UVec2(SURFACE_CACHE_PADDING, SURFACE_CACHE_PADDING);
-    rasterizeDraws.clear();
-    for(auto& task : tasks) 
+    // 物体根据其世界空间尺寸以及在世界空间与相机的距离确认分辨率
     {
-        if(objectIDtoCardID.contains(task.objectID) && 
-            objectIDtoCardID[task.objectID] != task.meshCardID) 
-        {
-            ReleaseCache(task.meshCardID);                              // ID改变？ TODO 
-            objectIDtoCardID.erase(task.objectID);
-        }
-        if(!objectIDtoCardID.contains(task.objectID))    InitCache(task);    // 首次提交的数据，先初始化
-                                                                                     
-        // 1. 分配cache空间                                                 
-        for(int face = 0; face < 6; face++)
-        {
-            auto& entry = cache[task.meshCardID + face];
-            auto& range = entry.atlasRange;
-            if(!entry.valid) continue;
-            if(!range)
-            {
-                float scaleFactor = 8.0;
-                UVec2 paddedExtent = UVec2(entry.meshCard.viewExtent.x() * scaleFactor, 
-                                        entry.meshCard.viewExtent.y() * scaleFactor);    // 尺寸暂时就这样？ TODO
-                if(paddedExtent.x() * paddedExtent.y() < 512.0)  paddedExtent *= 4;         // 适当扩大一点小物体的？   TODO
-                paddedExtent += padding;
+        ENGINE_TIME_SCOPE(RenderSurfaceCacheManager::Rasterize);
 
-                range = atlas.Allocate(paddedExtent);
-                if(!range) continue;    // 分配失败
-                entry.meshCard.atlasOffset = range->offset + padding;
-                entry.meshCard.atlasExtent = range->extent - padding;
+        int32_t rasterizeBuget = MAX_SURFACE_CACHE_RASTERIZE_SIZE * MAX_SURFACE_CACHE_RASTERIZE_SIZE;
+        for(auto& task : tasks) 
+        {
+            task.forceUpdate |= materialUpdate[task.materialID];    // 材质发生更新，强制处理
+            if(!task.forceUpdate && rasterizeBuget <= 0) break;
+
+            if(objectIDtoCardID.contains(task.objectID) && 
+                objectIDtoCardID[task.objectID] != task.meshCardID) 
+            {
+                ReleaseCache(task.meshCardID);                              // ID改变？ TODO 
+                objectIDtoCardID.erase(task.objectID);
             }
 
-            EngineContext::RenderResource()->SetMeshCardInfo(entry.meshCard, task.meshCardID + face);
-        }
-        
-        // 2. 处理光栅化任务
-        if(rasterizeBuget < MIN_SURFACE_CACHE_LOD_SIZE * MIN_SURFACE_CACHE_LOD_SIZE) continue;
-        for(int face = 0; face < 6; face++)
-        {
-            auto& entry = cache[task.meshCardID + face];
-            auto& range = entry.atlasRange;
-            if(!entry.valid) continue;
-            if(!range) continue;
-            if(entry.rasterized == true) continue; 
-
-            uint32_t size = range->AllocatedSize();
-            if(rasterizeBuget > size)
+            bool initCache = !objectIDtoCardID.contains(task.objectID);
+            if(initCache) InitCache(task);                                              // 首次提交的数据，先初始化
+                                                             
+            for(int face = 0; face < 6; face++)
             {
-                rasterizeBuget -= size;
-                entry.rasterized = true;
+                auto& entry = cache[task.meshCardID + face];
+                auto& card = cards[task.meshCardID + face];
+                auto& range = entry.atlasRange;
+                auto& prevRange = entry.prevAtlasRange;
 
-                rasterizeDraws.emplace_back();
-                rasterizeDraws.back().task = task;
-                rasterizeDraws.back().task.meshCardID = task.meshCardID + face;  
-                rasterizeDraws.back().atlasOffset = range->offset + padding;
-                rasterizeDraws.back().atlasExtent = range->extent - padding;    
+                //if(!dynamicUpdate && entry.rasterized) continue;
+                
+                // 1. 分配cache空间    
+                Vec3 center = task.pos;
+                float radious = task.sphere.radius * task.scale.norm();
+                float distance = (cameraPos - center).norm() - radious;
+                int32_t scaleFactor = fmax(5.0f - fmax(distance, 0.0f) / 10.0f, 0.0f);  // 指数，每10米衰减一半
+                if(fixScale) scaleFactor = 4;
+
+                bool reallocate = range && !prevRange && 
+                    (entry.scaleFactor != scaleFactor || task.forceUpdate); // 尺寸发生变化或强制更新，且未进入更新流程
+
+                if(!entry.valid) continue;
+                if(!range || reallocate)
+                {
+                    float scale = pow(2, scaleFactor);
+                    UVec2 paddedExtent = UVec2(card.viewExtent.x() * scale, 
+                                            card.viewExtent.y() * scale);          // 尺寸暂时就这样？ TODO
+                    //if(paddedExtent.x() * paddedExtent.y() < 512.0)  paddedExtent *= 4;         // 适当扩大一点小物体的？   TODO
+                    paddedExtent += padding;
+
+                    auto newRange = atlas.Allocate(paddedExtent);       
+                    if(newRange) 
+                    {
+                        if(reallocate)   
+                        {
+                            //atlas.Release(range);     // 存储旧范围，等到新范围进行过光照计算后释放
+                            prevRange = range;
+                            range = newRange;
+
+                            card.sampleAtlasOffset = prevRange->offset + padding;
+                            card.sampleAtlasExtent = prevRange->extent - padding;
+                        }
+                        else {
+                            prevRange = nullptr;
+                            range = newRange;
+
+                            card.sampleAtlasOffset = range->offset + padding;
+                            card.sampleAtlasExtent = range->extent - padding;
+                        }
+
+                        card.atlasOffset = range->offset + padding;
+                        card.atlasExtent = range->extent - padding;
+                        entry.directLightings.clear();  // 清空光照相关数据
+                        entry.lastUpdateTick = 0;       // 标记为最久未更新
+                        entry.rasterized = false;       // 标记未光栅
+
+                        entry.scaleFactor = scaleFactor;
+                    }
+                } 
+                else continue;  // 无需进行重新光栅，跳过
+
+                // 2. 处理光栅化任务
+                if(!range) continue;
+                uint32_t size = range->AllocatedSize();
+                {
+                    rasterizeBuget -= task.forceUpdate ? 0 : size;  // 强制更新的就不算buget了？
+                    entry.rasterized = true;
+
+                    perFrameTask.rasterizeDraws.emplace_back();
+                    perFrameTask.rasterizeDraws.back().task = task;
+                    perFrameTask.rasterizeDraws.back().task.meshCardID = task.meshCardID + face;  
+                    perFrameTask.rasterizeDraws.back().atlasOffset = range->offset + padding;
+                    perFrameTask.rasterizeDraws.back().atlasExtent = range->extent - padding;    
+                }
             }
         }
     }
 
     // 3. 处理光照计算任务
     // UE使用的是以每128*128的page为基本单位进行更新，这里直接用的是card为单位 
-    EngineContext::RenderResource()->GetMeshCardReadback(readback); // 根据回读信息来做优先级队列
-    std::sort(sortedID.begin() + 1,                             // 响应速度会快不少，相应的会多一些CPU开销，UE是GPU radix sort实现的
-              sortedID.begin() + maxUsedMeshCardID * 6 + 1, 
-              [&](const uint32_t& a, const uint32_t& b) {
-        if(!cache[a].valid) return false;
-        if(!cache[b].valid) return true;
-        return  ((int)readback[a] - (int)cache[a].lastUpdateTick) >= 
-                ((int)readback[b] - (int)cache[b].lastUpdateTick);   // lastUsed - lastUpdated
-    });
-
-    uint32_t directLightingBuget = MAX_SURFACE_CACHE_DIRECT_LIGHTING_SIZE * MAX_SURFACE_CACHE_DIRECT_LIGHTING_SIZE;
-    directLightingDispatches.clear();
-    for(int i = 1; i < maxUsedMeshCardID * 6 + 1; i++)
     {
-        auto& entry = cache[sortedID[i]];
-        if(!entry.valid) continue;
+        ENGINE_TIME_SCOPE(RenderSurfaceCacheManager::SortCache);
 
-        if(directLightingBuget < SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE * SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE) break;
+        EngineContext::RenderResource()->GetMeshCardReadback(readback); // 根据回读信息来做优先级队列
+        std::sort(sortedID.begin() + 1,                             // 响应速度会快不少，UE是GPU radix sort实现的
+                sortedID.begin() + maxUsedMeshCardID + 6 + 1,        // 回读很快，但是CPU排序太慢了
+                [&](const int32_t& a, const int32_t& b) {
+            if(!cache[a].valid) return false;
+            if(!cache[b].valid) return true;
+            return  (readback[a] - cache[a].lastUpdateTick) >= 
+                    (readback[b] - cache[b].lastUpdateTick);   // lastUsed - lastUpdated
+        });
+    }
+
+    {
+        ENGINE_TIME_SCOPE(RenderSurfaceCacheManager::Lighting);
+
+        uint32_t directLightingBuget = MAX_SURFACE_CACHE_DIRECT_LIGHTING_SIZE * MAX_SURFACE_CACHE_DIRECT_LIGHTING_SIZE;
+        for(int i = 1; i < maxUsedMeshCardID + 6 + 1; i++)
         {
-            auto& range = entry.atlasRange;
-            if(!range) continue;
-            if(!entry.rasterized) continue;
-            //if(EngineContext::GetCurretTick() - entry.lastUpdateTick < 30) continue; // 也可以简单的遍历，对超过固定帧数更新一次
+            uint32_t meashCardID = sortedID[i];
+            auto& entry = cache[meashCardID];
+            auto& card = cards[meashCardID];
+            if(!entry.valid) continue;
 
-            uint32_t size = range->AllocatedSize();
-            if(directLightingBuget > size)
+            if(directLightingBuget < SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE * SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE) break;
             {
-                directLightingBuget -= size;
-                entry.lastUpdateTick = EngineContext::GetCurretTick();
+                auto& range = entry.atlasRange;
+                if(!range) continue;
+                if(!entry.rasterized) continue;
+                //if(EngineContext::GetCurretTick() - entry.lastUpdateTick < 30) continue; // 也可以简单的遍历，对超过固定帧数更新一次
 
-                if(entry.directLightings.size() == 0)
+                uint32_t size = range->AllocatedSize();
+                if(directLightingBuget > size)
                 {
-                    UVec2 tiledOffset = entry.atlasRange->TiledOffset(SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE);
-                    UVec2 tiledExtent = entry.atlasRange->TiledExtent(SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE);
-                    for(int col = 0; col < tiledExtent.x(); col++)
+                    directLightingBuget -= size;
+                    entry.lastUpdateTick = EngineContext::GetCurretTick();
+
+                    if(entry.prevAtlasRange)                    // 有旧范围数据，在新范围进行首次光照计算后就可释放了
                     {
-                        for(int row = 0; row < tiledExtent.y(); row++)
+                        Rect2D scissor = {};
+                        scissor.offset.x = (card.sampleAtlasOffset - padding).x();
+                        scissor.offset.y = (card.sampleAtlasOffset - padding).y();
+                        scissor.extent.width = (card.sampleAtlasExtent + padding).x();
+                        scissor.extent.height = (card.sampleAtlasExtent + padding).y();
+                        perFrameTask.clearScissors.push_back(scissor);  // 旧范围的GBuffer清理
+
+                        atlas.Release(entry.prevAtlasRange);
+                        entry.prevAtlasRange = nullptr;
+
+                        card.sampleAtlasOffset = range->offset + padding;
+                        card.sampleAtlasExtent = range->extent - padding;
+
+                        //EngineContext::RenderResource()->SetMeshCardInfo(card, meashCardID);  
+                    }
+
+                    if(entry.directLightings.size() == 0)
+                    {
+                        UVec2 tiledOffset = entry.atlasRange->TiledOffset(SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE);
+                        UVec2 tiledExtent = entry.atlasRange->TiledExtent(SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE);
+                        for(int col = 0; col < tiledExtent.x(); col++)
                         {
-                            entry.directLightings.emplace_back();
-                            entry.directLightings.back().meshCardID = sortedID[i]; 
-                            entry.directLightings.back().objectID = entry.objectID;
-                            entry.directLightings.back().tileOffset = tiledOffset;
-                            entry.directLightings.back().tileIndex = UVec2(col, row);   
+                            for(int row = 0; row < tiledExtent.y(); row++)
+                            {
+                                entry.directLightings.emplace_back();
+                                entry.directLightings.back().meshCardID = sortedID[i]; 
+                                entry.directLightings.back().objectID = entry.objectID;
+                                entry.directLightings.back().tileOffset = tiledOffset;
+                                entry.directLightings.back().tileIndex = UVec2(col, row);   
+                            }
                         }
                     }
+                    perFrameTask.directLightingDispatches.insert(perFrameTask.directLightingDispatches.end(), 
+                                                    entry.directLightings.begin(), 
+                                                    entry.directLightings.end());
                 }
-                directLightingDispatches.insert(directLightingDispatches.end(), 
-                                                entry.directLightings.begin(), 
-                                                entry.directLightings.end());
             }
         }
     }
+
+    EngineContext::RenderResource()->SetMeshCardInfos(cards, maxUsedMeshCardID + 6 + 1);  
 }

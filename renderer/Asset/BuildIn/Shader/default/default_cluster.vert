@@ -47,8 +47,9 @@ void main()
     if(GLOBAL_SETTING.clusterInspectMode == 0)  OUT_COLOR = color;
     if(GLOBAL_SETTING.clusterInspectMode == 1)  OUT_COLOR = inspectColors[clusterID % 7];           // cluster索引
     if(GLOBAL_SETTING.clusterInspectMode == 2)  OUT_COLOR = inspectColors[(indexOffset / 3) % 7];   // 三角面索引
+    if(GLOBAL_SETTING.clusterInspectMode == 3)  OUT_COLOR = inspectColors[clusterID % 7] * vec3(((indexOffset / 3) % 7) / 7.0f * 0.8f + 0.2f);   // 三角面索引
     
-    gl_Position = CAMERA.proj * CAMERA.view * model * pos;
+    gl_Position = CAMERA.viewProj * model * pos;
 }
 
 

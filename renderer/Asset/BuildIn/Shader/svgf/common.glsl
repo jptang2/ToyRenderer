@@ -1,15 +1,16 @@
 
-layout(set = 1, binding = 0)                uniform texture2D G_BUFFER_DIFFUSE_ROUGHNESS;	
-layout(set = 1, binding = 1)                uniform texture2D G_BUFFER_NORMAL_METALLIC;	
-layout(set = 1, binding = 2)   		        uniform texture2D HISTORY_G_BUFFER_NORMAL_METALLIC;	
+layout(set = 1, binding = 0)                uniform texture2D G_BUFFER_DIFFUSE_METALLIC;	
+layout(set = 1, binding = 1)                uniform texture2D G_BUFFER_NORMAL_ROUGHNESS;	
+layout(set = 1, binding = 2)   		        uniform texture2D HISTORY_G_BUFFER_NORMAL_ROUGHNESS;	
 //layout(set = 1, binding = 2)                uniform texture2D REPROJECTION_RESULT;	
 
-layout(set = 1, binding = 3, rgba16f) 		uniform image2D IN_OUT_DIRECT_COLOR;	
+layout(set = 1, binding = 3, rgba16f) 		uniform image2D IN_COLOR;	
+layout(set = 1, binding = 4, rgba16f) 		uniform image2D OUT_COLOR;	
 
-layout(set = 1, binding = 4) 				uniform texture2D HISTORY_MOMENTS;				// 前两维moments，第三维history length，//第四维预滤波variance
-layout(set = 1, binding = 5, rgba32f) 		uniform image2D CURRENT_MOMENTS;                 
-layout(set = 1, binding = 6) 				uniform texture2D HISTORY_COLOR_VARIANCE;		// 前三维color，第四维variance
-layout(set = 1, binding = 7, rgba16f) 		uniform image2D CURRENT_COLOR_VARIANCE[2];		// 需要pingpong	
+layout(set = 1, binding = 5) 				uniform texture2D HISTORY_MOMENTS;				// 前两维moments，第三维history length，//第四维预滤波variance
+layout(set = 1, binding = 6, rgba32f) 		uniform image2D CURRENT_MOMENTS;                 
+layout(set = 1, binding = 7) 				uniform texture2D HISTORY_COLOR_VARIANCE;		// 前三维color，第四维variance
+layout(set = 1, binding = 8, rgba16f) 		uniform image2D CURRENT_COLOR_VARIANCE[2];		// 需要pingpong	
 
 layout(push_constant) uniform SVGFSetting 
 {
@@ -23,6 +24,7 @@ layout(push_constant) uniform SVGFSetting
     float alpha;
     int mode;
 
+    int denoisedOnly;
     int disocclusionFix;
     int antiFirefly;
     int historyClamp;

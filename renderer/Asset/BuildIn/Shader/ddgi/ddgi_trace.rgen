@@ -79,7 +79,7 @@ void main()
 	// if(RAY_PAYLOAD.dist < tmax) AddGizmoLine(origin, origin + direction * RAY_PAYLOAD.dist, RAY_PAYLOAD.diffuse);	// 可视化trace路径
 
 	imageStore(G_BUFFER_POSITION,	 		pixel, vec4(direction, RAY_PAYLOAD.dist)); 
-	imageStore(G_BUFFER_NORMAL_METALLIC, 	pixel, RAY_PAYLOAD.normal);
-	imageStore(G_BUFFER_DIFFUSE_ROUGHNESS, 	pixel, RAY_PAYLOAD.diffuse);
+	imageStore(G_BUFFER_NORMAL_ROUGHNESS, 	pixel, RAY_PAYLOAD.normal);
+	imageStore(G_BUFFER_DIFFUSE_METALLIC, 	pixel, RAY_PAYLOAD.diffuse);
 	imageStore(G_BUFFER_EMISSION, 			pixel, RAY_PAYLOAD.emission);
 }

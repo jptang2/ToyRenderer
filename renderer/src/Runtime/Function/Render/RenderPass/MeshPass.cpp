@@ -14,17 +14,24 @@
 
 uint32_t MeshPassProcessor::globalClusterOffset = 0;
 
-std::shared_ptr<MeshPassIndirectBuffers> MeshPassProcessor::GetIndirectBuffers()                                   
+const std::vector<std::shared_ptr<MeshPassIndirectBuffers>>& MeshPassProcessor::GetIndirectBuffers()                                   
 { 
-    return indirectBuffers[EngineContext::CurrentFrameIndex()]; 
+    return indirectBuffers[EngineContext::ThreadPool()->ThreadFrameIndex()]; 
 }
 
-void MeshPassProcessor::Init()
+void MeshPassProcessor::AddDrawCommand(const DrawCommand& drawCommand, uint32_t passIndex)                         
 { 
+    drawCommands[EngineContext::ThreadPool()->ThreadFrameIndex()][passIndex].emplace_back(drawCommand); 
+}
+
+void MeshPassProcessor::Init(uint32_t multiPass)
+{ 
+    this->multiPass = multiPass;
     for(auto& indirectBuffer : indirectBuffers)
     {
-        if(indirectBuffer == nullptr) 
-        indirectBuffer = std::make_shared<MeshPassIndirectBuffers>(); 
+        indirectBuffer.clear();
+        for(int i = 0; i < multiPass; i++)
+            indirectBuffer.push_back(std::make_shared<MeshPassIndirectBuffers>()); 
     }
 }
 
@@ -34,12 +41,14 @@ void MeshPassProcessor::Process(const std::vector<DrawBatch>& drawBatches)
 
     batches.clear();
     drawGeometries.clear();
-    drawCommands.clear();
+    drawCommands[EngineContext::ThreadPool()->ThreadFrameIndex()].clear();
     meshDrawCommand.clear();
     meshDrawInfo.clear();
     clusterDrawCommand.clear();
     clusterDrawInfo.clear();
     clusterGroupDrawInfo.clear();
+
+    drawCommands[EngineContext::ThreadPool()->ThreadFrameIndex()].resize(multiPass);
 
     for(auto& batch : drawBatches)
     {
@@ -64,22 +73,6 @@ void MeshPassProcessor::Process(const std::vector<DrawBatch>& drawBatches)
         }
     }
 
-    // 填写cluster的间接绘制命令
-    // 由于所有绘制指令里的索引最后指向同一个全局缓冲，需要计算全局的偏移
-    uint32_t globalClusterOffset = MeshPassProcessor::GetGlobalClusterOffset();
-    uint32_t localClusterOffset = 0;
-    for(uint32_t i = 0; i < pipelineIndex; i++)
-    {
-        clusterDrawCommand.push_back({
-            .vertexCount = CLUSTER_TRIANGLE_SIZE * 3,
-            .instanceCount = 0,
-            .firstVertex = 0,
-            .firstInstance = globalClusterOffset + localClusterOffset
-        });
-        localClusterOffset += clusterCount[i];
-    }
-    MeshPassProcessor::AddGlobalClusterOffset(localClusterOffset);
-
     // 将准备好的全部数据提交给GPU端
     IndirectSetting meshDrawSetting = {
         .processSize = (uint32_t)meshDrawInfo.size(),
@@ -88,11 +81,6 @@ void MeshPassProcessor::Process(const std::vector<DrawBatch>& drawBatches)
         .frustumCull = 0,
         .occlusionCull = 0
     };
-    auto buffers = GetIndirectBuffers();
-    buffers->meshDrawDataBuffer.SetData(&meshDrawSetting, sizeof(IndirectSetting), 0);
-    buffers->meshDrawDataBuffer.SetData(meshDrawInfo.data(), meshDrawInfo.size() * sizeof(IndirectMeshDrawInfo), sizeof(IndirectSetting));
-    buffers->meshDrawCommandBuffer.SetData(meshDrawCommand.data(), meshDrawCommand.size() * sizeof(RHIIndirectCommand), 0);
-
     IndirectSetting clusterDrawSetting = {
         .processSize = (uint32_t)clusterDrawInfo.size(),
         .pipelineStateSize = pipelineIndex,
@@ -100,10 +88,6 @@ void MeshPassProcessor::Process(const std::vector<DrawBatch>& drawBatches)
         .frustumCull = 0,
         .occlusionCull = 0
     };
-    buffers->clusterDrawDataBuffer.SetData(&clusterDrawSetting, sizeof(IndirectSetting), 0);
-    buffers->clusterDrawDataBuffer.SetData(clusterDrawInfo.data(), clusterDrawInfo.size() * sizeof(IndirectClusterDrawInfo), sizeof(IndirectSetting));
-    buffers->clusterDrawCommandBuffer.SetData(clusterDrawCommand.data(), clusterDrawCommand.size() * sizeof(RHIIndirectCommand), 0);
-
     IndirectSetting clusterGroupDrawSetting = {
         .processSize = (uint32_t)clusterGroupDrawInfo.size(),
         .pipelineStateSize = pipelineIndex,
@@ -111,15 +95,49 @@ void MeshPassProcessor::Process(const std::vector<DrawBatch>& drawBatches)
         .frustumCull = 0,
         .occlusionCull = 0
     };
-    buffers->clusterGroupDrawDataBuffer.SetData(&clusterGroupDrawSetting, sizeof(IndirectSetting), 0);
-    buffers->clusterGroupDrawDataBuffer.SetData(clusterGroupDrawInfo.data(), clusterGroupDrawInfo.size() * sizeof(IndirectClusterGroupDrawInfo), sizeof(IndirectSetting));
+    processSizes[0] = meshDrawInfo.size();
+    processSizes[1] = clusterGroupDrawInfo.size();
+    processSizes[2] = clusterDrawInfo.size() + clusterGroupDrawInfo.size() * CLUSTER_GROUP_SIZE;
+
+    auto& passBuffers = GetIndirectBuffers();
+    for(auto& buffers : passBuffers)
+    {
+        // 填写cluster的间接绘制命令
+        // 由于所有绘制指令里的索引最后指向同一个全局缓冲，需要计算全局的偏移
+        uint32_t globalClusterOffset = MeshPassProcessor::GetGlobalClusterOffset();
+        uint32_t localClusterOffset = 0;
+        clusterDrawCommand.clear();
+        for(uint32_t i = 0; i < pipelineIndex; i++)
+        {
+            clusterDrawCommand.push_back({
+                .vertexCount = CLUSTER_TRIANGLE_SIZE * 3,
+                .instanceCount = 0,
+                .firstVertex = 0,
+                .firstInstance = globalClusterOffset + localClusterOffset
+            });
+            localClusterOffset += clusterCount[i];
+        }
+        MeshPassProcessor::AddGlobalClusterOffset(localClusterOffset);
+
+
+        buffers->meshDrawDataBuffer.SetData(&meshDrawSetting, sizeof(IndirectSetting), 0);
+        buffers->meshDrawDataBuffer.SetData(meshDrawInfo.data(), meshDrawInfo.size() * sizeof(IndirectMeshDrawInfo), sizeof(IndirectSetting));
+        buffers->meshDrawCommandBuffer.SetData(meshDrawCommand.data(), meshDrawCommand.size() * sizeof(RHIIndirectCommand), 0);
+
+        buffers->clusterDrawDataBuffer.SetData(&clusterDrawSetting, sizeof(IndirectSetting), 0);
+        buffers->clusterDrawDataBuffer.SetData(clusterDrawInfo.data(), clusterDrawInfo.size() * sizeof(IndirectClusterDrawInfo), sizeof(IndirectSetting));
+        buffers->clusterDrawCommandBuffer.SetData(clusterDrawCommand.data(), clusterDrawCommand.size() * sizeof(RHIIndirectCommand), 0);
+
+        buffers->clusterGroupDrawDataBuffer.SetData(&clusterGroupDrawSetting, sizeof(IndirectSetting), 0);
+        buffers->clusterGroupDrawDataBuffer.SetData(clusterGroupDrawInfo.data(), clusterGroupDrawInfo.size() * sizeof(IndirectClusterGroupDrawInfo), sizeof(IndirectSetting));
+    }
 
     // ENGINE_LOG_INFO("Mesh pass processor process size: {} {} {}", meshDrawInfo.size(), clusterDrawInfo.size(), clusterGroupDrawInfo.size());
 }
 
-void MeshPassProcessor::Draw(RHICommandListRef command)
+void MeshPassProcessor::Draw(RHICommandListRef command, uint32_t passIndex)
 {
-    for(auto& drawCommand : drawCommands)
+    for(auto& drawCommand : drawCommands[EngineContext::ThreadPool()->ThreadFrameIndex()][passIndex])
     {
         command->SetGraphicsPipeline(drawCommand.pipeline);
 
@@ -199,18 +217,16 @@ void MeshPassProcessor::OnBuildDrawCommands(
     RHIGraphicsPipelineRef pipeline, 
     const std::vector<DrawGeometryInfo>& geometries)
 {
-    auto buffers = GetIndirectBuffers();
-
     DrawCommand drawCommand = {
         .pipeline = pipeline,
 
         .meshCommandRange = { (uint32_t)meshDrawCommand.size(), 0 },    // 下面填size
         .meshCommandOffset = 0,
-        .indirectMeshCommandBuffer = buffers->meshDrawCommandBuffer.buffer,
+        //.indirectMeshCommandBuffer = buffers->meshDrawCommandBuffer.buffer,
 
         .clusterCommandRange = { pipelineIndex, 1 },                    // 一个管线状态的cluster共用一个command
         .clusterCommandOffset = 0,
-        .indirectClusterCommandBuffer = buffers->clusterDrawCommandBuffer.buffer
+        //.indirectClusterCommandBuffer = buffers->clusterDrawCommandBuffer.buffer,
     };
 
     clusterCount[pipelineIndex] = 0; 
@@ -270,6 +286,12 @@ void MeshPassProcessor::OnBuildDrawCommands(
     }
     drawCommand.meshCommandRange.size = meshCount;  //每个mesh一个command
 
-    AddDrawCommand(drawCommand);
+    auto& indirectBuffers = GetIndirectBuffers();
+    for(int i = 0; i < indirectBuffers.size(); i++)
+    {
+        drawCommand.indirectMeshCommandBuffer = indirectBuffers[i]->meshDrawCommandBuffer.buffer;
+        drawCommand.indirectClusterCommandBuffer = indirectBuffers[i]->clusterDrawCommandBuffer.buffer;
+        AddDrawCommand(drawCommand, i);
+    }
 }
 

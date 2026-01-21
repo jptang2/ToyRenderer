@@ -66,6 +66,8 @@ void main()
     float roughness     = FetchRoughness(material, texCoord);
     float metallic      = FetchMetallic(material, texCoord);
 
+    if(material.useVertexColor != 0)
+        diffuse.xyz *= color.xyz;
 
     // 光照参数计算 //////////////////////////////////
     
@@ -73,6 +75,7 @@ void main()
 
 	vec3 N          = normalize(normal);                        //法线
 	vec3 V          = normalize(-gl_WorldRayDirectionEXT);	    //视线，此处是递归的出射方向
+    float NoV       = saturate(dot(N, V)); 
 
     // 间接光照 //////////////////////////////////
     vec3 throughput = vec3(0.0f);
@@ -81,16 +84,26 @@ void main()
     {
         vec2 seed = vec2(RandFloat(RAY_PAYLOAD.rand), RandFloat(RAY_PAYLOAD.rand));
         
-        // vec4 newSample     = CosineSampleHemisphere(seed);                   // 余弦采样
-        // vec3 L             = normalize(TangentToWorld(newSample1.xyz, N));     
-        // float pdf          = newSample1.w;
+        if(RandFloat(RAY_PAYLOAD.rand) > 0.5f)  // TODO
+        {
+            // vec4 newSample          = CosineSampleHemisphere(seed);                   // 余弦采样
+            // L                       = normalize(TangentToWorld(newSample.xyz, N));     
+            // pdf                     = newSample.w;
 
-        vec4 newSample      = ImportanceSampleGGX(seed, a2);                    // 重要性采样
-        vec3 H              = normalize(TangentToWorld(newSample.xyz, N));      // 半程向量
-        float HPDF          = newSample.w;
-        float VoH           = saturate(dot(V, H));
-        pdf                 = RayPDFToReflectionRayPDF(VoH, HPDF);
-        L                   = normalize(2.0 * dot(V, H) * H - V);               // 采样的光源入射方向
+            vec4 newSample      = UniformSampleHemisphere(seed);     	                // 半球均匀采样
+            L                   = normalize(TangentToWorld(newSample.xyz, N));     
+            pdf                 = newSample.w;								            // proposel PDF, 1 / (2 * PI)
+
+        }
+        else 
+        {
+            vec4 newSample      = ImportanceSampleGGX(seed, a2);                    // 重要性采样
+            vec3 H              = normalize(TangentToWorld(newSample.xyz, N));      // 半程向量
+            float HPDF          = newSample.w;
+            float VoH           = saturate(dot(V, H));
+            pdf                 = RayPDFToReflectionRayPDF(VoH, HPDF);
+            L                   = normalize(2.0 * dot(V, H) * H - V);               // 采样的光源入射方向
+        }
 
         // 应该和这个的pdf是相同的
         // float D = D_GGX( a2,  NoH );
@@ -99,12 +112,14 @@ void main()
         float NoL = saturate(dot(N, L));      
         vec3 radiance = vec3(1.0f) * NoL; 
         
-        vec3 f_r = ResolveBRDF(diffuse.xyz, roughness, metallic, N, V, L);
+        BRDFData data = ResolveBRDF(diffuse.xyz, roughness, metallic, N, V, L);
+        vec3 f_r = data.diffuse + data.specular;
+        if(SETTING.diffuseOnly > 0) f_r = data.diffuse;
 
         throughput += f_r * radiance;
 
-        if(NoL <= 0.0f) pdf = 0.0f;  // 终止 
-    }
+        if(NoL <= 0.0f || NoV <= 0) pdf = 0.0f;  // 终止，生成的新路径在表面以下
+    }                                            // 可能会因为模型法线错误导致一些问题
 
     // 直接光照 //////////////////////////////////   
     // NEE
@@ -130,11 +145,12 @@ void main()
     // 自发光 //////////////////////////////////
     lightColor += emission;
 
-
+    if(NoV <= 0) lightColor = vec3(0.0f);   // trace到背面了
 
     RAY_PAYLOAD.throughput = throughput;
 	RAY_PAYLOAD.lightColor = lightColor;
     RAY_PAYLOAD.distance = gl_HitTEXT; 
     RAY_PAYLOAD.pdf = pdf;
     RAY_PAYLOAD.reflectDir = L;
+    RAY_PAYLOAD.numBounce++;
 }

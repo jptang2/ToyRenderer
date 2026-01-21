@@ -3,20 +3,20 @@
 
 #if(ENABLE_RAY_TRACING != 0)
 
-bool RayQueryVisibility(vec3 from, vec3 to) 
+bool RayQueryVisibility(vec3 from, vec3 to, float minDist) 
 {
 	float tmin = MIN_RAY_TRACING_DISTANCE;
     //float tmax = MAX_RAY_TRACING_DISTANCE;  
-	float tmax = length(to - from);
+	float tmax = max(length(to - from) - minDist - 1e-3, tmin);
 	vec3 dir = normalize(to - from);
 
     rayQueryEXT query;
     rayQueryInitializeEXT(
         query, 
         TLAS, 
-        gl_RayFlagsTerminateOnFirstHitEXT, 
+        gl_RayFlagsOpaqueEXT,  // gl_RayFlagsCullBackFacingTrianglesEXT gl_RayFlagsTerminateOnFirstHitEXT?
         0xFF, 
-        from, 
+        from + dir * minDist, 
         tmin, 
         dir, 
         tmax);
@@ -27,7 +27,7 @@ bool RayQueryVisibility(vec3 from, vec3 to)
     if (rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT)
     {
         //dist = rayQueryGetIntersectionTEXT(query, true);
-        return true;
+        return true;    //命中物体
     }
 
     // return dist < tmax;
@@ -36,6 +36,7 @@ bool RayQueryVisibility(vec3 from, vec3 to)
 
 bool RayQueryHitObject(
     vec3 from, vec3 to, 
+    float minDist,
     out uint objectID, 
     out vec4 worldPos, 
     out vec3 worldNormal) 
@@ -46,16 +47,16 @@ bool RayQueryHitObject(
 
 	float tmin = MIN_RAY_TRACING_DISTANCE;
     //float tmax = MAX_RAY_TRACING_DISTANCE;  
-	float tmax = length(to - from);
+	float tmax = max(length(to - from) - minDist - 1e-3, tmin);
 	vec3 dir = normalize(to - from);
 
     rayQueryEXT query;
     rayQueryInitializeEXT(
         query, 
         TLAS, 
-        gl_RayFlagsOpaqueEXT, 
+        gl_RayFlagsOpaqueEXT, // gl_RayFlagsCullBackFacingTrianglesEXT gl_RayFlagsTerminateOnFirstHitEXT?
         0xFF, 
-        from, 
+        from + dir * minDist, 
         tmin, 
         dir, 
         tmax);
@@ -64,7 +65,7 @@ bool RayQueryHitObject(
 
     if (rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT)
     {
-
+        float dist          = rayQueryGetIntersectionTEXT(query, true);
         vec2 hitAttribute   = rayQueryGetIntersectionBarycentricsEXT(query, true);
         objectID            = rayQueryGetIntersectionInstanceCustomIndexEXT(query, true);
         uint triangleID    	= rayQueryGetIntersectionPrimitiveIndexEXT(query, true);
@@ -74,7 +75,10 @@ bool RayQueryHitObject(
         uvec3 index         = FetchTriangleIndex(objectID, triangleID, barycentrics);
         vec4 pos            = FetchTrianglePos(objectID, index, barycentrics);
         worldNormal         = FetchWorldNormal(FetchTriangleNormal(objectID, index, barycentrics), model);
-        worldPos            = model * pos;
+        // worldPos            = model * pos;   // 不太准
+
+        worldPos.xyz        = from + dir * (minDist + dist);
+        worldPos.w          = 1.0f;
 
         return true;
     }

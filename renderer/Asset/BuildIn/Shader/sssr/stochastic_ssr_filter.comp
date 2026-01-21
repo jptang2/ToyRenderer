@@ -60,16 +60,12 @@ void main() {
         float blendWeight   = saturate(SETTING.filterBlend);
         finalColor          = Lerp(currentColor.xyz, historyColor.xyz, blendWeight);
     }
-
-
     screenColor += finalColor;
 
     vec4 traceResult = imageLoad(SSSR_HIT_RESULT, ivec2(tracePixel.xy));
     if(SETTING.visualizeHitUV != 0)     screenColor = vec3(traceResult.xy, 0.0f);
     if(SETTING.visualizeHitMask != 0)   screenColor = vec3(traceResult.www);
 
-    imageStore(OUT_COLOR,       ivec2(pixel.xy), vec4(screenColor, 1.0));
     imageStore(SSSR_HISTORY,    ivec2(pixel.xy), vec4(finalColor, 1.0));
-
-    imageStore(OUT_COLOR,       ivec2(pixel.xy), vec4(currentColor + screenColor.xyz, 1.0));
+    imageStore(OUT_COLOR,       ivec2(pixel.xy), vec4(screenColor.xyz, 1.0));
 }

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Platform/HAL/CriticalSection.h"
+#include "Platform/HAL/Mutex.h"
 #include "Platform/HAL/RunnableThread.h"
 #include "Platform/HAL/Semaphore.h"
-#include "Platform/HAL/Event.h"
+#include "Platform/HAL/SyncEvent.h"
 
 class WindowsPlatformProcess
 {
@@ -13,13 +13,15 @@ public:
 
     static void Sleep(float seconds);
 
+    static uint32_t GetThreadID();
+
     //信号量 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-	static SemaphoreRef CreateSemaphore();
+	static SemaphoreRef CreateSemaphore(uint32_t maxCount = 0);
 
     //事件 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-    static EventRef CreateSyncEvent(bool manualReset);
+    static SyncEventRef CreateSyncEvent(bool manualReset);
 
     //临界区 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-    static CriticalSectionRef CreateCriticalSection();	
+    static MutexRef CreateMutex();	
 };
 

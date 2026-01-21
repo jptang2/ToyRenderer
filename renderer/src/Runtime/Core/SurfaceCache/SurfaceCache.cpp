@@ -91,7 +91,7 @@ SurfaceAtlasRangeRef SurfaceAtlas::AllocateInternal(UVec2 targetExtent, uint32_t
         UnusedAtlasBlock* block = blocks[lod][line];
         while(block)
         {
-            if(block->blockCount >= targetBlockCount)
+            if(block->blockCount >= targetBlockCount)   // 尺寸足够
             {
                 SurfaceAtlasRangeRef allocate = std::make_shared<SurfaceAtlasRange>();
                 allocate->offset = BlockOffset(block, lod, line);
@@ -103,9 +103,16 @@ SurfaceAtlasRangeRef SurfaceAtlas::AllocateInternal(UVec2 targetExtent, uint32_t
 
                 if(block->blockCount == targetBlockCount) 
                 {
-                    if(block->previous) block->previous->next = block->next;
-                    if(block->next)     block->next->previous = block->previous;
-                    if(block == blocks[lod][line]) blocks[lod][line] = nullptr;
+                    if(block == blocks[lod][line]) 
+                    {
+                        blocks[lod][line] = block->next;
+                        if(block->next) block->next->previous = nullptr;
+                    }
+                    else
+                    {
+                        if(block->previous) block->previous->next = block->next;
+                        if(block->next)     block->next->previous = block->previous;
+                    }
                     delete block;
                     return allocate;
                 }
@@ -139,7 +146,7 @@ void SurfaceAtlas::Release(SurfaceAtlasRangeRef range)
     {
         while(true)
         {
-            if(iter->blockOffset > range->blockOffset)  
+            if(iter->blockOffset > range->blockOffset)  // 找到首个更靠后的块
             {
                 if(iter->previous) 
                 {
@@ -147,17 +154,21 @@ void SurfaceAtlas::Release(SurfaceAtlasRangeRef range)
                     iter->previous->next = block;
                 }
                 else 
+                {
+                    iter->previous = block;
                     blocks[lod][line] = block;
-
+                }
+                
                 block->next = iter;
                 iter->previous = block;
                 MergeBlock(block, lod, line);
                 CleanUpRange(range);
                 return;
             }
-            if(iter->next) iter = iter->next;
+            else if(iter->next) iter = iter->next;  // 向后寻找
             else {
                 iter->next = block;
+                block->previous = iter;
                 MergeBlock(block, lod, line);
                 CleanUpRange(range);
                 return;
@@ -176,6 +187,7 @@ void SurfaceAtlas::MergeBlock(UnusedAtlasBlock* block, uint32_t lod, uint32_t li
     UnusedAtlasBlock* previous = block->previous;
     UnusedAtlasBlock* next = block->next;
 
+    // 每次合并最多只需考虑前一块和后一块
     if(previous && previous->blockOffset + previous->blockCount == block->blockOffset)
     {
         previous->blockCount += block->blockCount;
@@ -197,7 +209,10 @@ void SurfaceAtlas::MergeBlock(UnusedAtlasBlock* block, uint32_t lod, uint32_t li
         next->previous = previous;
         if(previous) previous->next = next;
         else 
+        {
             blocks[lod][line] = next;
+            next->previous = nullptr;
+        }    
 
         delete block;
     }

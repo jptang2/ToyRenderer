@@ -1,8 +1,10 @@
 #pragma once
 
 #include "Function/Framework/Component/VolumeLightComponent.h"
+#include "Function/Global/Definations.h"
 #include "Function/Render/RHI/RHIStructs.h"
 #include "RenderPass.h"
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -37,7 +39,7 @@ private:
     RHIRayTracingPipelineRef rayTracingPipeline;
 	RHIComputePipelineRef computePipeline[5];
 
-	std::vector<std::shared_ptr<VolumeLightComponent>> volumeLights;
+	std::array<std::vector<std::shared_ptr<VolumeLightComponent>>, FRAMES_IN_FLIGHT> volumeLights;
 
 	EnablePassEditourUI()
 };

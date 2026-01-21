@@ -35,7 +35,7 @@ void DirectionalLightComponent::OnUpdate(float deltaTime)
 		if (updateCnts[i] >= updateFrequences[i]) updateCnts[i] = 0;
 	}
 
-	// UpdateLightInfo();
+	//UpdateLightInfo();
 }
 
 void DirectionalLightComponent::UpdateMatrix()
@@ -107,7 +107,8 @@ void DirectionalLightComponent::UpdateCascades()
 
 		// Project frustum corners into world space
 		// 将相机视线台体的八个顶点转到世界空间
-		Mat4 invCam = (camera->GetProjectionMatrix() * camera->GetViewMatrix()).inverse();
+		Mat4 invCam = camera->GetInvViewProjectionMatrix();
+		Mat4 fuck = invCam.inverse();
 		for (uint32_t j = 0; j < 8; j++) 
 		{
 			Vec4 invCorner = invCam * Vec4(frustumCorners[j].x(), frustumCorners[j].y(), frustumCorners[j].z(), 1.0f);
@@ -138,13 +139,14 @@ void DirectionalLightComponent::UpdateCascades()
 			radius = std::max(radius, distance); 
 		}
 		radius = std::ceil(radius * 16.0f) / 16.0f;
+		float offset = 30.0f;	// 把视锥往天上再退一点，背后的场景不在视锥里也有阴影
 
 		Vec3 maxExtents = Vec3::Constant(radius);
 		Vec3 minExtents = -maxExtents;
 
 		Vec3 lightDir = front.normalized();
-		Mat4 lightViewMatrix = Math::LookAt(frustumCenter - lightDir * radius, frustumCenter, Vec3(0.0f, 1.0f, 0.0f));
-		Mat4 lightOrthoMatrix = Math::Ortho(minExtents.x(), maxExtents.x(), minExtents.y(), maxExtents.y(), 0.0f, maxExtents.z() - minExtents.z());
+		Mat4 lightViewMatrix = Math::LookAt(frustumCenter - lightDir * (radius + offset), frustumCenter, Vec3(0.0f, 1.0f, 0.0f));
+		Mat4 lightOrthoMatrix = Math::Ortho(minExtents.x(), maxExtents.x(), minExtents.y(), maxExtents.y(), 0.0f, maxExtents.z() - minExtents.z() + offset);
 		lightOrthoMatrix(1, 1) *= -1;		// Vulkan的NDC是y向下
 
 		// 最后存储各种信息，只有当即将被更新阴影贴图时才会写入数据
@@ -153,6 +155,7 @@ void DirectionalLightComponent::UpdateCascades()
 			lightInfos[i].depth = (camera->GetNear() + splitDist * clipRange);
 			lightInfos[i].view = lightViewMatrix;
 			lightInfos[i].proj = lightOrthoMatrix;
+			lightInfos[i].viewProj = lightOrthoMatrix * lightViewMatrix;
 			lightInfos[i].pos = TryGetComponent<TransformComponent>()->GetPosition();
 			lightInfos[i].color = color;
             lightInfos[i].intencity = intencity;

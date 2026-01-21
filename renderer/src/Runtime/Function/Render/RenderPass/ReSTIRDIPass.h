@@ -74,6 +74,7 @@ private:
         float spatialNormalThreshold = 45.0f;
         float spatialRadius = 30.0f;                // 空域采样像素半径
 
+        uint32_t combineMode = 0;                   // 立即合并/降噪后合并
         uint32_t visibilityReuse = 1;               // 开启可见性测试
         uint32_t temporalReuse = 1;                 // 开启时域重用
         uint32_t spatialReuse = 1;                  // 开启空域重用
@@ -100,5 +101,5 @@ private:
     };
 
     Buffer<RestirDISetting> restirSettingBuffer;
-    ArrayBuffer<DIReservoir, WINDOW_WIDTH * WINDOW_HEIGHT> reservoirsBuffer[FRAMES_IN_FLIGHT] = {};
+    ArrayBuffer<DIReservoir, WINDOW_WIDTH * WINDOW_HEIGHT> reservoirsBuffer[3] = {};
 };

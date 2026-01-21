@@ -19,14 +19,15 @@ void SVGFPass::Init()
 
     RHIRootSignatureInfo rootSignatureInfo = {};
     rootSignatureInfo.AddEntry(EngineContext::RenderResource()->GetPerFrameRootSignature()->GetInfo())
-                     .AddEntry({1, 0, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // G_BUFFER_DIFFUSE_ROUGHNESS
-                     .AddEntry({1, 1, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // G_BUFFER_NORMAL_METALLIC
-                     .AddEntry({1, 2, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // HISTORY_G_BUFFER_NORMAL_METALLIC
-                     .AddEntry({1, 3, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // IN_OUT_DIRECT_COLOR
-                     .AddEntry({1, 4, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // HISTORY_MOMENTS
-                     .AddEntry({1, 5, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // CURRENT_MOMENTS
-                     .AddEntry({1, 6, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // HISTORY_COLOR_VARIANCE
-                     .AddEntry({1, 7, 2, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // CURRENT_COLOR_VARIANCE[2]
+                     .AddEntry({1, 0, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // G_BUFFER_DIFFUSE_METALLIC
+                     .AddEntry({1, 1, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // G_BUFFER_NORMAL_ROUGHNESS
+                     .AddEntry({1, 2, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // HISTORY_G_BUFFER_NORMAL_ROUGHNESS
+                     .AddEntry({1, 3, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // IN_COLOR
+                     .AddEntry({1, 4, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // OUT_COLOR
+                     .AddEntry({1, 5, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // HISTORY_MOMENTS
+                     .AddEntry({1, 6, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // CURRENT_MOMENTS
+                     .AddEntry({1, 7, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // HISTORY_COLOR_VARIANCE
+                     .AddEntry({1, 8, 2, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // CURRENT_COLOR_VARIANCE[2]
                      .AddPushConstant({128, SHADER_FREQUENCY_COMPUTE});
     rootSignature = backend->CreateRootSignature(rootSignatureInfo);
 
@@ -80,13 +81,17 @@ void SVGFPass::Build(RDGBuilder& builder)
          EngineContext::Render()->IsPassEnabled(RESTIR_GI_PASS)) &&
         !EngineContext::Render()->IsPassEnabled(PATH_TRACING_PASS))
     {
+        setting.denoisedOnly = (EngineContext::Render()->IsPassEnabled(RESTIR_DI_PASS) || denoisedOnly) ? 1 : 0;   
+        // 开启DI后，deferred流程被禁用，因此Mesh Pass Out Color里无可用数据
+
         Extent2D windowExtent = EngineContext::Render()->GetWindowsExtent();
 
-        RDGTextureHandle diffuse         = builder.GetTexture("G-Buffer Diffuse/Roughness");
-        RDGTextureHandle normal          = builder.GetTexture("G-Buffer Normal/Metallic");
-        RDGTextureHandle historyNormal   = builder.GetTexture("History G-Buffer Normal/Metallic");
+        RDGTextureHandle diffuse         = builder.GetTexture("G-Buffer Diffuse/Metallic");
+        RDGTextureHandle normal          = builder.GetTexture("G-Buffer Normal/Roughness");
+        RDGTextureHandle historyNormal   = builder.GetTexture("History G-Buffer Normal/Roughness");
         //RDGTextureHandle reprojectionOut = builder.GetTexture("Reprojection Out");
-        RDGTextureHandle inOutColor      = builder.GetTexture("Mesh Pass Out Color");
+        RDGTextureHandle inColor        = builder.GetTexture("ReSTIR Diffuse Color");
+        RDGTextureHandle outColor      = builder.GetTexture("Mesh Pass Out Color");
 
         RDGTextureHandle historyMoments = builder.CreateTexture("SVGF History Moments/History Length")
             .Import(historyMomentsTex, RESOURCE_STATE_UNDEFINED)
@@ -128,12 +133,13 @@ void SVGFPass::Build(RDGBuilder& builder)
             .Read(1, 0, 0, diffuse)
             .Read(1, 1, 0, normal)
             .Read(1, 2, 0, historyNormal)
-            .ReadWrite(1, 3, 0, inOutColor)
-            .Read(1, 4, 0, historyMoments)
-            .ReadWrite(1, 5, 0, currentMoments)
-            .Read(1, 6, 0, historyColor)
-            .ReadWrite(1, 7, 0, currentColor0)
-            .ReadWrite(1, 7, 1, currentColor1)
+            .ReadWrite(1, 3, 0, inColor)
+            .ReadWrite(1, 4, 0, outColor)
+            .Read(1, 5, 0, historyMoments)
+            .ReadWrite(1, 6, 0, currentMoments)
+            .Read(1, 7, 0, historyColor)
+            .ReadWrite(1, 8, 0, currentColor0)
+            .ReadWrite(1, 8, 1, currentColor1)
             .Execute([&](RDGPassContext context) {       
 
                 RHICommandListRef command = context.command; 
@@ -141,8 +147,8 @@ void SVGFPass::Build(RDGBuilder& builder)
                 command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
                 command->BindDescriptorSet(context.descriptors[1], 1);
                 command->PushConstants(&setting, sizeof(SVGFSetting), SHADER_FREQUENCY_COMPUTE);
-                command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                    EngineContext::Render()->GetWindowsExtent().height / 16, 
+                command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                    Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                     1);
             })
             .Finish();
@@ -153,12 +159,13 @@ void SVGFPass::Build(RDGBuilder& builder)
             .Read(1, 0, 0, diffuse)
             .Read(1, 1, 0, normal)
             .Read(1, 2, 0, historyNormal)
-            .ReadWrite(1, 3, 0, inOutColor)
-            .Read(1, 4, 0, historyMoments)
-            .ReadWrite(1, 5, 0, currentMoments)
-            .Read(1, 6, 0, historyColor)
-            .ReadWrite(1, 7, 0, currentColor0)
-            .ReadWrite(1, 7, 1, currentColor1)
+            .ReadWrite(1, 3, 0, inColor)
+            .ReadWrite(1, 4, 0, outColor)
+            .Read(1, 5, 0, historyMoments)
+            .ReadWrite(1, 6, 0, currentMoments)
+            .Read(1, 7, 0, historyColor)
+            .ReadWrite(1, 8, 0, currentColor0)
+            .ReadWrite(1, 8, 1, currentColor1)
             .Execute([&](RDGPassContext context) {       
 
                 RHICommandListRef command = context.command; 
@@ -166,8 +173,8 @@ void SVGFPass::Build(RDGBuilder& builder)
                 command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
                 command->BindDescriptorSet(context.descriptors[1], 1);
                 command->PushConstants(&setting, sizeof(SVGFSetting), SHADER_FREQUENCY_COMPUTE);
-                command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                    EngineContext::Render()->GetWindowsExtent().height / 16, 
+                command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                    Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                     1);
             })
             .Finish();
@@ -183,12 +190,13 @@ void SVGFPass::Build(RDGBuilder& builder)
             .Read(1, 0, 0, diffuse)
             .Read(1, 1, 0, normal)
             .Read(1, 2, 0, historyNormal)
-            .ReadWrite(1, 3, 0, inOutColor)
-            .Read(1, 4, 0, historyMoments)
-            .ReadWrite(1, 5, 0, currentMoments)
-            .Read(1, 6, 0, historyColor)
-            .ReadWrite(1, 7, 0, currentColor0)
-            .ReadWrite(1, 7, 1, currentColor1)
+            .ReadWrite(1, 3, 0, inColor)
+            .ReadWrite(1, 4, 0, outColor)
+            .Read(1, 5, 0, historyMoments)
+            .ReadWrite(1, 6, 0, currentMoments)
+            .Read(1, 7, 0, historyColor)
+            .ReadWrite(1, 8, 0, currentColor0)
+            .ReadWrite(1, 8, 1, currentColor1)
             .Execute([&](RDGPassContext context) {       
 
                 RHICommandListRef command = context.command; 
@@ -196,8 +204,8 @@ void SVGFPass::Build(RDGBuilder& builder)
                 command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
                 command->BindDescriptorSet(context.descriptors[1], 1);
                 command->PushConstants(&setting, sizeof(SVGFSetting), SHADER_FREQUENCY_COMPUTE);
-                command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                    EngineContext::Render()->GetWindowsExtent().height / 16, 
+                command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                    Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                     1);
             })
             .Finish();
@@ -207,12 +215,13 @@ void SVGFPass::Build(RDGBuilder& builder)
             .Read(1, 0, 0, diffuse)
             .Read(1, 1, 0, normal)
             .Read(1, 2, 0, historyNormal)
-            .ReadWrite(1, 3, 0, inOutColor)
-            .Read(1, 4, 0, historyMoments)
-            .ReadWrite(1, 5, 0, currentMoments)
-            .Read(1, 6, 0, historyColor)
-            .ReadWrite(1, 7, 0, currentColor0)
-            .ReadWrite(1, 7, 1, currentColor1)
+            .ReadWrite(1, 3, 0, inColor)
+            .ReadWrite(1, 4, 0, outColor)
+            .Read(1, 5, 0, historyMoments)
+            .ReadWrite(1, 6, 0, currentMoments)
+            .Read(1, 7, 0, historyColor)
+            .ReadWrite(1, 8, 0, currentColor0)
+            .ReadWrite(1, 8, 1, currentColor1)
             .Execute([&](RDGPassContext context) {       
 
                 RHICommandListRef command = context.command; 
@@ -220,8 +229,8 @@ void SVGFPass::Build(RDGBuilder& builder)
                 command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
                 command->BindDescriptorSet(context.descriptors[1], 1);
                 command->PushConstants(&setting, sizeof(SVGFSetting), SHADER_FREQUENCY_COMPUTE);
-                command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                    EngineContext::Render()->GetWindowsExtent().height / 16, 
+                command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                    Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                     1);
             })
             .Finish();
@@ -234,12 +243,13 @@ void SVGFPass::Build(RDGBuilder& builder)
             //     .Read(1, 0, 0, diffuse)
             //     .Read(1, 1, 0, normal)
             //     .Read(1, 2, 0, historyNormal)
-            //     .ReadWrite(1, 3, 0, inOutColor)
-            //     .Read(1, 4, 0, historyMoments)
-            //     .ReadWrite(1, 5, 0, currentMoments)
-            //     .Read(1, 6, 0, historyColor)
-            //     .ReadWrite(1, 7, 0, currentColor0)
-            //     .ReadWrite(1, 7, 1, currentColor1)
+            //     .ReadWrite(1, 3, 0, inColor)
+            //     .ReadWrite(1, 4, 0, outColor)
+            //     .Read(1, 5, 0, historyMoments)
+            //     .ReadWrite(1, 6, 0, currentMoments)
+            //     .Read(1, 7, 0, historyColor)
+            //     .ReadWrite(1, 8, 0, currentColor0)
+            //     .ReadWrite(1, 8, 1, currentColor1)
             //     .Execute([&](RDGPassContext context) {       
 
             //         SVGFSetting newSetting = setting;
@@ -250,8 +260,8 @@ void SVGFPass::Build(RDGBuilder& builder)
             //         command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
             //         command->BindDescriptorSet(context.descriptors[1], 1);
             //         command->PushConstants(&newSetting, sizeof(SVGFSetting), SHADER_FREQUENCY_COMPUTE);
-            //         command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-            //                             EngineContext::Render()->GetWindowsExtent().height / 16, 
+            //         command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+            //                             Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
             //                             1);
             //     })
             //     .Finish();
@@ -262,12 +272,13 @@ void SVGFPass::Build(RDGBuilder& builder)
                 .Read(1, 0, 0, diffuse)
                 .Read(1, 1, 0, normal)
                 .Read(1, 2, 0, historyNormal)
-                .ReadWrite(1, 3, 0, inOutColor)
-                .Read(1, 4, 0, historyMoments)
-                .ReadWrite(1, 5, 0, currentMoments)
-                .Read(1, 6, 0, historyColor)
-                .ReadWrite(1, 7, 0, currentColor0)
-                .ReadWrite(1, 7, 1, currentColor1)
+                .ReadWrite(1, 3, 0, inColor)
+                .ReadWrite(1, 4, 0, outColor)
+                .Read(1, 5, 0, historyMoments)
+                .ReadWrite(1, 6, 0, currentMoments)
+                .Read(1, 7, 0, historyColor)
+                .ReadWrite(1, 8, 0, currentColor0)
+                .ReadWrite(1, 8, 1, currentColor1)
                 .Execute([&](RDGPassContext context) {       
 
                     SVGFSetting newSetting = setting;
@@ -278,8 +289,8 @@ void SVGFPass::Build(RDGBuilder& builder)
                     command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
                     command->BindDescriptorSet(context.descriptors[1], 1);
                     command->PushConstants(&newSetting, sizeof(SVGFSetting), SHADER_FREQUENCY_COMPUTE);
-                    command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                        EngineContext::Render()->GetWindowsExtent().height / 16, 
+                    command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                        Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                         1);
                 })
                 .Finish();
@@ -298,12 +309,13 @@ void SVGFPass::Build(RDGBuilder& builder)
             .Read(1, 0, 0, diffuse)
             .Read(1, 1, 0, normal)
             .Read(1, 2, 0, historyNormal)
-            .ReadWrite(1, 3, 0, inOutColor)
-            .Read(1, 4, 0, historyMoments)
-            .ReadWrite(1, 5, 0, currentMoments)
-            .Read(1, 6, 0, historyColor)
-            .ReadWrite(1, 7, 0, currentColor0)
-            .ReadWrite(1, 7, 1, currentColor1)
+            .ReadWrite(1, 3, 0, inColor)
+            .ReadWrite(1, 4, 0, outColor)
+            .Read(1, 5, 0, historyMoments)
+            .ReadWrite(1, 6, 0, currentMoments)
+            .Read(1, 7, 0, historyColor)
+            .ReadWrite(1, 8, 0, currentColor0)
+            .ReadWrite(1, 8, 1, currentColor1)
             .Execute([&](RDGPassContext context) {       
 
                 RHICommandListRef command = context.command; 
@@ -311,8 +323,8 @@ void SVGFPass::Build(RDGBuilder& builder)
                 command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
                 command->BindDescriptorSet(context.descriptors[1], 1);
                 command->PushConstants(&setting, sizeof(SVGFSetting), SHADER_FREQUENCY_COMPUTE);
-                command->Dispatch(  EngineContext::Render()->GetWindowsExtent().width / 16, 
-                                    EngineContext::Render()->GetWindowsExtent().height / 16, 
+                command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                    Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                     1);
             })
             .Finish();

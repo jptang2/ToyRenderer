@@ -217,6 +217,13 @@ enum RHIFormat : uint32_t
 	FORMAT_D32_SFLOAT_S8_UINT, 
 	FORMAT_D24_UNORM_S8_UINT,
 
+	FORMAT_A2R10G10B10_SNORM,
+    FORMAT_A2R10G10B10_UNORM,
+    FORMAT_A2R10G10B10_SINT,
+    FORMAT_A2R10G10B10_UINT,
+    FORMAT_B10G11R11_UFLOAT,
+    FORMAT_E5B9G9R9_UFLOAT,
+
 	FORMAT_MAX_ENUM, 	//
 };
 
@@ -269,6 +276,8 @@ static uint32_t FormatChanelCounts(RHIFormat format)
 	case FORMAT_R8G8B8_SINT:
 	case FORMAT_R16G16B16_SINT:
 	case FORMAT_R32G32B32_SINT:
+	case FORMAT_B10G11R11_UFLOAT:
+    case FORMAT_E5B9G9R9_UFLOAT:
 		return 3;
 
 	case FORMAT_R8G8B8A8_SRGB:
@@ -285,6 +294,10 @@ static uint32_t FormatChanelCounts(RHIFormat format)
 	case FORMAT_R8G8B8A8_SINT:   
 	case FORMAT_R16G16B16A16_SINT:
 	case FORMAT_R32G32B32A32_SINT:
+	case FORMAT_A2R10G10B10_SNORM:
+    case FORMAT_A2R10G10B10_UNORM:
+    case FORMAT_A2R10G10B10_SINT:
+    case FORMAT_A2R10G10B10_UINT:
 		return 4;
 
 	default:  
@@ -596,8 +609,8 @@ typedef struct RHIAccelerationStructureInstanceInfo
 
 typedef struct Extent2D 
 {
-    uint32_t    width;
-    uint32_t    height;
+    uint32_t    width = 0;
+    uint32_t    height = 0;
 
 	friend bool operator==(const Extent2D& a, const Extent2D& b)
 	{
@@ -614,9 +627,9 @@ typedef struct Extent2D
 
 typedef struct Extent3D 
 {
-    uint32_t    width;
-    uint32_t    height;
-    uint32_t    depth;
+    uint32_t    width = 0;
+    uint32_t    height = 0;
+    uint32_t    depth = 0;
 
 	friend bool operator==(const Extent3D& a, const Extent3D& b)
 	{
@@ -634,8 +647,8 @@ typedef struct Extent3D
 
 typedef struct Offset2D 
 {
-    uint32_t    x;
-    uint32_t    y;
+    uint32_t    x = 0;
+    uint32_t    y = 0;
 
 	friend Offset2D operator+(const Offset2D& a, const Offset2D& b)
 	{
@@ -655,9 +668,9 @@ typedef struct Offset2D
 
 typedef struct Offset3D 
 {
-    uint32_t    x;
-    uint32_t    y;
-    uint32_t    z;
+    uint32_t    x = 0;
+    uint32_t    y = 0;
+    uint32_t    z = 0;
 
 	friend Offset3D operator+(const Offset3D& a, const Offset3D& b)
 	{
@@ -679,8 +692,8 @@ typedef struct Offset3D
 
 typedef struct Rect2D 
 {
-    Offset2D    offset;
-    Extent2D    extent;
+    Offset2D    offset = {};
+    Extent2D    extent = {};
 } Rect2D;
 
 typedef struct Color3 {
@@ -751,6 +764,13 @@ typedef struct TextureSubresourceLayers
 	}
 
 } TextureSubresourceLayers;
+
+typedef struct ClearAttachment
+{
+	uint32_t binding = 0;
+	TextureAspectFlags aspect = TEXTURE_ASPECT_NONE;
+	Color4 clearColor = {};
+} ClearAttachment;
 
 typedef struct RHIQueueInfo
 {
@@ -963,6 +983,8 @@ typedef struct RHIRenderPassInfo
 	Extent2D extent = {0, 0};
 	uint32_t layers = 1;
 
+	uint32_t multiviewCount = 0;	
+
 } RHIRenderPassInfo;
 
 typedef struct RHIRootSignatureInfo	
@@ -1161,7 +1183,7 @@ typedef struct RHIGraphicsPipelineInfo
 	std::array<RHIFormat, MAX_RENDER_TARGETS> colorAttachmentFormats = { FORMAT_UKNOWN };
 	RHIFormat						depthStencilAttachmentFormat = FORMAT_UKNOWN;
 
-	uint32_t 						__padding = FORMAT_UKNOWN;
+	uint32_t viewMask 				= 0b00000000;	// multiview
 
 	// uint32_t						numSamples = 1;		// TODO
 	// uint8_t						subpassIndex = 0;	// 放弃支持sub pass
@@ -1176,7 +1198,8 @@ typedef struct RHIGraphicsPipelineInfo
 				a.primitiveType == b.primitiveType &&
 				a.rasterizerState == b.rasterizerState &&
 				a.blendState == b.blendState &&
-				a.depthStencilState == b.depthStencilState;
+				a.depthStencilState == b.depthStencilState &&
+				a.viewMask == b.viewMask;
 	}
 
 } RHIGraphicsPipelineInfo;

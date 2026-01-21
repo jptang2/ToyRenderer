@@ -5,9 +5,11 @@ RunnableThreadRef PlatformProcess::CreateRunnableThread() { return WindowsPlatfo
 
 void PlatformProcess::Sleep(float seconds) { WindowsPlatformProcess::Sleep(seconds); }
 
-SemaphoreRef PlatformProcess::CreateSemaphore() {return WindowsPlatformProcess::CreateSemaphore(); }
+uint32_t PlatformProcess::GetThreadID() { return WindowsPlatformProcess::GetThreadID(); }
 
-EventRef PlatformProcess::CreateSyncEvent(bool manualReset) { return WindowsPlatformProcess::CreateSyncEvent(manualReset); }	
+SemaphoreRef PlatformProcess::CreateSemaphore(uint32_t maxCount) {return WindowsPlatformProcess::CreateSemaphore(maxCount); }
 
-CriticalSectionRef PlatformProcess::CreateCriticalSection() { return WindowsPlatformProcess::CreateCriticalSection(); }
+SyncEventRef PlatformProcess::CreateSyncEvent(bool manualReset) { return WindowsPlatformProcess::CreateSyncEvent(manualReset); }	
+
+MutexRef PlatformProcess::CreateMutex() { return WindowsPlatformProcess::CreateMutex(); }
 

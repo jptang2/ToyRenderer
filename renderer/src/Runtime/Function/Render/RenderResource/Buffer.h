@@ -182,6 +182,11 @@ public:
         memcpy((Type*)buffer->Map() + index, data.data(), data.size() * sizeof(Type));
     }
 
+    void SetData(const Type* data, uint32_t index = 0, uint32_t size = 1)
+    {
+        memcpy((Type*)buffer->Map() + index, data, size * sizeof(Type));
+    }
+
     uint32_t Allocate()                             { return idAlloctor.Allocate(); }
     IndexRange Allocate(uint32_t size)              { return idAlloctor.Allocate(size); }
     void Release(uint32_t index)                    { idAlloctor.Release(index); }

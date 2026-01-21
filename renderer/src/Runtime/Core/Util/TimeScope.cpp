@@ -2,6 +2,7 @@
 #include "Core/Log/log.h"
 #include "Platform/HAL/PlatformProcess.h"
 
+#include <algorithm>
 #include <memory>
 
 void TimeScope::Clear()
@@ -59,6 +60,8 @@ void TimeScopes::PushScope(std::string name)
     runningScopes.push(newScope);
 
     depth++;
+
+    if(scopes.size() == 1) begin = newScope->GetBeginTime();
 }
 
 void TimeScopes::PopScope()
@@ -74,6 +77,8 @@ void TimeScopes::PopScope()
     scope->End();
 
     depth--;
+
+    if(depth == 0) end = std::max(end, scope->GetEndTime());
 }
 
 void TimeScopes::Clear() 
@@ -81,6 +86,11 @@ void TimeScopes::Clear()
     scopes.clear();
     runningScopes = {};
     depth = 0; 
+};
+
+bool TimeScopes::Valid() 
+{ 
+    return depth == 0;
 };
 
 const std::vector<std::shared_ptr<TimeScope>>& TimeScopes::GetScopes()

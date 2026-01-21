@@ -26,6 +26,11 @@ public:
     void DestroyGLFW();
 
     bool Tick();
+    void BuildRDG();
+    void ExecuteRDG();
+
+    void SetSurfaceCacheUpdate(bool update)                                                 { surfaceCacheManager->SetDynamicUpdate(update); }
+    void SetSurfaceCacheFixScale(bool fixScale)                                             { surfaceCacheManager->SetFixScale(fixScale); }
 
     const std::array<std::shared_ptr<RenderPass>, PASS_TYPE_MAX_CNT>& GetPasses()           { return passes; }
     const std::array<std::shared_ptr<MeshPass>, MESH_PASS_TYPE_MAX_CNT>& GetMeshPasses()    { return meshPasses; }
@@ -48,6 +53,8 @@ public:
 
 private:
     GLFWwindow* window;
+
+    std::array<RDGBuilderRef, FRAMES_IN_FLIGHT> rdgBuilders;
 
     RHIBackendRef backend;
     RHISurfaceRef surface;
@@ -72,6 +79,7 @@ private:
 
     void InitPasses();
     void InitBaseResource();
+    void SubmitRHI();
     void UpdateGlobalSetting();
 
     std::shared_ptr<RenderMeshManager> meshManager;

@@ -7,12 +7,15 @@
 #include "Core/Mesh/TangentSpace.h"
 #include "Core/Mesh/MeshOptimizor/MeshOptimizor.h"
 #include "Function/Global/EngineContext.h"
+#include "Function/Global/EngineThreadPool.h"
 #include "Function/Render/RHI/RHIStructs.h"
 #include "Function/Render/RenderResource/Buffer.h"
 #include "Function/Render/RenderResource/Texture.h"
 #include "Material.h"
 #include "RenderStructs.h"
 #include "Resource/Asset/Asset.h"
+#include "assimp/defs.h"
+#include "assimp/types.h"
 
 #include <algorithm>
 #include <cassert>
@@ -98,13 +101,13 @@ void Model::OnLoadAsset()
             vertexBuffer->SetColor(tempMesh.color);
             // vertexBuffer->SetBoneIndex(tempMesh.boneIndex);      // 不支持骨骼
             // vertexBuffer->SetBoneWeight(tempMesh.boneWeight);
-            submeshes[i].vertexBuffer = vertexBuffer;
+            submesh.vertexBuffer = vertexBuffer;
   
             indexBuffer->SetIndex(tempMesh.index);
-            submeshes[i].indexBuffer = indexBuffer;
+            submesh.indexBuffer = indexBuffer;
 
-            submeshes[i].meshClusterID = EngineContext::RenderResource()->AllocateMeshClusterID(meshClusterInfos.size());
-            EngineContext::RenderResource()->SetMeshClusterInfo(meshClusterInfos, submeshes[i].meshClusterID.begin);
+            submesh.meshClusterID = EngineContext::RenderResource()->AllocateMeshClusterID(meshClusterInfos.size());
+            EngineContext::RenderResource()->SetMeshClusterInfo(meshClusterInfos, submesh.meshClusterID.begin);
         }
     }
 
@@ -146,18 +149,18 @@ void Model::OnLoadAsset()
             vertexBuffer->SetColor(tempMesh.color);
             // vertexBuffer->SetBoneIndex(tempMesh.boneIndex);      // 不支持骨骼
             // vertexBuffer->SetBoneWeight(tempMesh.boneWeight);
-            submeshes[i].vertexBuffer = vertexBuffer;
+            submesh.vertexBuffer = vertexBuffer;
   
             indexBuffer->SetIndex(tempMesh.index);
-            submeshes[i].indexBuffer = indexBuffer;
+            submesh.indexBuffer = indexBuffer;
 
-            submeshes[i].meshClusterID = EngineContext::RenderResource()->AllocateMeshClusterID(meshClusterInfos.size());
-            EngineContext::RenderResource()->SetMeshClusterInfo(meshClusterInfos, submeshes[i].meshClusterID.begin);
+            submesh.meshClusterID = EngineContext::RenderResource()->AllocateMeshClusterID(meshClusterInfos.size());
+            EngineContext::RenderResource()->SetMeshClusterInfo(meshClusterInfos, submesh.meshClusterID.begin);
 
             for(auto& clusterGroup : submesh.virtualMesh->clusterGroups)    // cluster group信息
             {
                 MeshClusterGroupInfo groupInfo = {};
-                for(uint32_t j = 0; j < clusterGroup->clusters.size(); j++) groupInfo.clusterID[j] = clusterGroup->clusters[j] + submeshes[i].meshClusterID.begin;  // 本地偏移加全局偏移
+                for(uint32_t j = 0; j < clusterGroup->clusters.size(); j++) groupInfo.clusterID[j] = clusterGroup->clusters[j] + submesh.meshClusterID.begin;  // 本地偏移加全局偏移
                 groupInfo.clusterSize = clusterGroup->clusters.size();
                 groupInfo.parentLodError = clusterGroup->parentLodError;
                 groupInfo.mipLevel = clusterGroup->mipLevel;
@@ -166,8 +169,8 @@ void Model::OnLoadAsset()
                 meshClusterGroupInfos.push_back(groupInfo);
             }
 
-            submeshes[i].meshClusterGroupID = EngineContext::RenderResource()->AllocateMeshClusterGroupID(meshClusterGroupInfos.size());
-            EngineContext::RenderResource()->SetMeshClusterGroupInfo(meshClusterGroupInfos, submeshes[i].meshClusterGroupID.begin);
+            submesh.meshClusterGroupID = EngineContext::RenderResource()->AllocateMeshClusterGroupID(meshClusterGroupInfos.size());
+            EngineContext::RenderResource()->SetMeshClusterGroupInfo(meshClusterGroupInfos, submesh.meshClusterGroupID.begin);
         }
     }
 
@@ -228,9 +231,9 @@ Model::Model(std::string path, ModelProcessSetting processSetting)
 
 bool Model::LoadFromFile(std::string path)
 {
-    if (processSetting.generateVirtualMesh) processSetting.smoothNormal = true;  //对于生成虚拟几何体需要顶点去重，强制平滑法线
+    //if (processSetting.generateVirtualMesh) processSetting.smoothNormal = true;  //对于生成虚拟几何体需要顶点去重，强制平滑法线
 
-    uint32_t processSteps = aiProcess_Triangulate | aiProcess_FixInfacingNormals;
+    uint32_t processSteps = aiProcess_Triangulate;  // | aiProcess_FixInfacingNormals;  // 对单面物体有BUG?
     if (processSetting.flipUV) processSteps |= aiProcess_FlipUVs;
     if (processSetting.smoothNormal) processSteps |= aiProcess_DropNormals | aiProcess_GenSmoothNormals;
     if (!processSetting.smoothNormal) processSteps |= aiProcess_JoinIdenticalVertices | aiProcess_GenNormals;  //不需要平滑法线就可以合并重复顶点了，
@@ -243,19 +246,27 @@ bool Model::LoadFromFile(std::string path)
         return false;
     }
 
-    std::vector<aiMesh*> processMeshes;
-    ProcessNode(scene->mRootNode, scene, processMeshes);
-    submeshes.resize(processMeshes.size());
+    std::vector<aiMesh*> processMeshes = {};
+    //submeshes.resize(processMeshes.size());
+    submeshes.clear();
+    ProcessNode(scene->mRootNode, scene, processMeshes, aiMatrix4x4());
+    
     if(processSetting.loadMaterials) materials.resize(processMeshes.size());
 
     //并行加载各个子mesh
     for(int i = 0; i < processMeshes.size(); i++)
     {
         aiMesh* mesh = processMeshes[i];
-        ENGINE_LOG_INFO("[{}/{}] Start processing mesh [{}].", i, scene->mNumMeshes, mesh->mName.C_Str());
+        ENGINE_LOG_INFO("[{}/{}] Start processing mesh [{}]. ", i, processMeshes.size(), mesh->mName.C_Str());   // scene->mNumMeshes ?
 
         ProcessMesh(mesh, scene, i);
+
+        // TODO 并行加载
+        // EngineContext::ThreadPool()->AddQueuedWork([mesh, scene, i, this](){
+        //     ProcessMesh(mesh, scene, i);
+        // });
     }  
+    // EngineContext::ThreadPool()->WaitAllIdle();
     textureMap.clear();
 
     // 统计信息
@@ -293,20 +304,50 @@ bool Model::LoadFromFile(std::string path)
     return true;
 }
 
-void Model::ProcessNode(aiNode* node, const aiScene* scene, std::vector<aiMesh*>& processMeshes)
+void Model::ProcessNode(aiNode* node, const aiScene* scene, std::vector<aiMesh*>& processMeshes, aiMatrix4x4 mat)
 {
+    aiMatrix4x4 newMat = mat * node->mTransformation;
+    Mat4 newTransform = ProcessTransform(newMat);
+
     // 处理节点所有的网格（如果有的话）
     for (uint32_t i = 0; i < node->mNumMeshes; i++)
     {
         aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-
+        
         processMeshes.push_back(mesh);
+        submeshes.emplace_back();
+        submeshes.back().transform = newTransform;
+        submeshes.back().scale = Math::GetScale(newTransform);
     }
     // 接下来对它的子节点重复这一过程
     for (uint32_t i = 0; i < node->mNumChildren; i++)
     {
-        ProcessNode(node->mChildren[i], scene, processMeshes);
+        ProcessNode(node->mChildren[i], scene, processMeshes, newMat);
     }
+}
+
+Mat4 Model::ProcessTransform(aiMatrix4x4 mat)
+{
+    Mat4 newMat;
+    newMat(0, 0) = mat.a1;
+    newMat(0, 1) = mat.a2;
+    newMat(0, 2) = mat.a3;
+    newMat(0, 3) = mat.a4;
+    newMat(1, 0) = mat.b1;
+    newMat(1, 1) = mat.b2;
+    newMat(1, 2) = mat.b3;
+    newMat(1, 3) = mat.b4;
+    newMat(2, 0) = mat.c1;
+    newMat(2, 1) = mat.c2;
+    newMat(2, 2) = mat.c3;
+    newMat(2, 3) = mat.c4;
+    newMat(3, 0) = mat.d1;
+    newMat(3, 1) = mat.d2;
+    newMat(3, 2) = mat.d3;
+    newMat(3, 3) = mat.d4;
+    //newMat.transposeInPlace();
+
+    return newMat;
 }
 
 void Model::ProcessMesh(aiMesh* mesh, const aiScene* scene, int index)
@@ -424,7 +465,46 @@ void Model::ProcessMesh(aiMesh* mesh, const aiScene* scene, int index)
 
             materials[index]->SetDiffuse(diffuse);
             materials[index]->SetNormal(normal);
-            materials[index]->SetSpecular(specular);
+            //materials[index]->SetSpecular(specular);
+
+            materials[index]->SetARM(specular); // ? TODO
+
+            // aiColor4D color4;
+            // Vec4 vec4;
+            // aiMaterial->Get(AI_MATKEY_COLOR_DIFFUSE, color4);
+            // vec4 = Vec4(color4.r, color4.g, color4.b, color4.a);
+            // if(!color4.IsBlack()) materials[index]->SetDiffuse(vec4);
+            // ENGINE_LOG_INFO("AI_MATKEY_COLOR_DIFFUSE [{} {} {} {}]", color4.r, color4.g, color4.b, color4.a);
+
+            // aiShadingMode mode = aiShadingMode_Flat;
+            // aiMaterial->Get(AI_MATKEY_SHADING_MODEL, mode);
+            // ENGINE_LOG_INFO("AI_MATKEY_SHADING_MODEL [{}]", (int)mode);
+
+            // ENGINE_LOG_INFO("AI_MATKEY_METALLIC_FACTOR [{}]", data);
+            // aiMaterial->mProperties[0]->mKey.C_Str();
+
+
+            // for(int i = 0; i < aiMaterial->mNumProperties; i++)
+            // {
+            //     ENGINE_LOG_INFO("[{}]", aiMaterial->mProperties[i]->mKey.C_Str());
+            // }
+
+
+
+            // TODO 并行加载
+            // materials[index] = std::make_shared<Material>();
+            // EngineContext::ThreadPool()->AddQueuedWork([this, index, aiMaterial](){
+            //     std::shared_ptr<Texture> diffuse = LoadMaterialTexture(aiMaterial, aiTextureType_DIFFUSE);
+            //     materials[index]->SetDiffuse(diffuse);
+            // }, ENGINE_THREAD_TYPE_RHI);
+            // EngineContext::ThreadPool()->AddQueuedWork([this, index, aiMaterial](){
+            //     std::shared_ptr<Texture> normal = LoadMaterialTexture(aiMaterial, aiTextureType_NORMALS);
+            //     materials[index]->SetNormal(normal);
+            // }, ENGINE_THREAD_TYPE_RHI);
+            // EngineContext::ThreadPool()->AddQueuedWork([this, index, aiMaterial](){
+            //     std::shared_ptr<Texture> specular = LoadMaterialTexture(aiMaterial, aiTextureType_SPECULAR);
+            //     materials[index]->SetSpecular(specular);
+            // }, ENGINE_THREAD_TYPE_RHI);
         }
     }
 
@@ -478,6 +558,13 @@ void Model::ProcessMesh(aiMesh* mesh, const aiScene* scene, int index)
         }
         else 
         {
+            // submeshes[index].mesh->normal.clear();
+            // submeshes[index].mesh->tangent.clear();
+            // submeshes[index].mesh->texCoord.clear();
+            // submeshes[index].mesh->color.clear();
+            // submeshes[index].mesh->boneIndex.clear();
+            // submeshes[index].mesh->boneWeight.clear();
+
             submeshes[index].virtualMesh = std::make_shared<VirtualMesh>();
             submeshes[index].virtualMesh->Build(submeshes[index].mesh);
         }
@@ -565,10 +652,14 @@ std::shared_ptr<Texture> Model::LoadMaterialTexture(aiMaterial* mat, aiTextureTy
 
         std::string texturePath = EngineContext::File()->RemoveFilename(path).append("/").append(str.C_Str());
 
+        if(processSetting.forcePngTexture)
+            texturePath = EngineContext::File()->ReplaceExtension(texturePath, "png");
+
         auto iter = textureMap.find(texturePath);   // 先从缓存中找
         if(iter != textureMap.end())    return iter->second;
         else
         {
+            ENGINE_LOG_INFO("Loading texture [{}]...", texturePath);
             std::shared_ptr<Texture> texture = std::make_shared<Texture>(texturePath);
             // EngineContext::Asset()->SaveAsset(texture);
             textureMap[texturePath] = texture;

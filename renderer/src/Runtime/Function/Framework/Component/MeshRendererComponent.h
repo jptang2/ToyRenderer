@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Event/EventSystem.h"
 #include "Core/Math/Math.h"
 #include "Core/Serialize/Serializable.h"
 #include "Component.h"
@@ -9,6 +10,7 @@
 #include "Function/Render/RenderResource/Model.h"
 #include "Function/Render/RenderResource/RenderStructs.h"
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 enum MeshRendererMode
@@ -46,13 +48,19 @@ public:
 	virtual void CollectSurfaceCacheTask(std::vector<SurfaceCacheTask>& tasks) override;
 
 private:
+	void InitResource();
+	int updateTicks = 0;	//GPU端数据已经更新的帧数，需要至少更新FRAMES_IN_FLIGHT次
 	ModelRef model;
     std::vector<MaterialRef> materials;
 	std::vector<ObjectInfo> objectInfos;
 	std::vector<uint32_t> objectIDs;
 	std::vector<uint32_t> meshCardIDs;
 
+	// 矩阵计算的用时很高，尽量缓存
 	Mat4 prevModel = Mat4::Identity();
+	Vec3 prevScale = Vec3::Ones();
+	std::vector<Mat4> currentModels;
+	std::vector<Mat4> prevModels;
 
 	bool castShadow;					//是否产生阴影（加入shadow map render pass）
 	MeshRendererMode renderMode;		//渲染模式

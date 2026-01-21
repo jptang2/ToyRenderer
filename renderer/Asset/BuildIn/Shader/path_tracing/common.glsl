@@ -6,6 +6,7 @@ struct Payload
 	float distance;
     float pdf;
     vec3 reflectDir;
+    uint numBounce;
     
     Rand rand;
 };
@@ -20,5 +21,6 @@ layout(push_constant) uniform setting {
 
     int sampleSkyBox;
     int indirectOnly;
+    int diffuseOnly;
     int mode;
 } SETTING;

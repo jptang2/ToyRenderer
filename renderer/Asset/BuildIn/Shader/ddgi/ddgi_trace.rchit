@@ -37,6 +37,8 @@ void main()
     float roughness     = FetchRoughness(material, texCoord);
     float metallic      = FetchMetallic(material, texCoord);
 
+    if(material.useVertexColor != 0)
+        diffuse.xyz *= color.xyz;
     
 	//RAY_PAYLOAD.dist      = length(worldPos.xyz - gl_WorldRayOriginEXT); 
     RAY_PAYLOAD.dist      = gl_HitTEXT; 
@@ -44,7 +46,7 @@ void main()
 	RAY_PAYLOAD.diffuse   = vec4(diffuse.rgb, 0.0f);  	
 	RAY_PAYLOAD.emission  = vec4(emission, 0.0f);
 
-	RAY_PAYLOAD.normal.w  = metallic;   //粗糙度
-	RAY_PAYLOAD.diffuse.w = roughness;  //金属度
+	RAY_PAYLOAD.normal.w  = roughness;   //粗糙度
+	RAY_PAYLOAD.diffuse.w = metallic;  //金属度
 }
 

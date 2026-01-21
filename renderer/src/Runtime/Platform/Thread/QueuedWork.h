@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 
 enum QueuedWorkPriority
@@ -14,12 +15,20 @@ enum QueuedWorkPriority
     WORK_PRIORITY_MAX_ENUM, //
 };
 
+typedef std::function<void()> QueuedWorkFunc;
 typedef std::shared_ptr<class QueuedWork> QueuedWorkRef;
 class QueuedWork
 {
 public:
+    QueuedWork() = default;
+    QueuedWork(QueuedWorkFunc func)
+    : func(func)
+    {}
+
     virtual void DoThreadedWork() 
     {
+        if(func) func();
+
         //SetPromise(Promise, Function);
         //delete this;
     }
@@ -45,7 +54,9 @@ protected:
     // TPromise<ResultType> Promise; // 用于同步的对象
 
     QueuedWorkPriority priority = WORK_PRIORITY_NORMAL;
+
+    QueuedWorkFunc func = nullptr;
 };
 
-
+ 
 

@@ -1,9 +1,12 @@
 #pragma once
 
 #include "Semaphore.h"
-#include "Event.h"
+#include "SyncEvent.h"
 #include "RunnableThread.h"
-#include "Platform/HAL/CriticalSection.h"
+#include "Mutex.h"
+#include <cstdint>
+
+
 
 // https://blog.csdn.net/zhu2695/article/details/8764816
 
@@ -15,14 +18,16 @@ public:
 
     static void Sleep(float seconds);
 
+    static uint32_t GetThreadID();
+
     //信号量 可跨进程，多占有////////////////////////////////////////////////////////////////////////////////////////////////////////
-	static SemaphoreRef CreateSemaphore();
+	static SemaphoreRef CreateSemaphore(uint32_t maxCount = 0);
 
     //事件 可跨进程，用于同步////////////////////////////////////////////////////////////////////////////////////////////////////////
-    static EventRef CreateSyncEvent(bool manualReset = false);	//TODO池化
+    static SyncEventRef CreateSyncEvent(bool manualReset = false);	//TODO池化
 
     //临界区 单进程多线程，单占有////////////////////////////////////////////////////////////////////////////////////////////////////////
-    static CriticalSectionRef CreateCriticalSection();	
+    static MutexRef CreateMutex();	
 
     //TODO 互斥量 可跨进程，单占有////////////////////////////////////////////////////////////////////////////////////////////////////////
 };

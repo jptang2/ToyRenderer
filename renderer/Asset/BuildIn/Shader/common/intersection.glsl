@@ -72,7 +72,7 @@ struct BoundingSphere
     vec4 centerRadius;
 };
 
-BoundingBox BoundingBoxTransform(BoundingBox box, mat4 transform)
+BoundingBox BoundingBoxTransform(BoundingBox box, mat4 transform, vec3 boundingScale)
 {
 	vec3 offsets[8] = {	vec3(-1.0f, -1.0f, 1.0f),
 						vec3(1.0f, -1.0f, 1.0f),
@@ -84,7 +84,7 @@ BoundingBox BoundingBoxTransform(BoundingBox box, mat4 transform)
 						vec3(1.0f, 1.0f, -1.0f)};
 
 	vec3 center = (box.maxBound + box.minBound) * 0.5f;
-	vec3 extent = (box.maxBound - box.minBound) * 0.5f;
+	vec3 extent = (box.maxBound - box.minBound) * 0.5f * boundingScale;
 
 	vec3 newMaxBound = vec3(-1e30);
 	vec3 newMinBound = vec3(1e30);
@@ -105,14 +105,28 @@ BoundingBox BoundingBoxTransform(BoundingBox box, mat4 transform)
 	return newBox;
 }
 
-BoundingSphere SphereTransform(BoundingSphere sphere, mat4 transform)
+BoundingBox BoundingBoxTransform(BoundingBox box, mat4 transform)       // 默认无scale
+{
+    return BoundingBoxTransform(box, transform, vec3(1.0f));
+}
+
+BoundingSphere SphereTransform(BoundingSphere sphere, mat4 transform, vec3 boundingScale)
 {
     BoundingSphere newSphere;
 
     newSphere.centerRadius.xyz = (transform * vec4(sphere.centerRadius.xyz, 1.0f)).xyz;	
-    //newSphere.centerRadius.w = sphere.centerRadius.w * length( transform[0] );
-    newSphere.centerRadius.w = sphere.centerRadius.w * max(transform[0][0], max(transform[1][1], transform[2][2]));			
+    newSphere.centerRadius.w = sphere.centerRadius.w * max(max(boundingScale.x, boundingScale.y), boundingScale.z);			
 
+    return newSphere;
+}
+
+BoundingSphere SphereTransform(BoundingSphere sphere, mat4 transform)   // 默认无scale
+{
+    BoundingSphere newSphere;
+
+    newSphere.centerRadius.xyz = (transform * vec4(sphere.centerRadius.xyz, 1.0f)).xyz;	
+    newSphere.centerRadius.w = sphere.centerRadius.w;			
+    
     return newSphere;
 }
 

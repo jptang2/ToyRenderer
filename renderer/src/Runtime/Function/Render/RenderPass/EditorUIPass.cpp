@@ -16,7 +16,7 @@ void EditorUIPass::Init()
 
 void EditorUIPass::Build(RDGBuilder& builder) 
 {
-    if(IsEnabled())
+    //if(IsEnabled())
     {
         RDGTextureHandle outColor = builder.GetTexture("Final Color");
         RDGTextureHandle depth = builder.GetTexture("Depth");
@@ -31,16 +31,9 @@ void EditorUIPass::Build(RDGBuilder& builder)
                 RHICommandListRef command = context.command;                                            
                 command->SetViewport({0, 0}, {windowExtent.width, windowExtent.height});
                 command->SetScissor({0, 0}, {windowExtent.width, windowExtent.height}); 
-
-                ImGui_ImplVulkan_NewFrame();
-                ImGui_ImplGlfw_NewFrame();
-                ImGui::NewFrame();
-                IMGUIZMO_NAMESPACE::BeginFrame();
-
-                EngineContext::Editor()->UI();
-
-                ImGui::Render();
-                command->ImGuiRenderDrawData();
+                command->ImGuiRenderDrawData([](){
+                    EngineContext::Editor()->UI();
+                });
             })
             .Finish();
     }

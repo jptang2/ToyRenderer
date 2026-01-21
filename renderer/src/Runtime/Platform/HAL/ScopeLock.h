@@ -1,13 +1,13 @@
 #pragma once
 
-#include "Platform/HAL/CriticalSection.h"
+#include "Platform/HAL/Mutex.h"
 
 #include <cassert>
 
 class ScopeLock
 {
 public:
-	ScopeLock(CriticalSectionRef sync)
+	ScopeLock(MutexRef sync)
     : sync(sync)
 	{
 		assert(sync != nullptr);
@@ -34,5 +34,5 @@ private:
 	ScopeLock& operator=( ScopeLock& scopeLock) { return *this; }
 
 private:
-	CriticalSectionRef sync;
+	MutexRef sync;
 };

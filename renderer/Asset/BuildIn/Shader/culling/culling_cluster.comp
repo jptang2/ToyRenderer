@@ -2,100 +2,9 @@
 #extension GL_GOOGLE_include_directive : enable
 
 #include "../common/common.glsl"
+#include "common.glsl"
 
-struct IndirectSetting
-{
-    uint processSize;              
-    uint pipelineStateSize;        
-    uint _padding0[2];
-
-    uint drawSize;                
-    uint frustumCull;             
-    uint occlusionCull;          
-    uint _padding1;
-};
-
-struct IndirectMeshDrawInfo
-{
-    uint objectID;			      
-    uint commandID;				   
-};
-
-struct IndirectClusterDrawInfo
-{
-    uint objectID;                 
-    uint clusterID;              
-    uint commandID;				    
-    uint _padding;
-};
-
-struct IndirectClusterGroupDrawInfo 
-{
-    uint objectID;                 
-    uint clusterGroupID;           
-    uint commandID;				    
-    uint _padding;
-};
-
-layout(set = 1, binding = 0) buffer IndirectMeshDrawDatas { 
-
-    IndirectSetting setting;
-    IndirectMeshDrawInfo draws[MAX_PER_FRAME_OBJECT_SIZE];	
-
-} MESH_DRAW_DATAS[];
-
-layout(set = 1, binding = 1) buffer IndirectMeshDrawCommands { 
-
-    RHIIndirectCommand commands[MAX_PER_FRAME_OBJECT_SIZE];
-
-} MESH_DRAW_COMMANDS[];
-
-layout(set = 1, binding = 2) buffer IndirectClusterDrawDatas { 
-
-    IndirectSetting setting;
-    IndirectClusterDrawInfo draws[MAX_PER_FRAME_CLUSTER_SIZE];
-
-} CLUSTER_DRAW_DATAS[];
-
-layout(set = 1, binding = 3) buffer IndirectClusterDrawCommands			           
-{
-    RHIIndirectCommand command[MAX_PER_PASS_PIPELINE_STATE_COUNT];	 
-                                                        
-} CLUSTER_DRAW_COMMANDS[];
-
-layout(set = 1, binding = 4) buffer IndirectClusterGroupDrawDatas
-{
-    IndirectSetting setting;
-    IndirectClusterGroupDrawInfo draws[MAX_PER_FRAME_CLUSTER_GROUP_SIZE];
-		    
-} CLUSTER_GROUP_DRAW_DATAS[];
-
-layout(set = 1, binding = 5) buffer CullingSetting
-{
-	uint processSize;
-	uint _padding[3];
-
-	uint passType [MAX_SUPPORTED_MESH_PASS_COUNT];
-	uint passOffset [MAX_SUPPORTED_MESH_PASS_COUNT];
-};
-
-layout(push_constant) uniform CullingLodSetting {
-    float lodErrorRate;
-	float lodErrorOffset;
-	uint disableVirtualMeshCulling;	
-	uint disableOcclusionCulling;
-	uint disableFrustrumCulling;
-	uint showBoundingBox;
-} SETTING;
-
-#define DEPTH_PASS_INDEX 0
-#define POINT_SHADOW_PASS_INDEX 1
-#define DIRECTIONAL_SHADOW_PASS_INDEX 2
-#define G_BUFFER_PASS_INDEX 3
-#define FORWARD_PASS_INDEX 4
-#define TRANSPARENT_PASS_INDEX 5
-
-#define THREAD_SIZE_X 256
+#define THREAD_SIZE_X 64
 #define THREAD_SIZE_Y 1
 #define THREAD_SIZE_Z 1
 layout (local_size_x = THREAD_SIZE_X, 
@@ -106,26 +15,26 @@ void main()
 	uint gID = gl_GlobalInvocationID.x;
 
 	// 逐cluster剔除
-	for(int i = 0; i < processSize; i++)
+	if(gID < CLUSTER_DRAW_DATAS[0].setting.processSize)
 	{
-		if(gID < CLUSTER_DRAW_DATAS[i].setting.processSize)
+		IndirectClusterDrawInfo clusterInfo = CLUSTER_DRAW_DATAS[0].draws[gID];
+
+		MeshCluster cluster = MESH_CLUSTERS.slot[clusterInfo.clusterID];
+		Object object = OBJECTS.slot[clusterInfo.objectID];
+		
+		BoundingSphere worldSphere = SphereTransform(cluster.sphere, object.model, object.localScale.xyz * object.modelScale.xyz);	//世界空间的包围球包围盒,是cluster的不是object的
+
+		for(int passIndex = 0; passIndex < SETTING.passCount; passIndex++)
 		{
-			IndirectClusterDrawInfo clusterInfo = CLUSTER_DRAW_DATAS[i].draws[gID];
-
-			MeshCluster cluster = MESH_CLUSTERS.slot[clusterInfo.clusterID];
-			Object object = OBJECTS.slot[clusterInfo.objectID];
-			
-			BoundingSphere worldSphere = SphereTransform(cluster.sphere, object.model);	//世界空间的包围球包围盒,是cluster的不是object的
-
 			bool visible = true;			//整体可见性
 			bool frustumVisible = true;		//视锥剔除可见性
 			bool occlusionVisible = true;	//遮蔽剔除可见性
-	
+
 			//屏幕空间绘制
-			if(	passType[i] == DEPTH_PASS_INDEX ||
-				passType[i] == G_BUFFER_PASS_INDEX ||
-				passType[i] == FORWARD_PASS_INDEX ||
-				passType[i] == TRANSPARENT_PASS_INDEX)
+			if(	SETTING.passType == DEPTH_PASS_INDEX ||
+				SETTING.passType == G_BUFFER_PASS_INDEX ||
+				SETTING.passType == FORWARD_PASS_INDEX ||
+				SETTING.passType == TRANSPARENT_PASS_INDEX)
 			{
 				frustumVisible = frustumVisible && FrustumIntersectSphere(CAMERA.frustum, worldSphere);
 
@@ -136,45 +45,56 @@ void main()
 			}
 
 			//光源空间绘制，平行光
-			if(passType[i] == DIRECTIONAL_SHADOW_PASS_INDEX)
+			else if(SETTING.passType == DIRECTIONAL_SHADOW_PASS_INDEX)
 			{			
-				// frustumVisible = frustumVisible && FrustumIntersectSphere(LIGHTS.directionalLights[passOffset[i]].frustum, worldSphere);
-				frustumVisible = frustumVisible && SphereIntersectSphere(LIGHTS.directionalLights[passOffset[i]].sphere, worldSphere);
+				// frustumVisible = frustumVisible && FrustumIntersectSphere(LIGHTS.directionalLights[passIndex].frustum, worldSphere);
+				frustumVisible = frustumVisible && SphereIntersectSphere(LIGHTS.directionalLights[passIndex].sphere, worldSphere);
 			}
 
 			//光源空间绘制，点光源
-			if(passType[i] == POINT_SHADOW_PASS_INDEX)
+			else if(SETTING.passType == POINT_SHADOW_PASS_INDEX)
 			{
-				if(passOffset[i] >= LIGHTS.lightSetting.pointshadowedLightCnt)	visible = false;	//没启用的点光源槽位
-				else frustumVisible = frustumVisible && SphereIntersectSphere(worldSphere, LIGHTS.pointLights[LIGHTS.lightSetting.pointShadowLightIDs[passOffset[i]]].sphere);
+				if(passIndex >= LIGHTS.lightSetting.pointshadowedLightCnt * 6)	visible = false;	//没启用的点光源槽位
+				else 
+				{
+					uint pointShadowLightID = passIndex / 6;
+					uint face = passIndex % 6;
+
+					//frustumVisible = frustumVisible && SphereIntersectSphere(worldSphere, LIGHTS.pointLights[LIGHTS.lightSetting.pointShadowLightIDs[pointShadowLightID]].sphere);
+					frustumVisible = frustumVisible && FrustumIntersectSphere(LIGHTS.pointLights[LIGHTS.lightSetting.pointShadowLightIDs[pointShadowLightID]].frustum[face], worldSphere);
+				}
 			}
 			
 			//TODO INDIRECT_COMMANDS可以放到这里来录制，不只是instanceCount
 
-            if(SETTING.disableFrustrumCulling != 0) frustumVisible = true;
-            if(SETTING.disableOcclusionCulling != 0) occlusionVisible = true;
+			if(SETTING.disableFrustrumCulling != 0) frustumVisible = true;
+			if(SETTING.disableOcclusionCulling != 0) occlusionVisible = true;
 			visible = visible && occlusionVisible && frustumVisible;
 			// visible = true;	// 
 			
-			atomicAdd(CLUSTER_DRAW_DATAS[i].setting.drawSize, visible ? 1 : 0);						//存一下剔除的数量信息
-			atomicAdd(CLUSTER_DRAW_DATAS[i].setting.frustumCull, frustumVisible ? 0 : 1);
-			atomicAdd(CLUSTER_DRAW_DATAS[i].setting.occlusionCull, occlusionVisible ? 0 : 1);
+			if(SETTING.enableStatistics != 0)
+			{
+				atomicAdd(CLUSTER_DRAW_DATAS[passIndex].setting.drawSize, visible ? 1 : 0);						//存一下剔除的数量信息
+				atomicAdd(CLUSTER_DRAW_DATAS[passIndex].setting.frustumCull, frustumVisible ? 0 : 1);
+				atomicAdd(CLUSTER_DRAW_DATAS[passIndex].setting.occlusionCull, occlusionVisible ? 0 : 1);
+			}
 		
 			if(visible) 
 			{
-				uint offset = atomicAdd(CLUSTER_DRAW_COMMANDS[i].command[clusterInfo.commandID].instanceCount, 1);	// 更新command和缓冲
+				uint offset = atomicAdd(CLUSTER_DRAW_COMMANDS[passIndex].command[clusterInfo.commandID].instanceCount, 1);	// 更新command和缓冲
 
 				MeshClusterDrawInfo drawInfo; 
 				drawInfo.objectID = clusterInfo.objectID;
 				drawInfo.clusterID = clusterInfo.clusterID;		
 
 				MESH_CLUSTER_DRAW_INFOS.slot[
-					CLUSTER_DRAW_COMMANDS[i].command[
+					CLUSTER_DRAW_COMMANDS[passIndex].command[
 						clusterInfo.commandID].firstInstance + offset] = drawInfo;
 
 				if(SETTING.showBoundingBox != 0) AddGizmoBox(worldSphere.centerRadius.xyz, vec3(worldSphere.centerRadius.w), vec4(0.0f, 0.0f, 1.0f, 1.0f));
 				// if(SETTING.showBoundingBox != 0) AddGizmoSphere(worldSphere.centerRadius.xyz, worldSphere.centerRadius.w, vec4(0.0f, 0.0f, 1.0f, 1.0f));
 			}
+
 		}
 	}
 }

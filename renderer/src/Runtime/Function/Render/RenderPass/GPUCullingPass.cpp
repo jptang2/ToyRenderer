@@ -18,8 +18,9 @@ void GPUCullingPass::Init()
 {
     auto backend = EngineContext::RHI();
 
-    cullingShader           = Shader(EngineContext::File()->ShaderPath() + "culling/culling.comp.spv", SHADER_FREQUENCY_COMPUTE);
-    clusterCullingShader    = Shader(EngineContext::File()->ShaderPath() + "culling/culling_cluster.comp.spv", SHADER_FREQUENCY_COMPUTE);
+    cullingShader               = Shader(EngineContext::File()->ShaderPath() + "culling/culling.comp.spv", SHADER_FREQUENCY_COMPUTE);
+    clusterGroupCullingShader   = Shader(EngineContext::File()->ShaderPath() + "culling/culling_cluster_group.comp.spv", SHADER_FREQUENCY_COMPUTE);
+    clusterCullingShader        = Shader(EngineContext::File()->ShaderPath() + "culling/culling_cluster.comp.spv", SHADER_FREQUENCY_COMPUTE);
 
     RHIRootSignatureInfo rootSignatureInfo = {};
     rootSignatureInfo.AddEntry(EngineContext::RenderResource()->GetPerFrameRootSignature()->GetInfo())
@@ -28,7 +29,6 @@ void GPUCullingPass::Init()
                      .AddEntry({1, 2, 1024, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_BUFFER})     // IndirectClusterDrawDatas
                      .AddEntry({1, 3, 1024, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_BUFFER})     // IndirectClusterDrawCommands
                      .AddEntry({1, 4, 1024, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_BUFFER})     // IndirectClusterGroupDrawDatas
-                     .AddEntry({1, 5, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_BUFFER})
                      .AddPushConstant({128, SHADER_FREQUENCY_COMPUTE});
                                  
     rootSignature = backend->CreateRootSignature(rootSignatureInfo);
@@ -39,108 +39,133 @@ void GPUCullingPass::Init()
     pipelineInfo.computeShader              = cullingShader.shader;
     cullingPipeline                         = backend->CreateComputePipeline(pipelineInfo);
 
+    pipelineInfo.computeShader              = clusterGroupCullingShader.shader;
+    clusterGroupCullingPipeline             = backend->CreateComputePipeline(pipelineInfo);
+    
     pipelineInfo.computeShader              = clusterCullingShader.shader;
     clusterCullingPipeline                  = backend->CreateComputePipeline(pipelineInfo);
 }   
 
 void GPUCullingPass::Build(RDGBuilder& builder) 
 {
-    auto pass0Builder = builder.CreateComputePass(GetName());
-    auto pass1Builder = builder.CreateComputePass(GetName() + " Cluster");
-        
     auto& passes = EngineContext::Render()->GetMeshPasses();
 
-    lodSetting.disableVirtualMeshCulling = lodSetting.disableVirtualMeshCulling || (EngineContext::Render()->IsPassEnabled(RESTIR_DI_PASS) ? true : false); //
-    cullingSetting.processSize = 0;
+    lodSetting.enableStatistics = enableStatistics ? 1 : 0;
+    // lodSetting.disableVirtualMeshCulling = 
+    //     lodSetting.disableVirtualMeshCulling || (EngineContext::Render()->IsPassEnabled(RESTIR_DI_PASS) ? true : false); //
     for(uint32_t i = 0; i < MESH_PASS_TYPE_MAX_CNT; i++)
     {
-        indirectBuffers[i].clear();
         if(!passes[i]) continue;
-        for(auto& processor : passes[i]->GetMeshPassProcessors())
+
+        std::string indexStrX = " [" + std::to_string(i) + "]";
+
+        auto pass0Builder = builder.CreateComputePass(GetName() + " Mesh" + indexStrX);
+        auto pass1Builder = builder.CreateComputePass(GetName() + " Cluster Group" + indexStrX);
+        auto pass2Builder = builder.CreateComputePass(GetName() + " Cluster" + indexStrX);
+
+        auto& processSizes = passes[i]->GetMeshPassProcessor()->GetProcessSizes();
+        auto& passBuffers = passes[i]->GetMeshPassProcessor()->GetIndirectBuffers();
+        uint32_t passCount = passBuffers.size();
+        for(uint32_t j = 0; j < passCount; j++)
         {
-            indirectBuffers[i].push_back(processor->GetIndirectBuffers());     // 获取全部的间接绘制缓冲
-        }
-        
-        for(uint32_t j = 0; j < indirectBuffers[i].size(); j++)
-        {
-            uint32_t index = cullingSetting.processSize++;
-            cullingSetting.passType[index] = i;  
-            cullingSetting.passOffset[index] = j;    
-            std::string indexStr = " [" + std::to_string(index) + "][" + std::to_string(j) + "]";
+            std::string indexStrXY = " [" + std::to_string(i) + "][" + std::to_string(j) + "]";
 
-            RDGBufferHandle meshDrawDatas = builder.CreateBuffer("Mesh Draw Datas" + indexStr)
-                .Import(indirectBuffers[i][j]->meshDrawDataBuffer.buffer, RESOURCE_STATE_UNDEFINED)
+            RDGBufferHandle meshDrawDatas = builder.CreateBuffer("Mesh Draw Datas" + indexStrXY)
+                .Import(passBuffers[j]->meshDrawDataBuffer.buffer, RESOURCE_STATE_UNDEFINED)
                 .Finish();
 
-            RDGBufferHandle meshDrawCommands = builder.CreateBuffer("Mesh Draw Commands" + indexStr)
-                .Import(indirectBuffers[i][j]->meshDrawCommandBuffer.buffer, RESOURCE_STATE_UNDEFINED)
+            RDGBufferHandle meshDrawCommands = builder.CreateBuffer("Mesh Draw Commands" + indexStrXY)
+                .Import(passBuffers[j]->meshDrawCommandBuffer.buffer, RESOURCE_STATE_UNDEFINED)
                 .Finish();
 
-            RDGBufferHandle clusrterDrawDatas = builder.CreateBuffer("Clusrter Draw Datas" + indexStr)
-                .Import(indirectBuffers[i][j]->clusterDrawDataBuffer.buffer, RESOURCE_STATE_UNDEFINED)
+            RDGBufferHandle clusrterDrawDatas = builder.CreateBuffer("Clusrter Draw Datas" + indexStrXY)
+                .Import(passBuffers[j]->clusterDrawDataBuffer.buffer, RESOURCE_STATE_UNDEFINED)
                 .Finish();
 
-            RDGBufferHandle clusrterDrawCommands = builder.CreateBuffer("Clusrter Draw Commands" + indexStr)
-                .Import(indirectBuffers[i][j]->clusterDrawCommandBuffer.buffer, RESOURCE_STATE_UNDEFINED)
+            RDGBufferHandle clusrterDrawCommands = builder.CreateBuffer("Clusrter Draw Commands" + indexStrXY)
+                .Import(passBuffers[j]->clusterDrawCommandBuffer.buffer, RESOURCE_STATE_UNDEFINED)
                 .Finish();
 
-            RDGBufferHandle clusrterGroupDrawDatas = builder.CreateBuffer("Clusrter Group Draw Datas" + indexStr)
-                .Import(indirectBuffers[i][j]->clusterGroupDrawDataBuffer.buffer, RESOURCE_STATE_UNDEFINED)
+            RDGBufferHandle clusrterGroupDrawDatas = builder.CreateBuffer("Clusrter Group Draw Datas" + indexStrXY)
+                .Import(passBuffers[j]->clusterGroupDrawDataBuffer.buffer, RESOURCE_STATE_UNDEFINED)
                 .Finish();
 
             pass0Builder
-                .ReadWrite(1, 0, index, meshDrawDatas)
-                .ReadWrite(1, 1, index, meshDrawCommands)
-                .ReadWrite(1, 2, index, clusrterDrawDatas)
-                .ReadWrite(1, 3, index, clusrterDrawCommands)
-                .ReadWrite(1, 4, index, clusrterGroupDrawDatas);
+                .ReadWrite(1, 0, j, meshDrawDatas)
+                .ReadWrite(1, 1, j, meshDrawCommands);
 
             pass1Builder
-                .ReadWrite(1, 0, index, meshDrawDatas)
-                .ReadWrite(1, 1, index, meshDrawCommands)
-                .ReadWrite(1, 2, index, clusrterDrawDatas)
-                .ReadWrite(1, 3, index, clusrterDrawCommands)
-                .ReadWrite(1, 4, index, clusrterGroupDrawDatas)                
+                .ReadWrite(1, 2, j, clusrterDrawDatas)
+                .ReadWrite(1, 4, j, clusrterGroupDrawDatas);
+
+            pass2Builder
+                .ReadWrite(1, 1, j, meshDrawCommands)
+                .ReadWrite(1, 2, j, clusrterDrawDatas)
+                .ReadWrite(1, 3, j, clusrterDrawCommands)            
                 .OutputIndirectDraw(meshDrawCommands)       // 输出，作为后续间接绘制的buffer
                 .OutputIndirectDraw(clusrterDrawCommands);
         }
+
+        pass0Builder
+            .RootSignature(rootSignature)
+            .PassIndex(i, passCount, processSizes[0])
+            .Execute([&](RDGPassContext context) {       
+
+                CullingLodSetting setting = lodSetting;
+                setting.passType = context.passIndex[0];
+                setting.passCount = context.passIndex[1];
+
+                RHICommandListRef command = context.command; 
+                command->SetComputePipeline(cullingPipeline);
+                command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);
+                command->BindDescriptorSet(context.descriptors[1], 1);
+                command->PushConstants(&setting, sizeof(CullingLodSetting), SHADER_FREQUENCY_COMPUTE);
+                command->Dispatch(  (context.passIndex[2] + 63) / 64, 
+                                    1, 
+                                    1); 
+            })
+            .Finish();
+
+        pass1Builder
+            .RootSignature(rootSignature)
+            .PassIndex(i, passCount, processSizes[1])
+            .Execute([&](RDGPassContext context) {       
+
+                CullingLodSetting setting = lodSetting;
+                setting.passType = context.passIndex[0];
+                setting.passCount = context.passIndex[1];
+
+                RHICommandListRef command = context.command; 
+                command->SetComputePipeline(clusterGroupCullingPipeline);
+                command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);
+                command->BindDescriptorSet(context.descriptors[1], 1);
+                command->PushConstants(&setting, sizeof(CullingLodSetting), SHADER_FREQUENCY_COMPUTE);
+                command->Dispatch(  (context.passIndex[2] + 63) / 64, 
+                                    1, 
+                                    1); 
+            })
+            .Finish();
+
+        pass2Builder
+            .RootSignature(rootSignature)
+            .PassIndex(i, passCount, processSizes[2])
+            .Execute([&](RDGPassContext context) {       
+
+                CullingLodSetting setting = lodSetting;
+                setting.passType = context.passIndex[0];
+                setting.passCount = context.passIndex[1];
+
+                RHICommandListRef command = context.command; 
+                command->SetComputePipeline(clusterCullingPipeline);
+                command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);
+                command->BindDescriptorSet(context.descriptors[1], 1);
+                command->PushConstants(&setting, sizeof(CullingLodSetting), SHADER_FREQUENCY_COMPUTE);
+                command->Dispatch( (context.passIndex[2] + 63) / 64, 
+                                    1, 
+                                    1);    
+            })
+            .Finish();
     }
-    cullingSettingBuffer[EngineContext::CurrentFrameIndex()].SetData(cullingSetting);
-    RDGBufferHandle cullingSettings = builder.CreateBuffer("Culling Setting Buffer")
-        .Import(cullingSettingBuffer[EngineContext::CurrentFrameIndex()].buffer, RESOURCE_STATE_UNDEFINED)
-        .Finish();
-
-    pass0Builder
-        .RootSignature(rootSignature)
-        .ReadWrite(1, 5, 0, cullingSettings)
-        .Execute([&](RDGPassContext context) {       
-
-            RHICommandListRef command = context.command; 
-            command->SetComputePipeline(cullingPipeline);
-            command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);
-            command->BindDescriptorSet(context.descriptors[1], 1);
-            command->PushConstants(&lodSetting, sizeof(CullingLodSetting), SHADER_FREQUENCY_COMPUTE);
-            command->Dispatch(  std::max(MAX_PER_FRAME_OBJECT_SIZE, MAX_PER_FRAME_CLUSTER_GROUP_SIZE) / 256, 
-                                1, 
-                                1); 
-        })
-        .Finish();
-
-    pass1Builder
-        .RootSignature(rootSignature)
-        .ReadWrite(1, 5, 0, cullingSettings)
-        .Execute([&](RDGPassContext context) {       
-
-            RHICommandListRef command = context.command; 
-            command->SetComputePipeline(clusterCullingPipeline);
-            command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);
-            command->BindDescriptorSet(context.descriptors[1], 1);
-            command->PushConstants(&lodSetting, sizeof(CullingLodSetting), SHADER_FREQUENCY_COMPUTE);
-            command->Dispatch(  MAX_PER_FRAME_CLUSTER_SIZE / 256, 
-                                1, 
-                                1);    
-        })
-        .Finish();
 }
 
 void GPUCullingPass::CollectStatisticDatas()
@@ -153,10 +178,8 @@ void GPUCullingPass::CollectStatisticDatas()
     {
         readBackDatas[i].clear();
         if(!passes[i]) continue;
-        for(auto& processor : passes[i]->GetMeshPassProcessors())
+        for(auto& indirectBuffer : passes[i]->GetMeshPassProcessor()->GetIndirectBuffers())
         {
-            auto indirectBuffer = processor->GetIndirectBuffers();    
-
             ReadBackData readBackData = {};
             indirectBuffer->meshDrawDataBuffer.GetData(&readBackData.meshSetting, sizeof(IndirectSetting), 0);
             indirectBuffer->clusterDrawDataBuffer.GetData(&readBackData.clusterSetting, sizeof(IndirectSetting), 0);
@@ -165,6 +188,3 @@ void GPUCullingPass::CollectStatisticDatas()
         }
     }
 }
-
-
-    

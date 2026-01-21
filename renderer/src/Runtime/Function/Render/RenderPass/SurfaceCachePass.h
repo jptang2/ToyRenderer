@@ -7,6 +7,7 @@
 #include "Function/Render/RenderSystem/RenderSurfaceCacheManager.h"
 #include "RenderPass.h"
 #include <cstdint>
+#include <vector>
 
 class SurfaceCachePass : public RenderPass
 {
@@ -40,6 +41,8 @@ private:
 	ArrayBuffer<SurfaceCacheLightingDispatch, 
 		(MAX_SURFACE_CACHE_DIRECT_LIGHTING_SIZE / SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE) * 
 		(MAX_SURFACE_CACHE_DIRECT_LIGHTING_SIZE / SURFACE_CACHE_DIRECT_LIGHTING_TILE_SIZE)> directLightingBuffer[FRAMES_IN_FLIGHT];
+
+	std::vector<ClearAttachment> clearAttachments;
 
 	bool init = false;
 

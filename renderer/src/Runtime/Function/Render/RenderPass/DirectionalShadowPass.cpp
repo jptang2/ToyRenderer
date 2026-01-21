@@ -15,12 +15,8 @@ RHIGraphicsPipelineRef DirectionalShadowPassProcessor::OnCreatePipeline(const Dr
 
 void DirectionalShadowPass::Init()
 {
-    for(uint32_t i = 0; i < DIRECTIONAL_SHADOW_CASCADE_LEVEL; i++)
-    {
-        auto processor = std::make_shared<DirectionalShadowPassProcessor>(this);
-        processor->Init();
-        meshPassProcessors.push_back(processor);
-    }
+    meshPassProcessor = std::make_shared<DirectionalShadowPassProcessor>(this);
+    meshPassProcessor->Init(DIRECTIONAL_SHADOW_CASCADE_LEVEL);
 
     auto backend = EngineContext::RHI();
 
@@ -35,10 +31,10 @@ void DirectionalShadowPass::Init()
 
     RHIGraphicsPipelineInfo pipelineInfo = {};
     pipelineInfo.vertexShader       = vertexShader.shader;
-    pipelineInfo.fragmentShader     = fragmentShader.shader;
+    pipelineInfo.fragmentShader     = fragmentShader.shader; // 暂时不需要
     pipelineInfo.rootSignature      = rootSignature;
     pipelineInfo.primitiveType      = PRIMITIVE_TYPE_TRIANGLE_LIST;
-    pipelineInfo.rasterizerState    = { FILL_MODE_SOLID, CULL_MODE_BACK, DEPTH_CLIP, 0.0f, 0.0f };  // 不要做背面剔除，双面阴影                     
+    pipelineInfo.rasterizerState    = { FILL_MODE_SOLID, CULL_MODE_BACK, DEPTH_CLIP, 0.0f, 0.0f };                   
     pipelineInfo.depthStencilState              = { COMPARE_FUNCTION_LESS_EQUAL, true, true };
     pipelineInfo.depthStencilAttachmentFormat   = EngineContext::Render()->GetDepthFormat();
     pipeline                                    = GraphicsPipelineCache::Get()->Allocate(pipelineInfo).pipeline;    // 普通mesh的默认绘制管线
@@ -87,7 +83,7 @@ void DirectionalShadowPass::Build(RDGBuilder& builder)
                         command->PushConstants(&index, sizeof(uint32_t), SHADER_FREQUENCY_GRAPHICS);
                         command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);   
 
-                        meshPassProcessors[index]->Draw(command);                      
+                        meshPassProcessor->Draw(command, index);                      
                     })
                     .OutputRead(depth)  // 输出，作为后续阴影绘制的SRV
                     .Finish();

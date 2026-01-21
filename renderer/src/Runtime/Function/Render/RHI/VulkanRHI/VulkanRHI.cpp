@@ -1,5 +1,6 @@
 #include "VulkanRHI.h"
 #include "Function/Global/EngineContext.h"
+#include "Function/Render/RHI/VulkanRHI/VulkanUtil.h"
 #include "GLFW/glfw3.h"
 #include "VulkanRHIResource.h"
 #include "VulkanUtil.h"
@@ -14,6 +15,7 @@
 #include <cstddef>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
+#include "ImGuizmo.h"
 
 #include <algorithm>
 #include <cmath>
@@ -24,7 +26,7 @@
 
 VulkanRHIBackend::VulkanRHIBackend(const RHIBackendInfo& info) 
 : RHIBackend(info)
-, sync(PlatformProcess::CreateCriticalSection())
+, sync(PlatformProcess::CreateMutex())
 {
     CreateInstance();   
     CreatePhysicalDevice();
@@ -575,6 +577,7 @@ void VulkanRHIBackend::CreateLogicalDevice()
     deviceFeatures.drawIndirectFirstInstance = VK_TRUE; //允许间接绘制的firstInstance不为0
     deviceFeatures.shaderInt64 = VK_TRUE;               //64位支持
     deviceFeatures.shaderFloat64 = VK_TRUE;
+    deviceFeatures.wideLines = VK_TRUE;                 //线框模式的宽度
     createInfo.pEnabledFeatures = &deviceFeatures;
 
     VkPhysicalDeviceVulkan12Features vulkan12Features{};                                        //1.2版本的其他支持
@@ -594,6 +597,13 @@ void VulkanRHIBackend::CreateLogicalDevice()
     dynamicVertexInputFeatures.vertexInputDynamicState = VK_TRUE;
     vulkan12Features.pNext = &dynamicVertexInputFeatures;
 
+    VkPhysicalDeviceMultiviewFeaturesKHR mulitiViewFeatures = {};                                  //多视口
+    mulitiViewFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES_KHR;
+    mulitiViewFeatures.multiview = VK_TRUE;
+    mulitiViewFeatures.multiviewGeometryShader = VK_TRUE;
+    mulitiViewFeatures.multiviewTessellationShader = VK_TRUE;
+    dynamicVertexInputFeatures.pNext = &mulitiViewFeatures;
+
     //这个扩展已经在1.2提为core特性，可以放在VkPhysicalDeviceVulkan12Features里声明   //最开始是 VkPhysicalDeviceDescriptorIndexingFeaturesEXT
     //VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures{};                          //bindless支持，描述符索引
     //indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
@@ -609,18 +619,17 @@ void VulkanRHIBackend::CreateLogicalDevice()
     //divisorFeatures.vertexAttributeInstanceRateZeroDivisor = VK_TRUE;
     //createInfo.pNext = &divisorFeatures;    //申请新特性（API1.0之后的）支持，链式申请
 
-
     VkPhysicalDeviceBufferDeviceAddressFeaturesEXT deviceAddressfeture = {};                //请求内存地址信息
     deviceAddressfeture.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_EXT;
     deviceAddressfeture.bufferDeviceAddress = VK_TRUE;
 
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = {};    //rt加速结构
     accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-    accelerationStructureFeatures.accelerationStructure = true;
+    accelerationStructureFeatures.accelerationStructure = VK_TRUE;
 
     VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures = {};          //rt管线
     rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
-    rayTracingPipelineFeatures.rayTracingPipeline = true;
+    rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
 
     VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = {};                              //rt查询
     rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
@@ -628,7 +637,7 @@ void VulkanRHIBackend::CreateLogicalDevice()
 
     if(backendInfo.enableRayTracing)
     {
-        dynamicVertexInputFeatures.pNext = &deviceAddressfeture;    
+        mulitiViewFeatures.pNext = &deviceAddressfeture;    
         deviceAddressfeture.pNext = &accelerationStructureFeatures;
         accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
         rayTracingPipelineFeatures.pNext = &rayQueryFeatures;
@@ -823,6 +832,15 @@ VkRenderPass VulkanRHIBackend::CreateVkRenderPass(const VulkanRenderPassAttachme
     renderPassInfo.dependencyCount = 0;
     renderPassInfo.pDependencies = nullptr;
 
+    VkRenderPassMultiviewCreateInfo multiviewInfo = {};
+    multiviewInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_MULTIVIEW_CREATE_INFO;
+    multiviewInfo.subpassCount = 1;
+    multiviewInfo.pViewMasks = &info.viewMask;
+    multiviewInfo.correlationMaskCount = 1;
+    multiviewInfo.pCorrelationMasks = &info.viewMask;       // 指定视图共享相同的固定管线渲染状态
+    if(info.viewMask != 0)
+        renderPassInfo.pNext = &multiviewInfo;
+
     VkRenderPass renderPass;
     if (vkCreateRenderPass(logicalDevice, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) 
     {
@@ -1009,7 +1027,8 @@ void BlitTexture(   VkCommandBuffer commandBuffer,
 void GenerateMips(VkCommandBuffer commandBuffer, RHITextureRef src)
 {
     //总计生成的mip层数
-    uint32_t mipLevels = src->GetInfo().mipLevels;   
+    uint32_t mipLevels = src->GetInfo().mipLevels;  
+    if(mipLevels <= 1) return; 
 
     VkImageSubresourceRange transition = {};
     transition.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1251,6 +1270,39 @@ void VulkanRHICommandContext::SetScissor(Offset2D min, Offset2D max)
     vkCmdSetScissor(handle, 0, 1, &scissor);
 }
 
+void VulkanRHICommandContext::ClearScissors(const std::vector<ClearAttachment>& attachments, const std::vector<Rect2D>& scissors, uint32_t baseArrayLayer, uint32_t layerCount)
+{
+    std::vector<VkClearAttachment> clearAttachments;
+    for(auto& attachment : attachments)
+    {
+        VkClearAttachment clearAttachment = {};
+        clearAttachment.colorAttachment = attachment.binding;
+        clearAttachment.clearValue.color.float32[0] = attachment.clearColor.r;
+        clearAttachment.clearValue.color.float32[1] = attachment.clearColor.g;
+        clearAttachment.clearValue.color.float32[2] = attachment.clearColor.b;
+        clearAttachment.clearValue.color.float32[3] = attachment.clearColor.a;
+        clearAttachment.aspectMask = VulkanUtil::TextureAspectToVk(attachment.aspect);
+        clearAttachments.emplace_back(clearAttachment);
+    }
+    std::vector<VkClearRect> clearRects;
+    for(auto& scissor : scissors)
+    {
+        if(scissor.extent.width == 0 || scissor.extent.height == 0)
+            continue;
+
+        VkClearRect rect = {};
+        rect.baseArrayLayer = baseArrayLayer;
+        rect.layerCount = layerCount;
+        rect.rect.offset = VkOffset2D(scissor.offset.x, scissor.offset.y);
+        rect.rect.extent = VkExtent2D(scissor.extent.width, scissor.extent.height);
+        clearRects.emplace_back(rect);
+    }
+    if(clearRects.size() > 0)
+        vkCmdClearAttachments(handle, 
+        clearAttachments.size(), clearAttachments.data(), 
+        clearRects.size(), clearRects.data());
+}
+
 void VulkanRHICommandContext::SetDepthBias(float constantBias, float slopeBias, float clampBias)
 {
     vkCmdSetDepthBias(handle, constantBias, clampBias, slopeBias);
@@ -1369,8 +1421,16 @@ void VulkanRHICommandContext::ImGuiCreateFontsTexture()
     ImGui_ImplVulkan_CreateFontsTexture(handle);
 }
 
-void VulkanRHICommandContext::ImGuiRenderDrawData()
+void VulkanRHICommandContext::ImGuiRenderDrawData(ImGuiDrawFunc func)
 {
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    IMGUIZMO_NAMESPACE::BeginFrame();
+
+    func();
+
+    ImGui::Render();
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), handle);
 }
 

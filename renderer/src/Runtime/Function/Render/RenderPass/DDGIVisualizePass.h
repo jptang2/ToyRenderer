@@ -37,8 +37,8 @@ private:
 
 	ModelRef model;
 
-	std::vector<std::shared_ptr<VolumeLightComponent>> volumeLights;
-
+	std::array<std::vector<std::shared_ptr<VolumeLightComponent>>, FRAMES_IN_FLIGHT> volumeLights;
+	
 private:
 	EnablePassEditourUI()
 };

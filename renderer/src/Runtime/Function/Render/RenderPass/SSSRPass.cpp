@@ -2,6 +2,7 @@
 #include "Function/Global/Definations.h"
 #include "Function/Global/EngineContext.h"
 #include "Function/Render/RHI/RHIStructs.h"
+#include "Function/Render/RenderPass/RenderPass.h"
 #include <cstdint>
 
 void SSSRPass::Init()
@@ -11,6 +12,7 @@ void SSSRPass::Init()
     computeShader[0] = Shader(EngineContext::File()->ShaderPath() + "sssr/stochastic_ssr_trace.comp.spv", SHADER_FREQUENCY_COMPUTE);
     computeShader[1] = Shader(EngineContext::File()->ShaderPath() + "sssr/stochastic_ssr_resolve.comp.spv", SHADER_FREQUENCY_COMPUTE);
     computeShader[2] = Shader(EngineContext::File()->ShaderPath() + "sssr/stochastic_ssr_filter.comp.spv", SHADER_FREQUENCY_COMPUTE);
+    computeShader[3] = Shader(EngineContext::File()->ShaderPath() + "sssr/stochastic_ssr_combine.comp.spv", SHADER_FREQUENCY_COMPUTE);
 
     RHIRootSignatureInfo rootSignatureInfo = {};
     rootSignatureInfo.AddEntry(EngineContext::RenderResource()->GetPerFrameRootSignature()->GetInfo())
@@ -23,15 +25,15 @@ void SSSRPass::Init()
                      .AddEntry({1, 6, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // IN_COLOR_PYRAMID
                      .AddEntry({1, 7, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // BRDF_LUT
                      .AddEntry({1, 8, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_TEXTURE})      // REPROJECTION_RESULT
-                     .AddEntry({2, 0, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // G_BUFFER_DIFFUSE_ROUGHNESS
-                     .AddEntry({2, 1, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // G_BUFFER_NORMAL_METALLIC
+                     .AddEntry({2, 0, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // G_BUFFER_DIFFUSE_METALLIC
+                     .AddEntry({2, 1, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // G_BUFFER_NORMAL_ROUGHNESS
                      .AddEntry({2, 2, 1, SHADER_FREQUENCY_COMPUTE, RESOURCE_TYPE_RW_TEXTURE})   // G_BUFFER_EMISSION
                      .AddPushConstant({128, SHADER_FREQUENCY_COMPUTE});
     rootSignature = backend->CreateRootSignature(rootSignatureInfo);
 
     RHIComputePipelineInfo pipelineInfo     = {};
     pipelineInfo.rootSignature              = rootSignature;
-    for(int i = 0; i < 3; i++)
+    for(int i = 0; i < 4; i++)
     {
         pipelineInfo.computeShader              = computeShader[i].shader;
         computePipeline[i]   = backend->CreateComputePipeline(pipelineInfo);
@@ -114,8 +116,8 @@ void SSSRPass::Build(RDGBuilder& builder)
 
         RDGTextureHandle reprojectionOut = builder.GetTexture("Reprojection Out");
 
-        RDGTextureHandle diffuse        = builder.GetTexture("G-Buffer Diffuse/Roughness");
-        RDGTextureHandle normal         = builder.GetTexture("G-Buffer Normal/Metallic");
+        RDGTextureHandle diffuse        = builder.GetTexture("G-Buffer Diffuse/Metallic");
+        RDGTextureHandle normal         = builder.GetTexture("G-Buffer Normal/Roughness");
         RDGTextureHandle emission       = builder.GetTexture("G-Buffer Emission");
 
         // 先生成屏幕纹理的mip
@@ -150,8 +152,8 @@ void SSSRPass::Build(RDGBuilder& builder)
                 command->BindDescriptorSet(context.descriptors[1], 1);
                 command->BindDescriptorSet(context.descriptors[2], 2); 
                 command->PushConstants(&setting, sizeof(SSSRSetting), SHADER_FREQUENCY_COMPUTE);
-                command->Dispatch(  extent.width / 16, 
-                                    extent.height / 16, 
+                command->Dispatch(  Math::CeilDivide(extent.width, 16),
+                                    Math::CeilDivide(extent.height, 16), 
                                     1);
             })
             .Finish();
@@ -172,48 +174,67 @@ void SSSRPass::Build(RDGBuilder& builder)
             .ReadWrite(2, 2, 0, emission)
             .Execute([&](RDGPassContext context) {       
 
-                Extent2D extent = EngineContext::Render()->GetWindowsExtent();
-
                 RHICommandListRef command = context.command; 
                 command->SetComputePipeline(computePipeline[1]);
                 command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);  
                 command->BindDescriptorSet(context.descriptors[1], 1);
                 command->BindDescriptorSet(context.descriptors[2], 2); 
                 command->PushConstants(&setting, sizeof(SSSRSetting), SHADER_FREQUENCY_COMPUTE);
-                command->Dispatch(  extent.width / 16, 
-                                    extent.height / 16, 
+                command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                    Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
                                     1);
             })
             .Finish();
 
-        RDGComputePassHandle pass2 = builder.CreateComputePass(GetName() + " Filter")
-            .RootSignature(rootSignature)
-            .ReadWrite(1, 0, 0, sssrHit)
-            .ReadWrite(1, 1, 0, sssrColor)
-            .ReadWrite(1, 2, 0, sssrPDF)
-            .ReadWrite(1, 3, 0, sssrResolve)
-            .ReadWrite(1, 4, 0, sssrHistory)
-            .ReadWrite(1, 5, 0, outColor)
-            .Read(1, 6, 0, inColorPyramid)
-            .Read(1, 7, 0, brdfLut)
-            .Read(1, 8, 0, reprojectionOut)      
-            .ReadWrite(2, 0, 0, diffuse)
-            .ReadWrite(2, 1, 0, normal)
-            .ReadWrite(2, 2, 0, emission)
-            .Execute([&](RDGPassContext context) {       
+        if(!EngineContext::Render()->IsPassEnabled(NRD_PASS))    // 有NRD就不在这里做filer和合并了
+        {
+            RDGComputePassHandle pass2 = builder.CreateComputePass(GetName() + " Filter")
+                .RootSignature(rootSignature)
+                .ReadWrite(1, 0, 0, sssrHit)
+                .ReadWrite(1, 1, 0, sssrColor)
+                .ReadWrite(1, 2, 0, sssrPDF)
+                .ReadWrite(1, 3, 0, sssrResolve)
+                .ReadWrite(1, 4, 0, sssrHistory)
+                .ReadWrite(1, 5, 0, outColor)
+                .Read(1, 6, 0, inColorPyramid)
+                .Read(1, 7, 0, brdfLut)
+                .Read(1, 8, 0, reprojectionOut)      
+                .ReadWrite(2, 0, 0, diffuse)
+                .ReadWrite(2, 1, 0, normal)
+                .ReadWrite(2, 2, 0, emission)
+                .Execute([&](RDGPassContext context) {       
 
-                Extent2D extent = EngineContext::Render()->GetWindowsExtent();
+                    RHICommandListRef command = context.command; 
+                    command->SetComputePipeline(computePipeline[2]);
+                    command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);  
+                    command->BindDescriptorSet(context.descriptors[1], 1);
+                    command->BindDescriptorSet(context.descriptors[2], 2); 
+                    command->PushConstants(&setting, sizeof(SSSRSetting), SHADER_FREQUENCY_COMPUTE);
+                    command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                        Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
+                                        1);
+                })
+                .Finish();
+        }
+        else 
+        {
+            RDGComputePassHandle pass3 = builder.CreateComputePass(GetName() + " Combine")
+                .RootSignature(rootSignature)
+                .ReadWrite(1, 3, 0, sssrResolve)
+                .ReadWrite(1, 5, 0, outColor)
+                .Read(1, 6, 0, inColorPyramid)
+                .Execute([&](RDGPassContext context) {       
 
-                RHICommandListRef command = context.command; 
-                command->SetComputePipeline(computePipeline[2]);
-                command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);  
-                command->BindDescriptorSet(context.descriptors[1], 1);
-                command->BindDescriptorSet(context.descriptors[2], 2); 
-                command->PushConstants(&setting, sizeof(SSSRSetting), SHADER_FREQUENCY_COMPUTE);
-                command->Dispatch(  extent.width / 16, 
-                                    extent.height / 16, 
-                                    1);
-            })
-            .Finish();
+                    RHICommandListRef command = context.command; 
+                    command->SetComputePipeline(computePipeline[3]);
+                    command->BindDescriptorSet(EngineContext::RenderResource()->GetPerFrameDescriptorSet(), 0);  
+                    command->BindDescriptorSet(context.descriptors[1], 1);
+                    command->PushConstants(&setting, sizeof(SSSRSetting), SHADER_FREQUENCY_COMPUTE);
+                    command->Dispatch(  Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().width, 16), 
+                                        Math::CeilDivide(EngineContext::Render()->GetWindowsExtent().height, 16), 
+                                        1);
+                })
+                .Finish();
+        }
     }
 }

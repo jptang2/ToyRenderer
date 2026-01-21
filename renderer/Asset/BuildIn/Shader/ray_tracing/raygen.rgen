@@ -30,7 +30,7 @@ void main()
     HIT_VALUE = vec3(0.0);
 
 	traceRayEXT(TLAS, 					// acceleration structure
-		gl_RayFlagsOpaqueEXT,       	// rayFlags
+		gl_RayFlagsOpaqueEXT,       	// rayFlags, https://github.com/KhronosGroup/GLSL/blob/main/extensions/ext/GLSL_EXT_ray_tracing.txt#L122-L130
 		0xFF,           				// cullMask
 		0,              				// sbtRecordOffset
 		0,              				// sbtRecordStride

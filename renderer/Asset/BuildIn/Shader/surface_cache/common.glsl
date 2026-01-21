@@ -7,8 +7,8 @@ struct SurfaceCacheLightingDispatch
     uvec2 tileIndex;  
 }; 
 
-layout(set = 1, binding = 0)            uniform texture2D CACHE_DIFFUSE_ROUGHNESS;	    
-layout(set = 1, binding = 1)            uniform texture2D CACHE_NORMAL_METALLIC;	    
+layout(set = 1, binding = 0)            uniform texture2D CACHE_DIFFUSE_METALLIC;	    
+layout(set = 1, binding = 1)            uniform texture2D CACHE_NORMAL_ROUGHNESS;	    
 layout(set = 1, binding = 2)            uniform texture2D CACHE_EMISSION;	            
 layout(set = 1, binding = 3, rgba16f)   uniform image2D CACHE_LIGHTING;	           
 layout(set = 1, binding = 4)            uniform texture2D CACHE_DEPTH;	

@@ -363,12 +363,21 @@ float Vis_SmithJoint(float a2, float NoV, float NoL)
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
-vec3 ResolveBRDF(vec3 albedo, float roughness, float metallic, vec3 N, vec3 V, vec3 L)
+struct BRDFData {
+	vec3 diffuse;
+	vec3 specular;
+};
+
+BRDFData ResolveBRDF(vec3 albedo, float roughness, float metallic, vec3 N, vec3 V, vec3 L)
 {
+	BRDFData data;
+	data.diffuse = vec3(0.0f);
+	data.specular = vec3(0.0f);
+
 	BxDFContext context;
     Init(context, N, V, L);
 
-	if(context.NoL <= 0) return vec3(0.0f);
+	if(context.NoL <= 0) return data;
 
 	float a2 			= Pow4(roughness);  
 	vec3 F0 			= mix(vec3(0.04f), albedo, metallic);                                        
@@ -377,8 +386,8 @@ vec3 ResolveBRDF(vec3 albedo, float roughness, float metallic, vec3 N, vec3 V, v
     float Vis           = Vis_Smith(a2, context.NoV, context.NoL ); 
     vec3 F              = F_Schlick(F0, context.VoH );      
 
-	//vec3 f_diffuse    = Diffuse_Lambert(albedo);                                                                  	//BRDF反射函数，漫反射项
-	vec3 f_diffuse      = Diffuse_Burley(albedo, roughness, context.NoV, context.NoL, context.VoH );
+	vec3 f_diffuse    	= Diffuse_Lambert(albedo);                                                                  	//BRDF反射函数，漫反射项
+	//vec3 f_diffuse      = Diffuse_Burley(albedo, roughness, context.NoV, context.NoL, context.VoH );
 	vec3 f_specular     = D * Vis * F;                                                                                  //BRDF反射函数，镜面反射项
 
 	vec3 k_specular     = F;                                                                                            //镜面反射率，也就是菲涅尔项
@@ -387,46 +396,10 @@ vec3 ResolveBRDF(vec3 albedo, float roughness, float metallic, vec3 N, vec3 V, v
 	vec3 f_r            = (1.0 - metallic) * k_diffuse * f_diffuse +                                                    //BRDF反射函数             
 							f_specular;																					//(1.0 - metallic)是漫反射颜色和albedo之间的系数差
 
-	return f_r;
-}
+	data.diffuse = (1.0 - metallic) * k_diffuse * f_diffuse;
+	data.specular = f_specular;
 
-
-vec3 ResolveDiffuseBRDF(vec3 albedo, float roughness, float metallic, vec3 N, vec3 V, vec3 L)
-{
-	BxDFContext context;
-    Init(context, N, V, L);
-
-	if(context.NoL <= 0) return vec3(0.0f);
-
-	vec3 F0 			= mix(vec3(0.04f), albedo, metallic);   
-    vec3 F              = F_Schlick(F0, context.VoH );    
-
-	//vec3 f_diffuse    = Diffuse_Lambert(albedo);     
-	vec3 f_diffuse      = Diffuse_Burley(albedo, roughness, context.NoV, context.NoL, context.VoH ); 
-	vec3 k_diffuse      = (vec3(1.0f) - F);                                                                 
-
-	vec3 f_r            = (1.0 - metallic) * k_diffuse * f_diffuse;
-
-	return f_r;
-}
-
-vec3 ResolveSpecularBRDF(vec3 albedo, float roughness, float metallic, vec3 N, vec3 V, vec3 L)
-{
-	BxDFContext context;
-    Init(context, N, V, L);
-
-	if(context.NoL <= 0) return vec3(0.0f);
-
-	float a2 			= Pow4(roughness);  
-	vec3 F0 			= mix(vec3(0.04f), albedo, metallic);                                           
-
-	float D             = D_GGX(a2, context.NoH);        
-    float Vis           = Vis_Smith(a2, context.NoV, context.NoL ); 
-    vec3 F              = F_Schlick(F0, context.VoH );      
-
-	vec3 f_specular     = D * Vis * F;              
-
-	return f_specular;
+	return data;
 }
 
 #endif

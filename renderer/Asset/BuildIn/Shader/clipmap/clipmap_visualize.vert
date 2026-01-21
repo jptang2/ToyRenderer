@@ -9,7 +9,7 @@ layout(push_constant) uniform clipmap_visualize_setting {
 	int mipLevel;			
 } SETTING;
 
-layout(set = 1, binding = 0, rgba32f) uniform readonly image3D VXGI_CLIPMAP;
+layout(set = 1, binding = 0, rgba16f) uniform readonly image3D VXGI_CLIPMAP;
 layout(set = 1, binding = 1) buffer VXGI_CLIPMAP_BUFFER {
 	ClipmapInfo clipmapInfo;
 };

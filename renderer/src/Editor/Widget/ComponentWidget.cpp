@@ -61,6 +61,9 @@ void ComponentWidget::TransformComponentUI(std::shared_ptr<TransformComponent> c
 
 void ComponentWidget::DirectionalLightComponentUI(std::shared_ptr<DirectionalLightComponent> component)
 {
+    ImGui::Checkbox("Enable", &component->enable);
+	ImGui::SameLine(); ImGui::Checkbox("Cast shadow", &component->castShadow);
+
     ImGui::Text("DirectionalLight front: [%f, %f, %f]", 
         component->front[0], 
         component->front[1], 
@@ -153,7 +156,7 @@ void ComponentWidget::VolumeLightComponentUI(std::shared_ptr<VolumeLightComponen
 	ImGui::DragFloat("Depth sharpness",		&component->depthSharpness, 0.05f, 0.0f, 100.0f);
 	ImGui::DragFloat("History blend weight",	&component->blendWeight, 0.05f, 0.0f, 1.0f);
 	ImGui::DragFloat("Normal bias",			&component->normalBias, 0.05f, 0.0f, 1.0f);
-	ImGui::DragFloat("Energy preservation", &component->energyPreservation, 0.01f, 0.0f, 1.0f);
+	ImGui::DragFloat("Energy preservation", &component->energyPreservation, 0.01f, 0.0f);
 }
 
 void ComponentWidget::MeshRendererComponentUI(std::shared_ptr<MeshRendererComponent> component)

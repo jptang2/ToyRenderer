@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -42,6 +43,8 @@ typedef struct CommandListInfo
     bool byPass = true; 		//是否立即录制
 
 } CommandListInfo;
+
+typedef std::function<void()> ImGuiDrawFunc;
 
 class RHICommandList	//CommandList没有子类，只是做DynamicRHI和RHIContext中函数的调用
 {
@@ -85,6 +88,8 @@ public:
 
     void SetScissor(Offset2D min, Offset2D max);
 
+    void ClearScissors(const std::vector<ClearAttachment>& attachments, const std::vector<Rect2D>& scissors, uint32_t baseArrayLayer = 0, uint32_t layerCount = 1);
+
     void SetDepthBias(float constantBias, float slopeBias, float clampBias);
 
     void SetLineWidth(float width);
@@ -123,7 +128,7 @@ public:
 
     void ImGuiCreateFontsTexture();
 
-    void ImGuiRenderDrawData();
+    void ImGuiRenderDrawData(ImGuiDrawFunc func);
 
 protected:
 	CommandListInfo info;
@@ -379,6 +384,23 @@ struct RHICommandSetScissor : public RHICommand
     virtual void Execute(RHICommandContextRef context) override final;
 };
 
+struct RHICommandClearScissors : public RHICommand 
+{
+    std::vector<ClearAttachment> attachments;
+    std::vector<Rect2D> scissors;
+    uint32_t baseArrayLayer;
+    uint32_t layerCount;
+
+    RHICommandClearScissors(const std::vector<ClearAttachment>& attachments, const std::vector<Rect2D>& scissors, uint32_t baseArrayLayer, uint32_t layerCount) 
+    : attachments(attachments)
+    , scissors(scissors)
+    , baseArrayLayer(baseArrayLayer)
+    , layerCount(layerCount)
+    {}
+
+    virtual void Execute(RHICommandContextRef context) override final;
+};
+
 struct RHICommandSetDepthBias : public RHICommand 
 {
     float constantBias;
@@ -614,7 +636,11 @@ struct RHICommandImGuiCreateFontsTexture : public RHICommand
 
 struct RHICommandImGuiRenderDrawData : public RHICommand
 {
-    RHICommandImGuiRenderDrawData() {}
+    ImGuiDrawFunc func;
+
+    RHICommandImGuiRenderDrawData(ImGuiDrawFunc func) 
+    : func(func)
+    {}
 
     virtual void Execute(RHICommandContextRef context) override final;
 };

@@ -576,7 +576,7 @@ void RDGGraphWidget::UIInternel(bool* open)
         if(autoUpdate) autoUpdateCount++;
         if(ImGui::Button("Refresh") || rdgDependencyGraph == nullptr || autoUpdateCount > 100)
         {
-            currentFrameIndex = EngineContext::CurrentFrameIndex();
+            currentFrameIndex = EngineContext::ThreadPool()->ThreadFrameIndex();
             rdgDependencyGraph = EngineContext::Render()->GetRDGDependenctyGraph();
             init = true;
             autoUpdateCount = 0;

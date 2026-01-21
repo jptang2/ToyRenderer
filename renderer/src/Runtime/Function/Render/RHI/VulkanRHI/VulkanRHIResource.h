@@ -216,7 +216,7 @@ public:
 	const VkAccelerationStructureKHR& GetHandle() 	{ return handle; }
 	VkDeviceAddress GetAddress() 					{ return address; }
 
-	virtual void Update(const std::vector<RHIAccelerationStructureInstanceInfo>& instanceInfos) override final;	
+	virtual void Update(const std::vector<RHIAccelerationStructureInstanceInfo>& instanceInfos, bool build = false) override final;	
 
 	virtual void Destroy() override final;
 	virtual void* RawHandle() override final { return handle; };
@@ -226,6 +226,10 @@ private:
 	VkDeviceAddress address;
 	RHIBufferRef accelerationStructureBuffer;	// 加速结构占用的内存
 	RHIBufferRef instanceBuffer;				// 实例信息内存
+	RHIBufferRef scratchBuffer;					// 构建过程使用的临时内存
+
+	VkAccelerationStructureGeometryKHR accelerationStructureGeometry;
+	VkAccelerationStructureBuildGeometryInfoKHR accelerationStructureBuildGeometryInfo;
 };
 
 class VulkanRHIBottomLevelAccelerationStructure : public RHIBottomLevelAccelerationStructure

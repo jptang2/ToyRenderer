@@ -6,6 +6,8 @@
 #include "RenderPass.h"
 #include "Function/Render/RenderResource/PipelineCache.h"
 #include <array>
+#include <cstdint>
+#include <vector>
 
 // mesh pass提供了对于各个需要光栅化绘制mesh的pass的抽象
 // 围绕mesh pass需要提供场景图元收集，管线状态管理，合批，剔除，以及各个mesh pass的绘制代码生成的全部功能
@@ -72,6 +74,22 @@ typedef struct DrawBatch
     IndexRange clusterGroupID = { 0, 0 };          // 若提交时begin不为0，则启用virtual mesh渲染
 
     MaterialRef material;                                       // 包含了材质数据的内存块，也包含了着色器信息
+
+    DrawBatch() = default;
+    DrawBatch(
+        uint32_t objectID,
+        VertexBufferRef vertexBuffer,
+        IndexBufferRef indexBuffer,
+        IndexRange clusterID,
+        IndexRange clusterGroupID,
+        MaterialRef material)
+    : objectID(objectID)
+    , vertexBuffer(vertexBuffer)
+    , indexBuffer(indexBuffer)
+    , clusterID(clusterID)
+    , clusterGroupID(clusterGroupID)
+    , material(material)
+    {}
 
 } DrawBatch;
 
@@ -168,11 +186,12 @@ typedef struct MeshPassIndirectBuffers
 class MeshPassProcessor
 {
 public:
-    void Init();
+    void Init(uint32_t multiPass = 1);
     void Process(const std::vector<DrawBatch>& batches);
-    void Draw(RHICommandListRef command);
+    void Draw(RHICommandListRef command, uint32_t passIndex = 0);
 
-    std::shared_ptr<MeshPassIndirectBuffers> GetIndirectBuffers();
+    const std::vector<std::shared_ptr<MeshPassIndirectBuffers>>& GetIndirectBuffers();
+    const std::array<uint32_t, 3>& GetProcessSizes()                                                { return processSizes; }
 
     static const uint32_t& GetGlobalClusterOffset()                                                 { return globalClusterOffset; }
     static const uint32_t& AddGlobalClusterOffset(uint32_t size)                                    { globalClusterOffset += size; return globalClusterOffset; }
@@ -187,9 +206,9 @@ protected:
                     RHIGraphicsPipelineRef pipeline, 
                     const std::vector<DrawGeometryInfo>& geometries);
     
-    void AddBatch(const DrawBatch& batch)                                                           { batches.push_back(batch); }
-    void AddDrawInfo(const DrawPipelineState& pipelineState, const DrawGeometryInfo& geometryInfo)  { drawGeometries[pipelineState].push_back(geometryInfo); }
-    void AddDrawCommand(const DrawCommand& drawCommand)                                             { drawCommands.push_back(drawCommand); }
+    void AddBatch(const DrawBatch& batch)                                                           { batches.emplace_back(batch); }
+    void AddDrawInfo(const DrawPipelineState& pipelineState, const DrawGeometryInfo& geometryInfo)  { drawGeometries[pipelineState].emplace_back(geometryInfo); }
+    void AddDrawCommand(const DrawCommand& drawCommand, uint32_t passIndex);
 
     // 需要提交给GPU缓冲的信息 ///////////////////////////////////////////////////
     std::vector<RHIIndirectCommand> meshDrawCommand;                            
@@ -200,13 +219,15 @@ protected:
     std::vector<IndirectClusterGroupDrawInfo> clusterGroupDrawInfo;
 
     // GPU缓冲 ///////////////////////////////////////////////////
-    std::array<std::shared_ptr<MeshPassIndirectBuffers>, FRAMES_IN_FLIGHT> indirectBuffers;     // 每帧都完全重构的buffer，因此需要每帧一份   
-    
-private:
+    std::array<std::vector<std::shared_ptr<MeshPassIndirectBuffers>>, FRAMES_IN_FLIGHT> indirectBuffers;     // 每帧都完全重构的buffer，因此需要每帧一份   
+                                                                                                             // 允许一个processor对应多个不同的绘制指令
+private:                                                                                                     // （例如点光源/平行光源阴影，收集流程完全相同，剔除和绘制流程不同）
     // CPU端的数据处理结果 ///////////////////////////////////////////////////
     std::vector<DrawBatch> batches;
     std::map<DrawPipelineState, std::vector<DrawGeometryInfo>> drawGeometries;
-    std::vector<DrawCommand> drawCommands;
+    std::array<std::vector<std::vector<DrawCommand>>, FRAMES_IN_FLIGHT> drawCommands;                       // CPU端的绘制指令也可能延迟执行，数据也需要每帧一份
+    std::array<uint32_t, 3> processSizes = { 0, 0, 0 };
+    uint32_t multiPass = 1;
 
     // cluster数据的全局偏移，最后所有的pass都需要收集cluster绘制信息到一个全局buffer，需要记录偏移
     static uint32_t globalClusterOffset;
@@ -217,7 +238,7 @@ class MeshPass : public RenderPass
 {
 public:
     virtual void Init() override                                        { meshPassProcessor->Init(); }
-    virtual std::vector<MeshPassProcessorRef> GetMeshPassProcessors()   { return { meshPassProcessor }; }
+    virtual MeshPassProcessorRef GetMeshPassProcessor()                 { return meshPassProcessor; }
 
 protected:
     MeshPassProcessorRef meshPassProcessor = std::make_shared<MeshPassProcessor>();

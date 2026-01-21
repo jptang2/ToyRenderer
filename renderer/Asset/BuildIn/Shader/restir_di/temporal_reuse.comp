@@ -18,14 +18,14 @@ void main()
     ivec2 pixel     = ivec2(gl_GlobalInvocationID.xy);
     vec2 uv         = ScreenPixToUV(pixel); 
 
-    vec4 gbffer0    = imageLoad(G_BUFFER_DIFFUSE_ROUGHNESS, pixel);
-    vec4 gbffer1    = imageLoad(G_BUFFER_NORMAL_METALLIC, pixel);
+    vec4 gbffer0    = imageLoad(G_BUFFER_DIFFUSE_METALLIC, pixel);
+    vec4 gbffer1    = imageLoad(G_BUFFER_NORMAL_ROUGHNESS, pixel);
     vec4 gbffer2    = imageLoad(G_BUFFER_EMISSION, pixel);
     vec3 diffuse    = gbffer0.xyz;
     vec3 normal     = normalize(gbffer1.xyz);
     vec3 emission   = gbffer2.xyz;
-    float roughness = gbffer0.w;
-    float metallic  = gbffer1.w;
+    float roughness = gbffer1.w;
+    float metallic  = gbffer0.w;
     vec4 worldPos   = DepthToWorld(uv);
 	float depth 	= FetchDepthTex(pixel);
 
@@ -66,8 +66,8 @@ void main()
 			DIReservoir prevRes = PREV_RESERVOIRS[ReservoirIndex(prevPixel)];	
 			prevRes.numStreamSamples = min(prevRes.numStreamSamples, RESTIR_DI_SETTING.temporalSampleCountMultiplier * res.numStreamSamples);	// 需要设置一个累计采样数的上限
 			
-			float newPHat = EvaluatePHat(
-					prevRes.sampl.lightID, worldPos.xyz, normal,
+			float newPHat = EvaluatePHat(								// 时域复用下的可见性测试使用的是阴影贴图
+					prevRes.sampl.lightID, worldPos.xyz, normal,		// 空域用的光追
 					diffuse, roughness, metallic); 
 			CombineDIReservoirs(res, prevRes, newPHat, rand);		
 		}
@@ -75,7 +75,7 @@ void main()
 
 	if (RESTIR_DI_SETTING.visibilityReuse != 0) 
 	{
-		bool shadowed = RayQueryVisibility(worldPos.xyz, LIGHTS.pointLights[res.sampl.lightID].pos);
+		bool shadowed = RayQueryVisibility(worldPos.xyz, LIGHTS.pointLights[res.sampl.lightID].pos, GLOBAL_SETTING.rayTracingOffset);
 		if (shadowed) 
 		{
 			CleanDIReservoir(res);		

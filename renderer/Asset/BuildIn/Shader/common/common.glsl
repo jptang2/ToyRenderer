@@ -13,7 +13,7 @@
 #define ENABLE_RAY_TRACING 1                        //启用硬件光追
 #endif
 
-#define FRAMES_IN_FLIGHT 3							//帧缓冲数目
+#define FRAMES_IN_FLIGHT 2							//帧缓冲数目
 #define WINDOW_WIDTH 2048                           //32 * 64   16 * 128
 #define WINDOW_HEIGHT 1152                          //18 * 64   9 * 128
 //#define WINDOW_WIDTH 1920                           
@@ -22,9 +22,9 @@
 #define HALF_WINDOW_WIDTH (WINDOW_WIDTH / 2)
 #define HALF_WINDOW_HEIGHT (WINDOW_HEIGHT / 2)
 
-#define MAX_BINDLESS_RESOURCE_SIZE 10240	        //bindless 单个binding的最大描述符数目
-#define MAX_PER_FRAME_RESOURCE_SIZE 10240			//全局的缓冲大小（个数）,包括动画，材质等
-#define MAX_PER_FRAME_OBJECT_SIZE 10240			    //全局最大支持的物体数目
+#define MAX_BINDLESS_RESOURCE_SIZE 102400	        //bindless 单个binding的最大描述符数目
+#define MAX_PER_FRAME_RESOURCE_SIZE 102400			//全局的缓冲大小（个数）,包括动画，材质等
+#define MAX_PER_FRAME_OBJECT_SIZE 102400		    //全局最大支持的物体数目
 
 #define DIRECTIONAL_SHADOW_SIZE 4096				//方向光源尺寸
 #define DIRECTIONAL_SHADOW_CASCADE_LEVEL 4			//CSM级数
@@ -36,10 +36,10 @@
 
 #define CLUSTER_TRIANGLE_SIZE 128                   //每个cluster内的三角形数目，固定尺寸
 #define CLUSTER_GROUP_SIZE 32                       //每个cluster ghroup内的最大cluster数目
-#define MAX_PER_FRAME_CLUSTER_SIZE 1024000          //全局最大支持的cluster数目
-#define MAX_PER_FRAME_CLUSTER_GROUP_SIZE 102400     //全局最大支持的cluster group数目
-#define MAX_PER_PASS_PIPELINE_STATE_COUNT 1024      //每个mesh pass支持的最大的不同管线状态数目
-#define MAX_SUPPORTED_MESH_PASS_COUNT 256           //全局支持的最大mesh pass数目 
+#define MAX_PER_FRAME_CLUSTER_SIZE 102400           //全局最大支持的cluster数目
+#define MAX_PER_FRAME_CLUSTER_GROUP_SIZE 20480      //全局最大支持的cluster group数目
+#define MAX_PER_PASS_PIPELINE_STATE_COUNT 64        //每个mesh pass支持的最大的不同管线状态数目
+#define MAX_SUPPORTED_MESH_PASS_COUNT 32            //全局支持的最大mesh pass数目 
 
 #define MAX_LIGHTS_PER_CLUSTER 8                    //每个cluster最多支持存储的光源数目
 #define LIGHT_CLUSTER_GRID_SIZE 64                  //cluster based lighting裁剪时使用的tile像素尺寸
@@ -57,14 +57,14 @@
 #define DDGI_IRRADIANCE_PROBE_SIZE 8                //DDGI使用的辐照度贴图，单个probe的纹理尺寸
 #define DDGI_DEPTH_PROBE_SIZE 16                    //DDGI使用的深度贴图，单个probe的纹理尺寸
 
-#define HALF_SIZE_SSSR false                        //SSSR是否使用半精度
+#define HALF_SIZE_SSSR true                         //SSSR是否使用半精度
 
 #define VOLUMETRIC_FOG_SIZE_X 320                   //体积雾使用的屏幕空间texture3d的分辨率
 #define VOLUMETRIC_FOG_SIZE_Y 180
 #define VOLUMETRIC_FOG_SIZE_Z 128
 
-#define CLIPMAP_VOXEL_COUNT 128                     //clipmap的边长
-#define CLIPMAP_MIN_VOXEL_SIZE                      //clipmap的mip0层级体素尺寸
+#define CLIPMAP_VOXEL_COUNT 64                      //clipmap的边长
+#define CLIPMAP_MIN_VOXEL_SIZE 0.2                  //clipmap的mip0层级体素尺寸
 #define CLIPMAP_MIPLEVEL 5                          //clipmap的mip层级
 
 #define MAX_GIZMO_PRIMITIVE_COUNT 102400            //gizmo可以绘制的最大图元数目
@@ -185,6 +185,8 @@ struct Object
 
     BoundingSphere sphere;  
     BoundingBox box;
+    vec4 localScale;            //缩放值，物体可能带有从局部坐标到local的变换
+    vec4 modelScale;
 
     vec4 debugData;
 };
@@ -201,11 +203,21 @@ struct VertexStream
     uint _padding;
 };
 
+struct Vertex
+{
+    vec4 pos;
+    vec3 normal;
+    vec4 tangent;
+    vec3 color;
+    vec2 texCoord;
+};
+
 struct Material 
 {
     float roughness;
     float metallic;
     float alphaClip;
+    uint useVertexColor;
 
     vec4 baseColor;
     vec4 emission;
@@ -214,6 +226,9 @@ struct Material
     uint textureNormal;
     uint textureArm;        //AO/Roughness/Metallic
     uint textureSpecular;
+
+    vec2 textureOffset;
+    vec2 textureScale;
 
     int ints[8];       
     float floats[8];   
@@ -234,6 +249,7 @@ struct DirectionalLight
 {
     mat4 view;
     mat4 proj;
+    mat4 viewProj;
     vec3 pos;
     float _padding0;
     vec3 dir;
@@ -254,6 +270,7 @@ struct PointLight
 {
     mat4 view[6];
     mat4 proj;
+    mat4 viewProj[6];
     vec3 pos;
     vec3 color;
     float intencity;
@@ -270,6 +287,7 @@ struct PointLight
     float fogScattering;                 
     float _padding2[3];
 
+    Frustum frustum[6];  
     BoundingSphere sphere;                
 };
 
@@ -396,11 +414,15 @@ struct MeshCardInfo     // 单个Card的全部信息
 
 	mat4 view;
     mat4 proj;
+    mat4 viewProj;
     mat4 invView;
     mat4 invProj;
 
 	uvec2 atlasOffset;
 	uvec2 atlasExtent;
+
+    uvec2 sampleAtlasOffset;
+    uvec2 sampleAtlasExtent;
 };
 
 layout(set = 0, binding = PER_FRAME_BINDING_GLOBAL_SETTING) buffer global_setting {
@@ -410,6 +432,7 @@ layout(set = 0, binding = PER_FRAME_BINDING_GLOBAL_SETTING) buffer global_settin
     uint totalTicks;
     float totalTickTime;
     float minFrameTime;
+    float rayTracingOffset;
 
     GlobalIconInfo icons;
 
@@ -421,8 +444,10 @@ layout(set = 0, binding = PER_FRAME_BINDING_CAMERA) uniform camera {
 
     mat4 view;
     mat4 proj;
+    mat4 viewProj;
     mat4 prevView;
     mat4 prevProj;
+    mat4 prevViewProj;
     mat4 invView;
     mat4 invProj;
 
@@ -499,7 +524,7 @@ layout(set = 0, binding = PER_FRAME_BINDING_MESH_CLUSTER_DRAW_INFO) buffer mesh_
 
 } MESH_CLUSTER_DRAW_INFOS;
 
-layout(set = 0, binding = PER_FRAME_BINDING_MESH_CARD) buffer mesh_cards { 
+layout(set = 0, binding = PER_FRAME_BINDING_MESH_CARD) readonly buffer mesh_cards { 
 
     MeshCardInfo slot[MAX_PER_FRAME_OBJECT_SIZE * 6];
 
@@ -507,7 +532,7 @@ layout(set = 0, binding = PER_FRAME_BINDING_MESH_CARD) buffer mesh_cards {
 
 layout(set = 0, binding = PER_FRAME_BINDING_MESH_CARD_READBACK) buffer mesh_card_readbacks { 
 
-    uint slot[MAX_PER_FRAME_OBJECT_SIZE * 6];
+    int slot[MAX_PER_FRAME_OBJECT_SIZE * 6];
 
 } MESH_CARD_READBACKS;
 
@@ -622,6 +647,47 @@ uint FetchIndex(in uint objectID, in uint offset)
     return index;
 }
 
+Vertex FetchVertex(in uint vertexID, in uint index)
+{
+    Vertex vert;
+    vert.pos = vec4(0.0f);
+    vert.normal = vec3(0.0f);
+    vert.tangent = vec4(0.0f);
+    vert.color = vec3(0.0f);
+    vert.texCoord = vec2(0.0f);
+
+    if(vertexID == 0) return vert;
+    VertexStream vertexStream = VERTICES.slot[vertexID];
+
+    if(vertexStream.positionID > 0)
+        vert.pos = vec4(POSITIONS[vertexStream.positionID].position[3 * index], 
+                        POSITIONS[vertexStream.positionID].position[3 * index + 1], 
+                        POSITIONS[vertexStream.positionID].position[3 * index + 2],
+                        1.0f);
+
+    if(vertexStream.normalID > 0)
+        vert.normal = vec3( NORMALS[vertexStream.normalID].normal[3 * index], 
+                            NORMALS[vertexStream.normalID].normal[3 * index + 1], 
+                            NORMALS[vertexStream.normalID].normal[3 * index + 2]);  
+
+    if(vertexStream.tangentID > 0)
+        vert.tangent = vec4(TANGENTS[vertexStream.tangentID].tangent[4 * index], 
+                            TANGENTS[vertexStream.tangentID].tangent[4 * index + 1], 
+                            TANGENTS[vertexStream.tangentID].tangent[4 * index + 2],
+                            TANGENTS[vertexStream.tangentID].tangent[4 * index + 3]);   
+
+    if(vertexStream.colorID > 0)
+        vert.color = vec3(  COLORS[vertexStream.colorID].color[3 * index], 
+                            COLORS[vertexStream.colorID].color[3 * index + 1],
+                            COLORS[vertexStream.colorID].color[3 * index + 2]);
+
+    if(vertexStream.texCoordID > 0)       
+        vert.texCoord = vec2(   TEXCOORDS[vertexStream.texCoordID].texCoord[2 * index], 
+                                TEXCOORDS[vertexStream.texCoordID].texCoord[2 * index + 1]);                 
+    
+    return vert;
+}
+
 vec4 FetchVertexPos(in uint vertexID, in uint index)
 {
     if(vertexID == 0) return vec4(0.0f);
@@ -673,10 +739,10 @@ vec2 FetchVertexTexCoord(in uint vertexID, in uint index)
 
 vec3 FetchVertexColor(in uint vertexID, in uint index)
 {
-    if(vertexID == 0) return vec3(0.0f);
+    if(vertexID == 0) return vec3(1.0f);
 
     uint colorID = VERTICES.slot[vertexID].colorID;
-    if(colorID == 0) return vec3(0.0f);
+    if(colorID == 0) return vec3(1.0f);
 
     return vec3(COLORS[colorID].color[3 * index], 
                 COLORS[colorID].color[3 * index + 1],
@@ -821,6 +887,14 @@ vec3 FetchTriangleColor(in uint objectID, in uvec3 triangleIndex, in vec3 baryce
 
 //texture////////////////////////////////////////////////////////////////////////////
 
+vec4 FetchTex2D(in uint slot, in vec2 coord, in vec2 offset, in vec2 scale) {
+	return texture(sampler2D(TEXTURES_2D[slot], SAMPLER[1]), offset + coord * scale);   
+}
+
+vec4 FetchTex2D(in uint slot, in vec2 coord, in vec2 offset, in vec2 scale, in float lod) {
+	return textureLod(sampler2D(TEXTURES_2D[slot], SAMPLER[1]), offset + coord * scale, lod);   
+}
+
 vec4 FetchTex2D(in uint slot, in vec2 coord) {
 	return texture(sampler2D(TEXTURES_2D[slot], SAMPLER[1]), coord);   
 }
@@ -864,11 +938,11 @@ vec4 FetchMaterialColor(in Material material, in int index) {
 }
 
 vec4 FetchMaterialTex2D(in Material material, in int index, in vec2 coord) {
-	return FetchTex2D(material.textureSlots2D[index], coord);
+	return FetchTex2D(material.textureSlots2D[index], coord, material.textureOffset, material.textureScale);
 }
 
 vec4 FetchMaterialTex2D(in Material material, in int index, in vec2 coord, in float lod) {
-	return FetchTex2D(material.textureSlots2D[index], coord, lod);
+	return FetchTex2D(material.textureSlots2D[index], coord, material.textureOffset, material.textureScale, lod);
 }
 
 vec4 FetchMaterialTexCube(in Material material, in int index, in vec3 vector) {
@@ -894,7 +968,7 @@ vec4 FetchBaseColor(in Material material){
 float FetchRoughness(in Material material, in vec2 coord){
     if(material.textureArm > 0)        
     {
-        vec3 arm = FetchTex2D(material.textureArm, coord).xyz;
+        vec3 arm = FetchTex2D(material.textureArm, coord, material.textureOffset, material.textureScale).xyz;
         arm = pow(arm, vec3(1.0/2.2));          //gamma矫正
 
         return arm.y;
@@ -905,7 +979,7 @@ float FetchRoughness(in Material material, in vec2 coord){
 float FetchMetallic(in Material material, in vec2 coord){
     if(material.textureArm > 0)        
     {
-        vec3 arm = FetchTex2D(material.textureArm, coord).xyz;
+        vec3 arm = FetchTex2D(material.textureArm, coord, material.textureOffset, material.textureScale).xyz;
         arm = pow(arm, vec3(1.0/2.2));          //gamma矫正
 
         return arm.z;
@@ -916,7 +990,7 @@ float FetchMetallic(in Material material, in vec2 coord){
 float FetchAO(in Material material, in vec2 coord){
     if(material.textureArm > 0)        
     {
-        vec3 arm = FetchTex2D(material.textureArm, coord).xyz;
+        vec3 arm = FetchTex2D(material.textureArm, coord, material.textureOffset, material.textureScale).xyz;
         arm = pow(arm, vec3(1.0/2.2));          //gamma矫正
 
         return arm.x;
@@ -928,10 +1002,14 @@ vec3 FetchEmission(in Material material){
     return material.emission.xyz * material.emission.w; 
 }
 
+float FetchEmissionIntencity(in Material material){
+    return material.emission.w; 
+}
+
 vec4 FetchDiffuse(in Material material, in vec2 coord) {
     if(material.textureDiffuse > 0)    
     {
-        vec4 diffuse = FetchTex2D(material.textureDiffuse, coord);
+        vec4 diffuse = FetchTex2D(material.textureDiffuse, coord, material.textureOffset, material.textureScale);
         diffuse = pow(diffuse, vec4(1.0/2.2));          //gamma矫正
         diffuse = FetchBaseColor(material) * diffuse;         
 
@@ -952,7 +1030,7 @@ vec3 FetchNormal(in Material material, in vec2 coord, in vec3 normal, in vec4 ta
 
         highp mat3 TBN = mat3(t, b, n);
 
-        vec3 texNormal = FetchTex2D(material.textureNormal, coord).xyz;
+        vec3 texNormal = FetchTex2D(material.textureNormal, coord, material.textureOffset, material.textureScale).xyz;
         vec3 outNormal = normalize(texNormal * 2.0 - 1.0);  
         outNormal = normalize(TBN * outNormal);
 
@@ -963,12 +1041,12 @@ vec3 FetchNormal(in Material material, in vec2 coord, in vec3 normal, in vec4 ta
 }
 
 vec4 FetchArm(in Material material, in vec2 coord) {
-	if(material.textureArm > 0)        return FetchTex2D(material.textureArm, coord);
+	if(material.textureArm > 0)        return FetchTex2D(material.textureArm, coord, material.textureOffset, material.textureScale);
     else return vec4(1.0f, 1.0f, 0.0f, 0.0f);
 }
 
 vec4 FetchSpecular(in Material material, in vec2 coord) {
-	if(material.textureSpecular > 0)        return FetchTex2D(material.textureSpecular, coord);
+	if(material.textureSpecular > 0)        return FetchTex2D(material.textureSpecular, coord, material.textureOffset, material.textureScale);
     else return vec4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
